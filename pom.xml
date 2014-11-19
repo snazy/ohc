@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.caffinitas.ohc</groupId>
+    <artifactId>off-heap-cache</artifactId>
+    <version>0.1-SNAPSHOT</version>
+
+    <name>Off-Heap-Cache</name>
+    <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
+    <organization>
+        <name>Robert Stupp, Koeln, Germany, robert-stupp.de</name>
+        <url>http://caffinitas.org/</url>
+    </organization>
+    <url>http://caffinitas.org/</url>
+
+    <prerequisites>
+        <maven>3.2</maven>
+    </prerequisites>
+
+    <inceptionYear>2014</inceptionYear>
+    <developers>
+        <developer>
+            <name>Robert Stupp</name>
+            <email>robert@caffinitas.org</email>
+        </developer>
+    </developers>
+    <contributors>
+        <contributor>
+            <name>Michal Budzyn</name>
+            <email>michalbudzyn@gmx.de</email>
+        </contributor>
+    </contributors>
+
+    <licenses>
+        <license>
+            <name>Apache 2</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+            <comments>Apache License Version 2.0</comments>
+        </license>
+    </licenses>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+    </distributionManagement>
+    <scm>
+        <connection>scm:git:http://bitbucket.org/snazy/caffinitas</connection>
+        <developerConnection>scm:git:https://bitbucket.org/snazy/caffinitas</developerConnection>
+        <url>http://bitbucket.org/snazy/caffinitas</url>
+    </scm>
+    <issueManagement>
+        <system>JIRA</system>
+        <url>https://caffinitas.atlassian.net/</url>
+    </issueManagement>
+    <mailingLists>
+        <mailingList>
+            <name>Caffinitas Mapper Mailing List</name>
+            <subscribe>caffinitas-mapper+subscribe@googlegroups.com</subscribe>
+            <unsubscribe>caffinitas-mapper+unsubscribe@googlegroups.com</unsubscribe>
+            <post>caffinitas-mapper@googlegroups.com</post>
+            <archive>https://groups.google.com/d/forum/caffinitas-mapper</archive>
+        </mailingList>
+    </mailingLists>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m2</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
+        <version.org.apache.maven.plugins.maven-compiler-plugin>3.1</version.org.apache.maven.plugins.maven-compiler-plugin>
+        <version.org.apache.maven.plugins.maven-gpg-plugin>1.5</version.org.apache.maven.plugins.maven-gpg-plugin>
+        <version.org.apache.maven.plugins.maven-javadoc-plugin>2.9.1</version.org.apache.maven.plugins.maven-javadoc-plugin>
+        <version.org.apache.maven.plugins.maven-project-info-reports-plugin>2.7</version.org.apache.maven.plugins.maven-project-info-reports-plugin>
+        <version.org.apache.maven.plugins.maven-site-plugin>3.3</version.org.apache.maven.plugins.maven-site-plugin>
+        <version.org.apache.maven.plugins.maven-source-plugin>2.2.1</version.org.apache.maven.plugins.maven-source-plugin>
+        <version.org.apache.maven.plugins.maven-surefire-plugin>2.17</version.org.apache.maven.plugins.maven-surefire-plugin>
+        <version.org.apache.maven.plugins.maven-surefire-report-plugin>2.17</version.org.apache.maven.plugins.maven-surefire-report-plugin>
+        <version.org.apache.logging.log4j>2.1</version.org.apache.logging.log4j>
+        <version.org.slf4j>1.7.7</version.org.slf4j>
+        <version.org.testng>6.8.8</version.org.testng>
+    </properties>
+
+    <dependencies>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${version.org.apache.logging.log4j}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.sun.jdmk</groupId>
+                    <artifactId>jmxtools</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sun.jmx</groupId>
+                    <artifactId>jmxri</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${version.org.apache.logging.log4j}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>${version.org.apache.logging.log4j}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${version.org.slf4j}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${version.org.testng}</version>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+
+        <plugins>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${version.org.apache.maven.plugins.maven-source-plugin}</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${version.org.apache.maven.plugins.maven-compiler-plugin}</version>
+                <configuration>
+                    <source>1.7</source>
+                    <target>1.7</target>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*DeveloperTest.java</exclude>
+                    </excludes>
+                    <forkCount>1</forkCount>
+                    <reuseForks>true</reuseForks>
+                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${version.org.apache.maven.plugins.maven-javadoc-plugin}</version>
+                <configuration>
+                    <windowtitle>Off-Heap Cache</windowtitle>
+                    <bottom>&amp;copy; 2014 ${project.organization.name} - licensed under &lt;a
+                        href="http://www.apache.org/licenses/LICENSE-2.0" target="_new"&gt;Apache License, Version 2&lt;/a&gt;
+                        - &lt;a href="http://caffinitas.org/" target="_new"&gt;Homepage&lt;/a&gt;</bottom>
+                    <show>protected</show>
+                    <includeDependencySources>false</includeDependencySources>
+                    <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+    <reporting>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-project-info-reports-plugin</artifactId>
+                <version>${version.org.apache.maven.plugins.maven-project-info-reports-plugin}</version>
+                <configuration>
+                    <dependencyDetailsEnabled>true</dependencyDetailsEnabled>
+                </configuration>
+                <reportSets>
+                    <reportSet>
+                        <reports>
+                            <!--
+                            <report>cim</report>
+                            <report>dependencies</report>
+                            <report>index</report>
+                            <report>dependency-info</report> uses parent pom - makes no sense...
+                            -->
+                            <report>summary</report>
+                            <report>modules</report>
+                            <report>project-team</report>
+                            <report>scm</report>
+                            <report>issue-tracking</report>
+                            <report>mailing-list</report>
+                            <report>license</report>
+                            <report>distribution-management</report>
+                            <report>dependency-convergence</report>
+                            <report>dependency-management</report>
+                            <report>help</report>
+                            <report>plugin-management</report>
+                            <report>plugins</report>
+                        </reports>
+                    </reportSet>
+                </reportSets>
+                <inherited>false</inherited>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-report-plugin</artifactId>
+                <version>${version.org.apache.maven.plugins.maven-surefire-report-plugin}</version>
+                <reportSets>
+                    <reportSet>
+                        <reports>
+                            <report>report</report>
+                        </reports>
+                    </reportSet>
+                </reportSets>
+                <inherited>false</inherited>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <windowtitle>Off-Heap concurrent hash map</windowtitle>
+                    <bottom>&amp;copy; 2014 ${project.organization.name} - licensed under &lt;a
+                        href="http://www.apache.org/licenses/LICENSE-2.0" target="_new"&gt;Apache License, Version 2&lt;/a&gt;
+                        - &lt;a href="http://caffinitas.org/" target="_new"&gt;Homepage&lt;/a&gt;</bottom>
+                    <show>protected</show>
+                    <includeDependencySources>true</includeDependencySources>
+                    <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
+                </configuration>
+                <reportSets>
+                    <reportSet>
+                        <reports>
+                            <report>aggregate</report>
+                        </reports>
+                    </reportSet>
+                </reportSets>
+                <inherited>false</inherited>
+            </plugin>
+        </plugins>
+    </reporting>
+
+    <profiles>
+        <profile>
+            <id>website-deploy</id>
+            <distributionManagement>
+                <site>
+                    <id>caffinitas.org</id>
+                    <url>scp://caffinitas.org/opt/caffinitas.org/webapps/ROOT/mapper</url>
+                </site>
+            </distributionManagement>
+        </profile>
+
+        <profile>
+            <id>deploy</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>external.atlassian.jgitflow</groupId>
+                        <artifactId>jgitflow-maven-plugin</artifactId>
+                        <version>${version.external.atlassian.jgitflow.jgitflow-maven-plugin}</version>
+                        <configuration>
+                            <allowSnapshots>false</allowSnapshots>
+                            <autoVersionSubmodules>true</autoVersionSubmodules>
+                            <pushReleases>false</pushReleases>
+                            <scmCommentPrefix>[GITFLOW]</scmCommentPrefix>
+                            <keepBranch>false</keepBranch>
+                            <noDeploy>false</noDeploy>
+                        </configuration>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${version.org.apache.maven.plugins.maven-gpg-plugin}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+        Website deployment procedure:
+
+            mvn site-deploy -Pwebsite-deploy
+
+        Release deployment procecure:
+
+            mvn clean
+            mvn jgitflow:release-start -Pdeploy -Pwebsite-deploy
+            mvn jgitflow:release-finish -Pdeploy -Pwebsite-deploy
+            (git push required unless -DpushReleases=true)
+
+            ALTERNATIVE:
+
+            mvn clean
+            mvn jgitflow:release-start -Pdeploy -Pwebsite-deploy
+            mvn jgitflow:release-finish -Pdeploy -Pwebsite-deploy -DkeepBranch=true -DnoDeploy=true
+            (...)
+            mvn deploy
+            (git push required unless -DpushReleases=true on release-finish)
+
+        -->
+
+    </profiles>
+
+</project>
