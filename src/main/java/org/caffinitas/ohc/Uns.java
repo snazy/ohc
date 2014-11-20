@@ -88,6 +88,16 @@ final class Uns
         return unsafe.compareAndSwapLong(null, address, expected, value);
     }
 
+    static void copyMemory(byte[] arr, int off, long address, int len)
+    {
+        unsafe.copyMemory(arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, null, address, len);
+    }
+
+    static void setMemory(long address, long len, byte val)
+    {
+        unsafe.setMemory(address, len, val);
+    }
+
     private Uns()
     {
     }

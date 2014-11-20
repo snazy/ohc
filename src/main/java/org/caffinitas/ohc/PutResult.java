@@ -15,23 +15,11 @@
  */
 package org.caffinitas.ohc;
 
-import java.io.Closeable;
-
-public interface OHCache extends Closeable
+public enum PutResult
 {
-    int getBlockSize();
+    ADD,
 
-    int getHashTableSize();
+    REPLACE,
 
-    long getTotalCapacity();
-
-    int calcFreeBlockCount();
-
-    PutResult put(int hash, BytesSource keySource, BytesSource valueSource);
-
-    PutResult put(int hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink);
-
-    boolean get(int hash, BytesSource keySource, BytesSink valueSink);
-
-    boolean remove(int hash, BytesSource keySource);
+    NO_MORE_SPACE
 }

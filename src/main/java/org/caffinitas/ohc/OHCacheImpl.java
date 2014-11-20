@@ -58,7 +58,7 @@ final class OHCacheImpl implements OHCache
                 break;
         hashTableSize = hts;
 
-        long minSize = 2L * hts * blockSize * 2L;
+        long minSize = 8 * 1024 * 1024; // ugh
 
         long ts = builder.getTotalCapacity();
         ts /= bs;
@@ -67,13 +67,14 @@ final class OHCacheImpl implements OHCache
             throw new IllegalArgumentException("Block size must not be less than " + minSize);
         totalCapacity = ts;
 
-        this.rootAddress = Uns.allocate(totalCapacity);
+        long hashTableMem = HashPartitionAccess.sizeForEntries(hashTableSize);
 
-        // this block is directly after the hash-table
-        long firstFreeBlockAddress = hashTableSize * blockSize;
+        this.rootAddress = Uns.allocate(totalCapacity + hashTableMem);
 
-        this.freeBlocks = new FreeBlocks(rootAddress + firstFreeBlockAddress, rootAddress + totalCapacity, blockSize);
-        this.hashPartitionAccess = new HashPartitionAccess(hashTableSize, blockSize, rootAddress);
+        long blocksAddress = this.rootAddress + hashTableMem;
+
+        this.freeBlocks = new FreeBlocks(blocksAddress, blocksAddress + totalCapacity, blockSize);
+        this.hashPartitionAccess = new HashPartitionAccess(hashTableSize, rootAddress);
         this.hashEntryAccess = new HashEntryAccess(blockSize, freeBlocks, hashPartitionAccess);
     }
 
@@ -113,7 +114,12 @@ final class OHCacheImpl implements OHCache
         return freeBlocks.calcFreeBlockCount();
     }
 
-    public boolean put(int hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink)
+    public PutResult put(int hash, BytesSource keySource, BytesSource valueSource)
+    {
+        return put(hash, keySource, valueSource, null);
+    }
+
+    public PutResult put(int hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink)
     {
         if (keySource == null)
             throw new NullPointerException();
@@ -142,14 +148,15 @@ final class OHCacheImpl implements OHCache
                 hashEntryAccess.freeHashEntryChain(hashEntryAdr);
             }
             hashEntryAdr = hashEntryAccess.allocateDataForEntry(hash, keySource, valueSource);
-            if (hashEntryAdr != 0L)
-            {
-                // add new entry
 
-                hashEntryAccess.addAsLRUHead(partitionAdr, hashEntryAdr);
-            }
+            if (hashEntryAdr == 0L)
+                return PutResult.NO_MORE_SPACE;
 
-            return replace;
+            // add new entry
+
+            hashEntryAccess.addAsLRUHead(partitionAdr, hashEntryAdr);
+
+            return replace ? PutResult.REPLACE : PutResult.ADD;
         }
         finally
         {

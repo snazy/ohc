@@ -39,6 +39,8 @@ final class FreeBlocks
         }
     }
 
+    // TODO add some inexpensive functionality to allocate multiple blocks at once
+
     synchronized long allocateBlock()
     {
         long blockAddress = freeBlockHead;
@@ -52,9 +54,14 @@ final class FreeBlocks
 
     synchronized void freeBlock(long adr)
     {
+        if (adr == 0L)
+            return;
+
         Uns.putLong(adr, freeBlockHead);
         freeBlockHead = adr;
     }
+
+    // TODO add functionality to free a complete hash-entry-chain at once
 
     synchronized int calcFreeBlockCount()
     {

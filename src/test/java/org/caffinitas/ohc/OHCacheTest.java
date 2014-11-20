@@ -28,32 +28,259 @@ public class OHCacheTest
         try (OHCache cache = OHCacheBuilder.newBuilder()
                                            .build())
         {
-            Assert.assertEquals(cache.calcFreeBlockCount(), cache.getTotalCapacity() / cache.getBlockSize() - cache.getHashTableSize());
+            int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
+            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
 
-            cache.put(0, new BytesSource()
-                      {
-                          public int size()
-                          {
-                              return 3210;
-                          }
+            String k = "123";
+            cache.put(k.hashCode(), new BytesSource.StringSource(k), new BytesSource.StringSource("hello world"));
 
-                          public byte getByte(int pos)
-                          {
-                              return 0;
-                          }
-                      }, new BytesSource()
-                      {
-                          public int size()
-                          {
-                              return 7654;
-                          }
+            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount - 1);
 
-                          public byte getByte(int pos)
-                          {
-                              return 0;
-                          }
-                      },
-                      null);
+            BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
+            cache.get(k.hashCode(), new BytesSource.StringSource(k), valueSink);
+            String v = valueSink.toString();
+            Assert.assertEquals(v, "hello world");
+
+            cache.remove(k.hashCode(), new BytesSource.StringSource(k));
+
+            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+        }
+    }
+
+    @Test
+    public void fillWithSmall() throws IOException
+    {
+        try (OHCache cache = OHCacheBuilder.newBuilder()
+                                           .build())
+        {
+            int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
+
+            for (int i = 0; i < dataBlockCount; i++)
+            {
+                BytesSource.StringSource src = new BytesSource.StringSource(Integer.toString(i));
+                Assert.assertSame(cache.put(i, src, src), PutResult.ADD, Integer.toString(i));
+            }
+
+            BytesSource.StringSource src = new BytesSource.StringSource(Integer.toString(-1));
+            Assert.assertSame(cache.put(-1, src, src), PutResult.NO_MORE_SPACE, Integer.toString(-1));
+
+            for (int i = 0; i < dataBlockCount; i++)
+            {
+                BytesSink.ByteArraySink val = new BytesSink.ByteArraySink();
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), val));
+                Assert.assertEquals(val.toString(), Integer.toString(i));
+            }
+
+            // once again
+
+            for (int i = 0; i < dataBlockCount; i++)
+            {
+                src = new BytesSource.StringSource(Integer.toString(i));
+                Assert.assertSame(cache.put(i, src, src), PutResult.REPLACE, Integer.toString(i));
+            }
+
+            for (int i = 0; i < dataBlockCount; i++)
+            {
+                BytesSink.ByteArraySink val = new BytesSink.ByteArraySink();
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), val));
+                Assert.assertEquals(val.toString(), Integer.toString(i));
+            }
+        }
+    }
+
+    @Test
+    public void fillWithBig() throws IOException
+    {
+        try (OHCache cache = OHCacheBuilder.newBuilder()
+                                           .build())
+        {
+            int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
+
+            int garbage = 2 * cache.getBlockSize();
+            int cnt = dataBlockCount / 5;
+
+            for (int i = 0; i < cnt; i++)
+            {
+                BytesSource src = bigSourceFor(garbage, i);
+                Assert.assertSame(cache.put(i, src, src), PutResult.ADD, Integer.toString(i));
+            }
+
+            BytesSource src = bigSourceFor(garbage, -1);
+            Assert.assertSame(cache.put(-1, src, src), PutResult.NO_MORE_SPACE, Integer.toString(-1));
+
+            for (int i = 0; i < cnt; i++)
+            {
+                BytesSink.ByteArraySink val = new BytesSink.ByteArraySink();
+                Assert.assertTrue(cache.get(i, bigSourceFor(garbage, i), val));
+                Assert.assertEquals(val.toString(), bigFor(garbage, i));
+            }
+
+            // once again
+
+            for (int i = 0; i < cnt; i++)
+            {
+                src = bigSourceFor(garbage, i);
+                Assert.assertSame(cache.put(i, src, src), PutResult.REPLACE, Integer.toString(i));
+            }
+
+            for (int i = 0; i < cnt; i++)
+            {
+                BytesSink.ByteArraySink val = new BytesSink.ByteArraySink();
+                Assert.assertTrue(cache.get(i, bigSourceFor(garbage, i), val));
+                Assert.assertEquals(val.toString(), bigFor(garbage, i));
+            }
+        }
+    }
+
+    private BytesSource bigSourceFor(int prefix, int v)
+    {
+        String s = bigFor(prefix, v);
+        return new BytesSource.StringSource(s);
+    }
+
+    private String bigFor(int prefix, int v)
+    {
+        StringBuilder sb = new StringBuilder(prefix + 6);
+        for (int i = 0; i < prefix; i++)
+            sb.append('a');
+        sb.append(v);
+        return sb.toString();
+    }
+
+    @Test
+    public void bigThingSerial() throws IOException
+    {
+        try (OHCache cache = OHCacheBuilder.newBuilder()
+                                           .build())
+        {
+            withKeyAndValLen(cache,
+                             4321,
+                             987654,
+                             false);
+
+            // on first block boundary
+            withKeyAndValLen(cache,
+                             cache.getBlockSize() - 64, // HashPartitionAccess.OFF_DATA_IN_FIRST
+                             987654,
+                             false);
+
+            // on second block boundary
+            withKeyAndValLen(cache,
+                             cache.getBlockSize() - 64 + // HashPartitionAccess.OFF_DATA_IN_FIRST
+                             cache.getBlockSize() - 8, // HashPartitionAccess.OFF_DATA_IN_NEXT
+                             987654,
+                             false);
+        }
+    }
+
+    @Test
+    public void bigThingArray() throws IOException
+    {
+        try (OHCache cache = OHCacheBuilder.newBuilder()
+                                           .build())
+        {
+            withKeyAndValLen(cache,
+                             4321,
+                             987654,
+                             true);
+
+            // on first block boundary
+            withKeyAndValLen(cache,
+                             cache.getBlockSize() - 64, // HashPartitionAccess.OFF_DATA_IN_FIRST
+                             987654,
+                             true);
+
+            // on second block boundary
+            withKeyAndValLen(cache,
+                             cache.getBlockSize() - 64 + // HashPartitionAccess.OFF_DATA_IN_FIRST
+                             cache.getBlockSize() - 8, // HashPartitionAccess.OFF_DATA_IN_NEXT
+                             987654,
+                             true);
+        }
+    }
+
+    private void withKeyAndValLen(OHCache cache, final int keyLen, final int valLen, boolean array)
+    {
+        int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
+        Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+
+        BytesSource key = array
+                          ? new ThirteenBytesSource(keyLen)
+                          : new ThirteenSource(keyLen);
+        BytesSource val = array
+                          ? new ThirteenBytesSource(valLen)
+                          : new ThirteenSource(valLen);
+        BytesSink valSink = new BytesSink()
+        {
+            public void setSize(int size)
+            {
+                Assert.assertEquals(size, valLen);
+            }
+
+            public void putByte(int pos, byte value)
+            {
+                Assert.assertEquals(value, (pos % 13), "at position " + pos + " with keyLen=" + keyLen + " and valLen=" + valLen);
+            }
+        };
+
+        int hash = Integer.MAX_VALUE - 1;
+
+        cache.put(hash, key, val);
+
+        int len = keyLen + valLen;
+        int blk = 1;
+        len -= cache.getBlockSize() - 64; // HashPartitionAccess.OFF_DATA_IN_FIRST
+        for (; len > 0; blk++)
+            len -= cache.getBlockSize() - 8; // HashPartitionAccess.OFF_DATA_IN_NEXT
+
+        Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount - blk);
+
+        Assert.assertTrue(cache.get(hash, key, valSink));
+
+        cache.remove(hash, key);
+
+        Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+    }
+
+    static class ThirteenSource extends BytesSource.AbstractSource
+    {
+
+        private final int len;
+
+        ThirteenSource(int len)
+        {
+            this.len = len;
+        }
+
+        public int size()
+        {
+            return len;
+        }
+
+        public byte getByte(int pos)
+        {
+            return (byte) (pos % 13);
+        }
+    }
+
+    static class ThirteenBytesSource extends BytesSource.ByteArraySource
+    {
+        public ThirteenBytesSource(int len)
+        {
+            super(arrayFor(len), 13, len);
+        }
+
+        private static byte[] arrayFor(int len)
+        {
+            byte[] arr = new byte[len + 13];
+            byte b = 0;
+            for (int i = 0; i < len + 13; i++)
+            {
+                arr[i] = b++;
+                if (b == 13)
+                    b = 0;
+            }
+            return arr;
         }
     }
 }

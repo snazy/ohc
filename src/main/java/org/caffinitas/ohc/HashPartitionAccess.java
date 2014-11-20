@@ -24,25 +24,31 @@ final class HashPartitionAccess
     static final long OFF_LRU_HEAD = 0L;
     // offset of CAS style lock field
     static final long OFF_LOCK = 8L;
-    // each partition entry is 64 bytes long (since we will perform a lot of CAS/modifying operations on LRU and LOCK
-    // which are evil to CPU cache lines)
-    static final long PARTITION_ENTRY_LEN = 64L;
+    // total memory required for a hash-partition
+    static final long PARTITION_ENTRY_LEN = 16L;
 
     private final int hashPartitionMask;
-    private final int blockSize;
     private final long rootAddress;
 
-    HashPartitionAccess(int hashTableSize, int blockSize, long rootAddress)
+    static long sizeForEntries(int hashTableSize)
     {
-        this.hashPartitionMask = hashTableSize;
-        this.blockSize = blockSize;
+        return PARTITION_ENTRY_LEN * hashTableSize;
+    }
+
+    HashPartitionAccess(int hashTableSize, long rootAddress)
+    {
+        this.hashPartitionMask = hashTableSize - 1;
         this.rootAddress = rootAddress;
+
+        // it's important to initialize the hash partition memory!
+        // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
+        Uns.setMemory(rootAddress, sizeForEntries(hashTableSize), (byte) 0);
     }
 
     long partitionForHash(int hash)
     {
         int partition = hash & hashPartitionMask;
-        return rootAddress + partition * blockSize;
+        return rootAddress + partition * PARTITION_ENTRY_LEN;
     }
 
     long lockPartitionForHash(int hash)
@@ -59,16 +65,20 @@ final class HashPartitionAccess
 
     void unlockPartition(long partitionAdr)
     {
-        Uns.compareAndSwap(partitionAdr + OFF_LOCK, Thread.currentThread().getId(), 0L);
+        if (partitionAdr != 0L)
+            Uns.compareAndSwap(partitionAdr + OFF_LOCK, Thread.currentThread().getId(), 0L);
     }
 
     long getLRUHead(long partitionAdr)
     {
+        if (partitionAdr == 0L)
+            return 0L;
         return Uns.getLong(partitionAdr + OFF_LRU_HEAD);
     }
 
     public void setLRUHead(long partitionAdr, long hashEntryAdr)
     {
-        Uns.putLong(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
+        if (partitionAdr != 0L)
+            Uns.putLong(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
     }
 }

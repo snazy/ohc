@@ -17,4 +17,32 @@ package org.caffinitas.ohc;
 
 public interface BytesSink
 {
+    void setSize(int size);
+
+    void putByte(int pos, byte value);
+
+    public static class ByteArraySink implements BytesSink
+    {
+
+        private byte[] array;
+
+        public void setSize(int size)
+        {
+            if (size < 0)
+                throw new IllegalArgumentException();
+            this.array = new byte[size];
+        }
+
+        public void putByte(int pos, byte value)
+        {
+            if (pos < 0 || pos >= array.length)
+                throw new IllegalArgumentException();
+            array[pos] = value;
+        }
+
+        public String toString()
+        {
+            return array != null ? new String(array) : "";
+        }
+    }
 }
