@@ -120,6 +120,11 @@ final class Uns
         }
     }
 
+    static void park(long nanos)
+    {
+        unsafe.park(false, nanos);
+    }
+
     private Uns()
     {
     }

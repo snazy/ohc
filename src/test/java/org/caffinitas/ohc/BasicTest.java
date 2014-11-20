@@ -20,7 +20,7 @@ import java.io.IOException;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-public class OHCacheBasicTest
+public class BasicTest
 {
     @Test
     public void basic() throws IOException

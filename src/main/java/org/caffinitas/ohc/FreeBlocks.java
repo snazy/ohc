@@ -105,11 +105,13 @@ final class FreeBlocks
 
     // TODO add some inexpensive functionality to allocate multiple blocks at once
 
-    synchronized long allocateBlock()
+    // TODO add functionality to free a complete hash-entry-chain at once
+
+    long allocateBlock()
     {
         int fli = freeListPtr.getAndIncrement();
         long adr;
-        while (true)
+        for (int spin = 0; ; spin++)
         {
             boolean none = true;
             for (int i = 0; i < freeLists.length; i++, fli++)
@@ -134,6 +136,8 @@ final class FreeBlocks
             }
             if (none)
                 return 0L;
+
+            Uns.park(((spin & 3) + 1) * 5000);
         }
     }
 
@@ -143,7 +147,7 @@ final class FreeBlocks
             return;
 
         int fli = freeListPtr.getAndIncrement();
-        while (true)
+        for (int spin = 0; ; spin++)
         {
             for (int i = 0; i < freeLists.length; i++, fli++)
             {
@@ -160,20 +164,20 @@ final class FreeBlocks
                         fl.unlock();
                     }
             }
+
             freeBlockSpins.incrementAndGet();
-            Thread.yield();
+            Uns.park(((spin & 3) + 1) * 5000);
         }
     }
 
-    // TODO add functionality to free a complete hash-entry-chain at once
-
-    synchronized int calcFreeBlockCount()
+    int calcFreeBlockCount()
     {
         int free = 0;
         for (FreeList freeList : freeLists)
         {
-            while (!freeList.tryLock())
-                Thread.yield();
+            for (int spin = 0; !freeList.tryLock(); spin++)
+                Uns.park(((spin & 3) + 1) * 5000);
+
             try
             {
                 free += freeList.calcFreeBlockCount();

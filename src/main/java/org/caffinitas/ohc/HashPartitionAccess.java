@@ -60,20 +60,20 @@ final class HashPartitionAccess
         long partAdr = partitionForHash(hash);
 
         long tid = Thread.currentThread().getId();
-        while (true)
+        for (int spin= 0;;spin++)
         {
             if (Uns.compareAndSwap(partAdr + OFF_LOCK, 0L, tid))
                 return partAdr;
 
             lockPartitionSpins.incrementAndGet();
-            Thread.yield();
+            Uns.park(((spin & 3) +1 ) * 5000);
         }
     }
 
     void unlockPartition(long partitionAdr)
     {
         if (partitionAdr != 0L)
-            Uns.compareAndSwap(partitionAdr + OFF_LOCK, Thread.currentThread().getId(), 0L);
+            Uns.putLong(partitionAdr + OFF_LOCK, 0L);
     }
 
     long getLRUHead(long partitionAdr)
