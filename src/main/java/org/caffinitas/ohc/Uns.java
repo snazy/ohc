@@ -65,27 +65,37 @@ final class Uns
 
     static void putLong(long address, long value)
     {
-        unsafe.putLong(address, value);
+        unsafe.putLongVolatile(null, address, value);
+    }
+
+    static void putLong(Object obj, long offset, long value)
+    {
+        unsafe.putLongVolatile(obj, offset, value);
     }
 
     static long getLong(long address)
     {
-        return unsafe.getLong(address);
+        return unsafe.getLongVolatile(null, address);
     }
 
     static void putByte(long address, byte value)
     {
-        unsafe.putByte(address, value);
+        unsafe.putByteVolatile(null, address, value);
     }
 
     static byte getByte(long address)
     {
-        return unsafe.getByte(address);
+        return unsafe.getByteVolatile(null, address);
     }
 
     static boolean compareAndSwap(long address, long expected, long value)
     {
         return unsafe.compareAndSwapLong(null, address, expected, value);
+    }
+
+    static boolean compareAndSwap(Object obj, long offset, long expected, long value)
+    {
+        return unsafe.compareAndSwapLong(obj, offset, expected, value);
     }
 
     static void copyMemory(byte[] arr, int off, long address, int len)
@@ -96,6 +106,18 @@ final class Uns
     static void setMemory(long address, long len, byte val)
     {
         unsafe.setMemory(address, len, val);
+    }
+
+    static long fieldOffset(Class<?> clazz, String field)
+    {
+        try
+        {
+            return unsafe.objectFieldOffset(clazz.getDeclaredField(field));
+        }
+        catch (NoSuchFieldException e)
+        {
+            throw new RuntimeException(e);
+        }
     }
 
     private Uns()

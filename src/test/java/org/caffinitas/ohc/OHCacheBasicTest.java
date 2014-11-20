@@ -20,7 +20,7 @@ import java.io.IOException;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-public class OHCacheTest
+public class OHCacheBasicTest
 {
     @Test
     public void basic() throws IOException
@@ -240,47 +240,5 @@ public class OHCacheTest
         cache.remove(hash, key);
 
         Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
-    }
-
-    static class ThirteenSource extends BytesSource.AbstractSource
-    {
-
-        private final int len;
-
-        ThirteenSource(int len)
-        {
-            this.len = len;
-        }
-
-        public int size()
-        {
-            return len;
-        }
-
-        public byte getByte(int pos)
-        {
-            return (byte) (pos % 13);
-        }
-    }
-
-    static class ThirteenBytesSource extends BytesSource.ByteArraySource
-    {
-        public ThirteenBytesSource(int len)
-        {
-            super(arrayFor(len), 13, len);
-        }
-
-        private static byte[] arrayFor(int len)
-        {
-            byte[] arr = new byte[len + 13];
-            byte b = 0;
-            for (int i = 0; i < len + 13; i++)
-            {
-                arr[i] = b++;
-                if (b == 13)
-                    b = 0;
-            }
-            return arr;
-        }
     }
 }

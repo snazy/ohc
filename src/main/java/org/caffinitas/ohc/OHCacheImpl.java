@@ -15,8 +15,26 @@
  */
 package org.caffinitas.ohc;
 
+import java.lang.reflect.Field;
+import java.util.concurrent.atomic.AtomicLong;
+
 final class OHCacheImpl implements OHCache
 {
+
+    static
+    {
+        try
+        {
+            Field f = AtomicLong.class.getDeclaredField("VM_SUPPORTS_LONG_CAS");
+            f.setAccessible(true);
+            if (!(Boolean)f.get(null))
+                throw new IllegalStateException("Off Heap Cache implementation requires a JVM that supports CAS on long fields");
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException();
+        }
+    }
 
     public static final int MAX_HASH_TABLE_SIZE = 4194304;
     public static final int MIN_HASH_TABLE_SIZE = 32;
@@ -227,5 +245,15 @@ final class OHCacheImpl implements OHCache
             // 3. release hash partition
             hashPartitionAccess.unlockPartition(partitionAdr);
         }
+    }
+
+    public long getFreeBlockSpins()
+    {
+        return freeBlocks.getFreeBlockSpins();
+    }
+
+    public long getLockPartitionSpins()
+    {
+        return hashPartitionAccess.getLockPartitionSpins();
     }
 }

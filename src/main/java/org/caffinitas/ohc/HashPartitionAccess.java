@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * Encapsulates access to hash partitions.
  */
@@ -29,6 +31,8 @@ final class HashPartitionAccess
 
     private final int hashPartitionMask;
     private final long rootAddress;
+
+    private final AtomicLong lockPartitionSpins = new AtomicLong();
 
     static long sizeForEntries(int hashTableSize)
     {
@@ -55,12 +59,15 @@ final class HashPartitionAccess
     {
         long partAdr = partitionForHash(hash);
 
-        while (!Uns.compareAndSwap(partAdr + OFF_LOCK, 0L, Thread.currentThread().getId()))
+        long tid = Thread.currentThread().getId();
+        while (true)
         {
-            // TODO find a better solution than a busy-spin-lock
-        }
+            if (Uns.compareAndSwap(partAdr + OFF_LOCK, 0L, tid))
+                return partAdr;
 
-        return partAdr;
+            lockPartitionSpins.incrementAndGet();
+            Thread.yield();
+        }
     }
 
     void unlockPartition(long partitionAdr)
@@ -80,5 +87,10 @@ final class HashPartitionAccess
     {
         if (partitionAdr != 0L)
             Uns.putLong(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
+    }
+
+    long getLockPartitionSpins()
+    {
+        return lockPartitionSpins.get();
     }
 }

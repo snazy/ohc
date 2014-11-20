@@ -15,27 +15,91 @@
  */
 package org.caffinitas.ohc;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 final class FreeBlocks
 {
-    private volatile long freeBlockHead;
+    static final class FreeList
+    {
+        private volatile long freeBlockHead;
+        private volatile long freeListLock;
+        // pad to 64 bytes (assuming 16 byte object header)
+        private volatile long pad2;
+        private volatile long pad3;
+        private volatile long pad4;
+        private volatile long pad5;
+
+        private static final long freeListLockOffset = Uns.fieldOffset(FreeList.class, "freeListLock");
+
+        boolean tryLock()
+        {
+            return Uns.compareAndSwap(this, freeListLockOffset, 0L, Thread.currentThread().getId());
+        }
+
+        void unlock()
+        {
+            Uns.putLong(this, freeListLockOffset, 0L);
+        }
+
+        public boolean empty()
+        {
+            return freeBlockHead == 0L;
+        }
+
+        void push(long adr)
+        {
+            Uns.putLong(adr, freeBlockHead);
+            freeBlockHead = adr;
+        }
+
+        long pull()
+        {
+            long blockAddress = freeBlockHead;
+            if (blockAddress == 0L)
+                return 0L;
+
+            freeBlockHead = Uns.getLong(blockAddress);
+
+            return blockAddress;
+        }
+
+        int calcFreeBlockCount()
+        {
+            int free = 0;
+            for (long adr = freeBlockHead; adr != 0L; adr = Uns.getLong(adr))
+                free++;
+            return free;
+        }
+    }
+
+    private static final int MASK = 7;
+    private final FreeList[] freeLists = new FreeList[]{
+                                                       new FreeList(),
+                                                       new FreeList(),
+                                                       new FreeList(),
+                                                       new FreeList(),
+                                                       new FreeList(),
+                                                       new FreeList(),
+                                                       new FreeList(),
+                                                       new FreeList()
+    };
+
+    private final AtomicInteger freeListPtr = new AtomicInteger();
+    private final AtomicLong freeBlockSpins = new AtomicLong();
 
     // TODO add more independent free-block lists to reduce concurrency issues during block allocation and replace
     // synchronized with something better
 
     FreeBlocks(long firstFreeBlockAddress, long firstNonUsableAddress, int blockSize)
     {
-        this.freeBlockHead = firstFreeBlockAddress;
-
-        for (long adr = firstFreeBlockAddress; adr != 0L; )
+        int fli = 0;
+        for (long adr = firstFreeBlockAddress; adr < firstNonUsableAddress; adr += blockSize)
         {
-            long next = adr + blockSize;
-            if (next > firstNonUsableAddress)
-                throw new InternalError();
-            if (next == firstNonUsableAddress)
-                next = 0L;
-            Uns.putLong(adr, next);
+            Uns.putLong(adr, 0L);
 
-            adr = next;
+            freeLists[fli & MASK].push(adr);
+            fli++;
         }
     }
 
@@ -43,22 +107,62 @@ final class FreeBlocks
 
     synchronized long allocateBlock()
     {
-        long blockAddress = freeBlockHead;
-        if (blockAddress == 0L)
-            return 0L;
+        int fli = freeListPtr.getAndIncrement();
+        long adr;
+        while (true)
+        {
+            boolean none = true;
+            for (int i = 0; i < freeLists.length; i++, fli++)
+            {
+                FreeList fl = freeLists[fli & MASK];
 
-        freeBlockHead = Uns.getLong(blockAddress);
+                if (fl.empty())
+                    continue;
+                none = false;
 
-        return blockAddress;
+                if (fl.tryLock())
+                    try
+                    {
+                        adr = fl.pull();
+                        if (adr != 0L)
+                            return adr;
+                    }
+                    finally
+                    {
+                        fl.unlock();
+                    }
+            }
+            if (none)
+                return 0L;
+        }
     }
 
-    synchronized void freeBlock(long adr)
+    void freeBlock(long adr)
     {
         if (adr == 0L)
             return;
 
-        Uns.putLong(adr, freeBlockHead);
-        freeBlockHead = adr;
+        int fli = freeListPtr.getAndIncrement();
+        while (true)
+        {
+            for (int i = 0; i < freeLists.length; i++, fli++)
+            {
+                FreeList fl = freeLists[fli & MASK];
+
+                if (fl.tryLock())
+                    try
+                    {
+                        fl.push(adr);
+                        return;
+                    }
+                    finally
+                    {
+                        fl.unlock();
+                    }
+            }
+            freeBlockSpins.incrementAndGet();
+            Thread.yield();
+        }
     }
 
     // TODO add functionality to free a complete hash-entry-chain at once
@@ -66,8 +170,24 @@ final class FreeBlocks
     synchronized int calcFreeBlockCount()
     {
         int free = 0;
-        for (long adr = freeBlockHead; adr != 0L; adr = Uns.getLong(adr))
-            free++;
+        for (FreeList freeList : freeLists)
+        {
+            while (!freeList.tryLock())
+                Thread.yield();
+            try
+            {
+                free += freeList.calcFreeBlockCount();
+            }
+            finally
+            {
+                freeList.unlock();
+            }
+        }
         return free;
+    }
+
+    long getFreeBlockSpins()
+    {
+        return freeBlockSpins.get();
     }
 }
