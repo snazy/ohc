@@ -58,8 +58,8 @@ final class OHCacheImpl implements OHCache
         long firstFreeBlockAddress = hashTableSize * blockSize;
 
         this.freeBlocks = new FreeBlocks(rootAddress + firstFreeBlockAddress, rootAddress + totalCapacity, blockSize);
-        this.hashEntryAccess = new HashEntryAccess(blockSize, freeBlocks);
-        this.hashPartitionAccess = new HashPartitionAccess(hashTableSize, blockSize, rootAddress, freeBlocks);
+        this.hashPartitionAccess = new HashPartitionAccess(hashTableSize, blockSize, rootAddress);
+        this.hashEntryAccess = new HashEntryAccess(blockSize, freeBlocks, hashPartitionAccess);
     }
 
     public void close()
@@ -98,7 +98,7 @@ final class OHCacheImpl implements OHCache
         return freeBlocks.calcFreeBlockCount();
     }
 
-    public void put(int hash, BytesSource keySource, BytesSource valueSource)
+    public boolean put(int hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink)
     {
         if (keySource == null)
             throw new NullPointerException();
@@ -110,34 +110,40 @@ final class OHCacheImpl implements OHCache
             throw new ArrayIndexOutOfBoundsException();
 
         // 1. find + lock hash partition
-        long partitionAdr = hashPartitionAccess.partitionForHash(hash);
-
-        // 2. do work
-        long adr = hashEntryAccess.findHashEntry(hash, keySource);
-        if (adr != 0L)
+        long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
+        try
         {
-            // remove existing entry
+            // 2. do work
+            long hashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
+            boolean replace = hashEntryAdr != 0L;
+            if (hashEntryAdr != 0L)
+            {
+                // remove existing entry
 
-            hashEntryAccess.freeHashEntryChain(adr);
+                if (oldValueSink != null)
+                    hashEntryAccess.writeValueToSink(hashEntryAdr, oldValueSink);
 
-            // TODO unlink from LRU list
+                hashEntryAccess.removeFromLRU(partitionAdr, hashEntryAdr);
+                hashEntryAccess.freeHashEntryChain(hashEntryAdr);
+            }
+            hashEntryAdr = hashEntryAccess.allocateDataForEntry(hash, keySource, valueSource);
+            if (hashEntryAdr != 0L)
+            {
+                // add new entry
 
-            // TODO remove from hash partition
+                hashEntryAccess.addAsLRUHead(partitionAdr, hashEntryAdr);
+            }
+
+            return replace;
         }
-        adr = hashEntryAccess.allocateDataForEntry(hash, keySource, valueSource);
-        if (adr != 0L)
+        finally
         {
-            // TODO link to LRU list
-
-            // TODO add to hash partition
+            // 3. release hash partition
+            hashPartitionAccess.unlockPartition(partitionAdr);
         }
-
-        // 3. release hash partition
-
-        throw new UnsupportedOperationException();
     }
 
-    public void get(int hash, BytesSource keySource, BytesSink valueSink)
+    public boolean get(int hash, BytesSource keySource, BytesSink valueSink)
     {
         if (keySource == null)
             throw new NullPointerException();
@@ -147,24 +153,30 @@ final class OHCacheImpl implements OHCache
             throw new ArrayIndexOutOfBoundsException();
 
         // 1. find + lock hash partition
-        long partitionAdr = hashPartitionAccess.partitionForHash(hash);
-
-        // 2. do work
-        long adr = hashEntryAccess.findHashEntry(hash, keySource);
-        if (adr != 0L)
+        long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
+        try
         {
-            // TODO update LRU list
-            // TODO update last accessed timestamp
+            // 2. do work
+            long hashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
+            if (hashEntryAdr != 0L)
+            {
+                hashEntryAccess.updateLRU(partitionAdr, hashEntryAdr);
 
-            hashEntryAccess.updateLRU(partitionAdr, adr);
+                hashEntryAccess.writeValueToSink(hashEntryAdr, valueSink);
+
+                return true;
+            }
+
+            return false;
         }
-
-        // 3. release hash partition
-
-        throw new UnsupportedOperationException();
+        finally
+        {
+            // 3. release hash partition
+            hashPartitionAccess.unlockPartition(partitionAdr);
+        }
     }
 
-    public void remove(int hash, BytesSource keySource)
+    public boolean remove(int hash, BytesSource keySource)
     {
         if (keySource == null)
             throw new NullPointerException();
@@ -172,21 +184,26 @@ final class OHCacheImpl implements OHCache
             throw new ArrayIndexOutOfBoundsException();
 
         // 1. find + lock hash partition
-        long partitionAdr = hashPartitionAccess.partitionForHash(hash);
-
-        // 2. do work
-        long adr = hashEntryAccess.findHashEntry(hash, keySource);
-        if (adr != 0L)
+        long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
+        try
         {
-            hashEntryAccess.freeHashEntryChain(adr);
+            // 2. do work
+            long hashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
+            if (hashEntryAdr != 0L)
+            {
+                hashEntryAccess.removeFromLRU(partitionAdr, hashEntryAdr);
 
-            // TODO unlink from LRU list
+                hashEntryAccess.freeHashEntryChain(hashEntryAdr);
 
-            // TODO remove from hash partition
+                return true;
+            }
+
+            return false;
         }
-
-        // 3. release hash partition
-
-        throw new UnsupportedOperationException();
+        finally
+        {
+            // 3. release hash partition
+            hashPartitionAccess.unlockPartition(partitionAdr);
+        }
     }
 }

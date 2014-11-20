@@ -26,15 +26,18 @@ final class HashEntryAccess
     static final long OFF_DATA_IN_NEXT = 8L;
 
     private final int blockSize;
+
     private final FreeBlocks freeBlocks;
+    private final HashPartitionAccess hashPartitionAccess;
 
     private final long firstBlockDataSpace;
     private final long nextBlockDataSpace;
 
-    HashEntryAccess(int blockSize, FreeBlocks freeBlocks)
+    HashEntryAccess(int blockSize, FreeBlocks freeBlocks, HashPartitionAccess hashPartitionAccess)
     {
         this.blockSize = blockSize;
         this.freeBlocks = freeBlocks;
+        this.hashPartitionAccess = hashPartitionAccess;
 
         firstBlockDataSpace = blockSize - OFF_DATA;
         nextBlockDataSpace = blockSize - OFF_DATA_IN_NEXT;
@@ -68,11 +71,14 @@ final class HashEntryAccess
         }
 
         Uns.putLong(adr + OFF_HASH, hash);
-        Uns.putLong(adr + OFF_LRU_PREVIOUS, 0L);
-        Uns.putLong(adr + OFF_LRU_NEXT, 0L);
+        setLRUPrevious(adr, 0L);
+        setLRUNext(adr, 0L);
         Uns.putLong(adr + OFF_LAST_USED_TIMESTAMP, System.currentTimeMillis());
         Uns.putLong(adr + OFF_HASH_KEY_LENGTH, keySource.size());
         Uns.putLong(adr + OFF_VALUE_LENGTH, valueSource.size());
+
+        // TODO write key to data
+        // TODO write value to data
 
         return adr;
     }
@@ -88,16 +94,84 @@ final class HashEntryAccess
         return 0L;
     }
 
-    long findHashEntry(int hash, BytesSource keySource)
+    long findHashEntry(long partitionAdr, int hash, BytesSource keySource)
     {
-        return 0;
+        for (long hashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr); hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
+        {
+            long hashEntryHash = Uns.getLong(hashEntryAdr + OFF_HASH);
+            if (hashEntryHash != hash)
+                continue;
+
+            // TODO compare serialized hash
+
+            throw new UnsupportedOperationException();
+        }
+        return 0L;
+    }
+
+    void writeValueToSink(long hashEntryAdr, BytesSink valueSink)
+    {
+        throw new UnsupportedOperationException();
     }
 
     public void updateLRU(long partitionAdr, long hashEntryAdr)
     {
-        // TODO update LRU using hash partition
-        Uns.putLong(hashEntryAdr + OFF_LRU_PREVIOUS, 0L);
-        Uns.putLong(hashEntryAdr + OFF_LRU_NEXT, 0L);
+        removeFromLRU(partitionAdr, hashEntryAdr);
+        addAsLRUHead(partitionAdr, hashEntryAdr);
+
         Uns.putLong(hashEntryAdr + OFF_LAST_USED_TIMESTAMP, System.currentTimeMillis());
+    }
+
+    void addAsLRUHead(long partitionAdr, long hashEntryAdr)
+    {
+        long lruHead = hashPartitionAccess.getLRUHead(partitionAdr);
+
+        if (lruHead != 0L)
+        {
+            setLRUNext(hashEntryAdr, lruHead);
+            setLRUPrevious(lruHead, hashEntryAdr);
+        }
+
+        hashPartitionAccess.setLRUHead(partitionAdr, hashEntryAdr);
+    }
+
+    void removeFromLRU(long partitionAdr, long hashEntryAdr)
+    {
+        long lruHead = hashPartitionAccess.getLRUHead(partitionAdr);
+
+        long entryPrev = getLRUPrevious(hashEntryAdr);
+        long entryNext = getLRUNext(hashEntryAdr);
+
+        if (entryNext != 0L)
+            setLRUPrevious(entryNext, entryPrev);
+
+        if (entryPrev != 0L)
+            setLRUNext(entryPrev, entryNext);
+
+        if (lruHead == hashEntryAdr)
+            hashPartitionAccess.setLRUHead(partitionAdr, entryNext);
+
+        setLRUPrevious(hashEntryAdr, 0L);
+        setLRUNext(hashEntryAdr, 0L);
+    }
+
+    private long getLRUNext(long hashEntryAdr)
+    {
+        return Uns.getLong(hashEntryAdr + OFF_LRU_NEXT);
+    }
+
+    private long getLRUPrevious(long hashEntryAdr)
+    {
+        return Uns.getLong(hashEntryAdr + OFF_LRU_PREVIOUS);
+    }
+
+    private void setLRUPrevious(long hashEntryAdr, long previousAdr)
+    {
+        Uns.putLong(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
+    }
+
+    private void setLRUNext(long hashEntryAdr, long nextAdr)
+    {
+        Uns.putLong(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
     }
 }

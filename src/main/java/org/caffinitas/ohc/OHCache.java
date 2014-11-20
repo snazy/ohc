@@ -12,9 +12,9 @@ public interface OHCache extends Closeable
 
     int calcFreeBlockCount();
 
-    void put(int hash, BytesSource keySource, BytesSource valueSource);
+    boolean put(int hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink);
 
-    void get(int hash, BytesSource keySource, BytesSink valueSink);
+    boolean get(int hash, BytesSource keySource, BytesSink valueSink);
 
-    void remove(int hash, BytesSource keySource);
+    boolean remove(int hash, BytesSource keySource);
 }
