@@ -53,23 +53,14 @@
         </repository>
     </distributionManagement>
     <scm>
-        <connection>scm:git:http://bitbucket.org/snazy/caffinitas</connection>
-        <developerConnection>scm:git:https://bitbucket.org/snazy/caffinitas</developerConnection>
-        <url>http://bitbucket.org/snazy/caffinitas</url>
+        <connection>scm:git:https://github.com/snazy/ohc.git</connection>
+        <developerConnection>scm:git:https://github.com/snazy/ohc.git</developerConnection>
+        <url>https://github.com/snazy/ohc</url>
     </scm>
     <issueManagement>
-        <system>JIRA</system>
-        <url>https://caffinitas.atlassian.net/</url>
+        <system>Github</system>
+        <url>https://github.com/snazy/ohc</url>
     </issueManagement>
-    <mailingLists>
-        <mailingList>
-            <name>Caffinitas Mapper Mailing List</name>
-            <subscribe>caffinitas-mapper+subscribe@googlegroups.com</subscribe>
-            <unsubscribe>caffinitas-mapper+unsubscribe@googlegroups.com</unsubscribe>
-            <post>caffinitas-mapper@googlegroups.com</post>
-            <archive>https://groups.google.com/d/forum/caffinitas-mapper</archive>
-        </mailingList>
-    </mailingLists>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
