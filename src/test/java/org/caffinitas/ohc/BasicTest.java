@@ -55,16 +55,24 @@ public class BasicTest
         {
             int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
 
-            for (int i = 0; i < dataBlockCount; i++)
+            int cnt = dataBlockCount - 1;
+
+            for (int i = 0; i < cnt; i++)
             {
                 BytesSource.StringSource src = new BytesSource.StringSource(Integer.toString(i));
                 Assert.assertSame(cache.put(i, src, src), PutResult.ADD, Integer.toString(i));
             }
 
-            BytesSource.StringSource src = new BytesSource.StringSource(Integer.toString(-1));
+            BytesSource.StringSource src = new BytesSource.StringSource(Integer.toString(cnt));
+            Assert.assertSame(cache.put(cnt, src, src), PutResult.ADD, Integer.toString(cnt));
+
+            src = new BytesSource.StringSource(Integer.toString(-1));
             Assert.assertSame(cache.put(-1, src, src), PutResult.NO_MORE_SPACE, Integer.toString(-1));
 
-            for (int i = 0; i < dataBlockCount; i++)
+            src = new BytesSource.StringSource(Integer.toString(cnt));
+            Assert.assertTrue(cache.remove(cnt, src));
+
+            for (int i = 0; i < cnt; i++)
             {
                 BytesSink.ByteArraySink val = new BytesSink.ByteArraySink();
                 Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), val));
@@ -73,13 +81,13 @@ public class BasicTest
 
             // once again
 
-            for (int i = 0; i < dataBlockCount; i++)
+            for (int i = 0; i < cnt; i++)
             {
                 src = new BytesSource.StringSource(Integer.toString(i));
                 Assert.assertSame(cache.put(i, src, src), PutResult.REPLACE, Integer.toString(i));
             }
 
-            for (int i = 0; i < dataBlockCount; i++)
+            for (int i = 0; i < cnt; i++)
             {
                 BytesSink.ByteArraySink val = new BytesSink.ByteArraySink();
                 Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), val));
@@ -97,7 +105,7 @@ public class BasicTest
             int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
 
             int garbage = 2 * cache.getBlockSize();
-            int cnt = dataBlockCount / 5;
+            int cnt = dataBlockCount / 5 - 1;
 
             for (int i = 0; i < cnt; i++)
             {
@@ -105,8 +113,14 @@ public class BasicTest
                 Assert.assertSame(cache.put(i, src, src), PutResult.ADD, Integer.toString(i));
             }
 
-            BytesSource src = bigSourceFor(garbage, -1);
+            BytesSource src = bigSourceFor(garbage, cnt);
+            Assert.assertSame(cache.put(cnt, src, src), PutResult.ADD, Integer.toString(cnt));
+
+            src = bigSourceFor(garbage, -1);
             Assert.assertSame(cache.put(-1, src, src), PutResult.NO_MORE_SPACE, Integer.toString(-1));
+
+            src = bigSourceFor(garbage, cnt);
+            Assert.assertTrue(cache.remove(cnt, src));
 
             for (int i = 0; i < cnt; i++)
             {

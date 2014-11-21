@@ -82,7 +82,7 @@ final class OHCacheImpl implements OHCache
         ts /= bs;
         ts *= bs;
         if (ts < minSize)
-            throw new IllegalArgumentException("Block size must not be less than " + minSize);
+            throw new IllegalArgumentException("Total size must not be less than " + minSize);
         totalCapacity = ts;
 
         long hashTableMem = HashPartitionAccess.sizeForEntries(hashTableSize);
