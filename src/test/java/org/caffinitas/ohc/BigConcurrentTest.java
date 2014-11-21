@@ -33,6 +33,8 @@ public class BigConcurrentTest
     {
         cache = OHCacheBuilder.newBuilder()
                               .setHashTableSize(1024)
+//                              .setBlockSize(65536)
+                              .setTotalCapacity(256 * 1024 * 1024)
                               .build();
     }
 
@@ -44,7 +46,7 @@ public class BigConcurrentTest
         cache.close();
     }
 
-    @Test(threadPoolSize = 1, invocationCount = 4)
+    @Test(threadPoolSize = 1, invocationCount = 4, enabled = false)
     public void threadCount1() throws IOException
     {
         withPieceOfData();

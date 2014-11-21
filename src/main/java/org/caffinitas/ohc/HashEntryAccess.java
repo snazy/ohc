@@ -74,14 +74,14 @@ final class HashEntryAccess
                : blk;
     }
 
-    long allocateDataForEntry(int hash, BytesSource keySource, BytesSource valueSource)
+    long createNewEntryChain(int hash, BytesSource keySource, BytesSource valueSource)
     {
         int requiredBlocks = calcRequiredNumberOfBlocks(keySource, valueSource);
         if (requiredBlocks < 1)
             throw new InternalError();
 
         // allocate memory for whole hash-entry-chain
-        long hashEntryAdr = allocateHashEntryChain(requiredBlocks);
+        long hashEntryAdr = freeBlocks.allocateChain(requiredBlocks);
         if (hashEntryAdr == 0L)
             return 0L;
 
@@ -191,43 +191,14 @@ final class HashEntryAccess
         return hashEntryAdr;
     }
 
-    private long allocateHashEntryChain(int requiredBlocks)
-    {
-        long hashEntryAdr = 0L;
-        while (requiredBlocks-- > 0)
-        {
-            long blkAdr = freeBlocks.allocateBlock();
-            if (blkAdr == 0L)
-            {
-                freeHashEntryChain(hashEntryAdr);
-                return 0L;
-            }
-
-            Uns.putLong(blkAdr + OFF_NEXT_BLOCK, hashEntryAdr);
-
-            hashEntryAdr = blkAdr;
-        }
-        return hashEntryAdr;
-    }
-
     private void initHashEntry(int hash, BytesSource keySource, BytesSource valueSource, long hashEntryAdr)
     {
-        Uns.putLong(hashEntryAdr + OFF_HASH, hash);
+        setLastUsed(hashEntryAdr);
+        Uns.putLongVolatile(hashEntryAdr + OFF_HASH, hash);
         setLRUPrevious(hashEntryAdr, 0L);
         setLRUNext(hashEntryAdr, 0L);
-        setLastUsed(hashEntryAdr);
-        Uns.putLong(hashEntryAdr + OFF_HASH_KEY_LENGTH, keySource.size());
-        Uns.putLong(hashEntryAdr + OFF_VALUE_LENGTH, valueSource.size());
-    }
-
-    void freeHashEntryChain(long adr)
-    {
-        while (adr != 0L)
-        {
-            long next = getNextBlock(adr);
-            freeBlocks.freeBlock(adr);
-            adr = next;
-        }
+        Uns.putLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH, keySource.size());
+        Uns.putLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH, valueSource.size());
     }
 
     long findHashEntry(long partitionAdr, int hash, BytesSource keySource)
@@ -243,11 +214,11 @@ final class HashEntryAccess
                 throw new InternalError("endless loop");
             first = false;
 
-            long hashEntryHash = Uns.getLong(hashEntryAdr + OFF_HASH);
+            long hashEntryHash = Uns.getLongVolatile(hashEntryAdr + OFF_HASH);
             if (hashEntryHash != hash)
                 continue;
 
-            long serKeyLen = Uns.getLong(hashEntryAdr + OFF_HASH_KEY_LENGTH);
+            long serKeyLen = Uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
             if (serKeyLen != keySource.size())
                 continue;
 
@@ -259,6 +230,26 @@ final class HashEntryAccess
         return 0L;
     }
 
+//    String dumpLRUList(long partitionAdr)
+//    {
+//        StringBuilder sb = new StringBuilder()
+//                           .append("partition=").append(partitionAdr).append("\n");
+//        long firstHashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr);
+//        boolean first = true;
+//        for (long hashEntryAdr = firstHashEntryAdr; hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
+//        {
+//            sb.append("     next=").append(hashEntryAdr).append("\n");
+//
+//            if (!first && firstHashEntryAdr == hashEntryAdr)
+//            {
+//                sb.append("*** FAILURE !!! LOOOPS TO FIRST ENTRY!");
+//                break;
+//            }
+//            first = false;
+//        }
+//        return sb.toString();
+//    }
+
     private boolean compareKey(long hashEntryAdr, BytesSource keySource, long serKeyLen)
     {
         if (hashEntryAdr == 0L)
@@ -266,6 +257,43 @@ final class HashEntryAccess
 
         long blkOff = OFF_DATA_IN_FIRST;
         long blkAdr = hashEntryAdr;
+
+        // array optimized version
+        if (keySource.hasArray())
+        {
+            byte[] arr = keySource.array();
+            int arrOff = keySource.arrayOffset();
+            for (int p = 0; p < serKeyLen; )
+            {
+                if (serKeyLen - p >= 8)
+                {
+                    long lSer = Uns.getLong(blkAdr + blkOff);
+                    long lKey = Uns.getLongFromByteArray(arr, arrOff + p);
+                    if (lSer != lKey)
+                        return false;
+                    blkOff += 8;
+                    p += 8;
+                }
+                else
+                {
+                    byte bSer = Uns.getByte(blkAdr + blkOff++);
+                    byte bKey = keySource.getByte(p++);
+
+                    if (bSer != bKey)
+                        return false;
+                }
+
+                if (blkOff == blockSize)
+                {
+                    blkAdr = getNextBlock(blkAdr);
+                    blkOff = OFF_DATA_IN_NEXT;
+                }
+            }
+
+            return true;
+        }
+
+        // last-resort byte-by-byte compare
         for (int p = 0; p < serKeyLen; p++)
         {
             if (blkAdr == 0L)
@@ -292,10 +320,10 @@ final class HashEntryAccess
         if (hashEntryAdr == 0L)
             return;
 
-        long serKeyLen = Uns.getLong(hashEntryAdr + OFF_HASH_KEY_LENGTH);
+        long serKeyLen = Uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
         if (serKeyLen < 0L)
             throw new InternalError();
-        long valueLen = Uns.getLong(hashEntryAdr + OFF_VALUE_LENGTH);
+        long valueLen = Uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
         if (valueLen < 0L)
             throw new InternalError();
         long blkAdr = hashEntryAdr;
@@ -334,12 +362,7 @@ final class HashEntryAccess
         }
     }
 
-    private long getNextBlock(long blockAdr)
-    {
-        return blockAdr != 0L ? Uns.getLong(blockAdr + OFF_NEXT_BLOCK) : 0L;
-    }
-
-    public void updateLRU(long partitionAdr, long hashEntryAdr)
+    void updatePartitionLRU(long partitionAdr, long hashEntryAdr)
     {
         if (partitionAdr == 0L || hashEntryAdr == 0L)
             return;
@@ -347,20 +370,20 @@ final class HashEntryAccess
         long lruHead = hashPartitionAccess.getLRUHead(partitionAdr);
         if (lruHead != hashEntryAdr)
         {
-            removeFromLRU(partitionAdr, hashEntryAdr, lruHead);
-            addAsLRUHead(partitionAdr, hashEntryAdr, lruHead);
+            removeFromPartitionLRU(partitionAdr, hashEntryAdr, lruHead);
+            addAsPartitionLRUHead(partitionAdr, hashEntryAdr, lruHead);
         }
 
         setLastUsed(hashEntryAdr);
     }
 
-    void addAsLRUHead(long partitionAdr, long hashEntryAdr)
+    void addAsPartitionLRUHead(long partitionAdr, long hashEntryAdr)
     {
         long lruHead = hashPartitionAccess.getLRUHead(partitionAdr);
-        addAsLRUHead(partitionAdr, hashEntryAdr, lruHead);
+        addAsPartitionLRUHead(partitionAdr, hashEntryAdr, lruHead);
     }
 
-    void addAsLRUHead(long partitionAdr, long hashEntryAdr, long lruHead)
+    void addAsPartitionLRUHead(long partitionAdr, long hashEntryAdr, long lruHead)
     {
         if (partitionAdr == 0L || hashEntryAdr == 0L)
             return;
@@ -370,49 +393,20 @@ final class HashEntryAccess
             setLRUNext(hashEntryAdr, lruHead);
             setLRUPrevious(lruHead, hashEntryAdr);
         }
+        else
+            setLRUNext(hashEntryAdr, 0L);
+        setLRUPrevious(hashEntryAdr, 0L);
 
         hashPartitionAccess.setLRUHead(partitionAdr, hashEntryAdr);
     }
 
-    String dumpLRUList(long partitionAdr)
-    {
-        StringBuilder sb = new StringBuilder()
-                           .append("partition=").append(partitionAdr).append("\n");
-        long firstHashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr);
-        boolean first = true;
-        for (long hashEntryAdr = firstHashEntryAdr; hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
-        {
-            sb.append("     next=").append(hashEntryAdr).append("\n");
-
-            if (!first && firstHashEntryAdr == hashEntryAdr)
-            {
-                sb.append("*** FAILURE !!! LOOOPS TO FIRST ENTRY!");
-                break;
-            }
-            first = false;
-        }
-        return sb.toString();
-    }
-
-    void assertNoLoop(long partitionAdr)
-    {
-        long firstHashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr);
-        boolean first = true;
-        for (long hashEntryAdr = firstHashEntryAdr; hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
-        {
-            if (!first && firstHashEntryAdr == hashEntryAdr)
-                throw new InternalError("endless loop");
-            first = false;
-        }
-    }
-
-    void removeFromLRU(long partitionAdr, long hashEntryAdr)
+    void removeFromPartitionLRU(long partitionAdr, long hashEntryAdr)
     {
         long lruHead = hashPartitionAccess.getLRUHead(partitionAdr);
-        removeFromLRU(partitionAdr, hashEntryAdr, lruHead);
+        removeFromPartitionLRU(partitionAdr, hashEntryAdr, lruHead);
     }
 
-    void removeFromLRU(long partitionAdr, long hashEntryAdr, long lruHead)
+    void removeFromPartitionLRU(long partitionAdr, long hashEntryAdr, long lruHead)
     {
         if (partitionAdr == 0L || hashEntryAdr == 0L)
             return;
@@ -429,30 +423,34 @@ final class HashEntryAccess
         if (lruHead == hashEntryAdr)
             hashPartitionAccess.setLRUHead(partitionAdr, entryNext);
 
-        setLRUPrevious(hashEntryAdr, 0L);
-        setLRUNext(hashEntryAdr, 0L);
+        // we can leave the LRU next+previous pointers in hashEntryAdr alone
+    }
+
+    private long getNextBlock(long blockAdr)
+    {
+        return blockAdr != 0L ? Uns.getLongVolatile(blockAdr + OFF_NEXT_BLOCK) : 0L;
     }
 
     private long getLRUNext(long hashEntryAdr)
     {
-        return hashEntryAdr != 0L ? Uns.getLong(hashEntryAdr + OFF_LRU_NEXT) : 0L;
+        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + OFF_LRU_NEXT) : 0L;
     }
 
     private long getLRUPrevious(long hashEntryAdr)
     {
-        return hashEntryAdr != 0L ? Uns.getLong(hashEntryAdr + OFF_LRU_PREVIOUS) : 0L;
+        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS) : 0L;
     }
 
     private void setLRUPrevious(long hashEntryAdr, long previousAdr)
     {
         if (hashEntryAdr != 0L)
-            Uns.putLong(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
+            Uns.putLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
     }
 
     private void setLRUNext(long hashEntryAdr, long nextAdr)
     {
         if (hashEntryAdr != 0L)
-            Uns.putLong(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
+            Uns.putLongVolatile(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
     }
 
     private void setLastUsed(long hashEntryAdr)

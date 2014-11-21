@@ -20,6 +20,7 @@ public class OHCacheBuilder
     private int blockSize = 2048;
     private int hashTableSize = 256;
     private long totalCapacity = 64L*1024L*1024L;
+//    private boolean profilingMetrics;
 
     private OHCacheBuilder()
     {
@@ -62,6 +63,16 @@ public class OHCacheBuilder
         this.totalCapacity = totalCapacity;
         return this;
     }
+
+//    public boolean isProfilingMetrics()
+//    {
+//        return profilingMetrics;
+//    }
+//
+//    public void setProfilingMetrics(boolean profilingMetrics)
+//    {
+//        this.profilingMetrics = profilingMetrics;
+//    }
 
     public OHCache build()
     {

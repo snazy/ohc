@@ -80,7 +80,7 @@ final class HashPartitionAccess
     {
         if (partitionAdr == 0L)
             return 0L;
-        return Uns.getLong(partitionAdr + OFF_LRU_HEAD);
+        return Uns.getLongVolatile(partitionAdr + OFF_LRU_HEAD);
     }
 
     public void setLRUHead(long partitionAdr, long hashEntryAdr)

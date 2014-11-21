@@ -68,24 +68,39 @@ final class Uns
         unsafe.putLongVolatile(null, address, value);
     }
 
-    static void putLong(Object obj, long offset, long value)
+    static void putLongVolatile(long address, long value)
+    {
+        unsafe.putLongVolatile(null, address, value);
+    }
+
+    static void putLongVolatile(Object obj, long offset, long value)
     {
         unsafe.putLongVolatile(obj, offset, value);
     }
 
+    static long getLongFromByteArray(byte[] array, int offset)
+    {
+        return unsafe.getLong(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
+    }
+
     static long getLong(long address)
+    {
+        return unsafe.getLong(null, address);
+    }
+
+    static long getLongVolatile(long address)
     {
         return unsafe.getLongVolatile(null, address);
     }
 
     static void putByte(long address, byte value)
     {
-        unsafe.putByteVolatile(null, address, value);
+        unsafe.putByte(null, address, value);
     }
 
     static byte getByte(long address)
     {
-        return unsafe.getByteVolatile(null, address);
+        return unsafe.getByte(null, address);
     }
 
     static boolean compareAndSwap(long address, long expected, long value)

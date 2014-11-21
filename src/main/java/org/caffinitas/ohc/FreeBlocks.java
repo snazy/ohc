@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 final class FreeBlocks
 {
+
     static final class FreeList
     {
         private volatile long freeBlockHead;
@@ -39,7 +40,7 @@ final class FreeBlocks
 
         void unlock()
         {
-            Uns.putLong(this, freeListLockOffset, 0L);
+            Uns.putLongVolatile(this, freeListLockOffset, 0L);
         }
 
         public boolean empty()
@@ -47,27 +48,43 @@ final class FreeBlocks
             return freeBlockHead == 0L;
         }
 
+        void pushChain(long adr)
+        {
+            long root = adr;
+            while (true)
+            {
+                long next = Uns.getLongVolatile(adr);
+                if (next == 0L)
+                {
+                    Uns.putLongVolatile(adr, freeBlockHead);
+                    freeBlockHead = root;
+                    return;
+                }
+                adr = next;
+            }
+        }
+
         void push(long adr)
         {
-            Uns.putLong(adr, freeBlockHead);
+            Uns.putLongVolatile(adr, freeBlockHead);
             freeBlockHead = adr;
         }
 
         long pull()
         {
-            long blockAddress = freeBlockHead;
-            if (blockAddress == 0L)
+            long adr = freeBlockHead;
+            if (adr == 0L)
                 return 0L;
 
-            freeBlockHead = Uns.getLong(blockAddress);
+            freeBlockHead = Uns.getLongVolatile(adr);
 
-            return blockAddress;
+            return adr;
         }
 
         int calcFreeBlockCount()
         {
             int free = 0;
-            for (long adr = freeBlockHead; adr != 0L; adr = Uns.getLong(adr))
+            for (long adr = freeBlockHead; adr != 0L; adr = Uns.getLongVolatile(adr))
                 free++;
             return free;
         }
@@ -88,29 +105,25 @@ final class FreeBlocks
     private final AtomicInteger freeListPtr = new AtomicInteger();
     private final AtomicLong freeBlockSpins = new AtomicLong();
 
-    // TODO add more independent free-block lists to reduce concurrency issues during block allocation and replace
-    // synchronized with something better
-
     FreeBlocks(long firstFreeBlockAddress, long firstNonUsableAddress, int blockSize)
     {
         int fli = 0;
         for (long adr = firstFreeBlockAddress; adr < firstNonUsableAddress; adr += blockSize)
         {
-            Uns.putLong(adr, 0L);
+            Uns.putLongVolatile(adr, 0L);
 
             freeLists[fli & MASK].push(adr);
             fli++;
         }
     }
 
-    // TODO add some inexpensive functionality to allocate multiple blocks at once
-
-    // TODO add functionality to free a complete hash-entry-chain at once
-
-    long allocateBlock()
+    long allocateChain(int requiredBlocks)
     {
+        if (requiredBlocks <= 0)
+            return 0L;
+
         int fli = freeListPtr.getAndIncrement();
-        long adr;
+        long lastAlloc = 0L;
         for (int spin = 0; ; spin++)
         {
             boolean none = true;
@@ -125,9 +138,19 @@ final class FreeBlocks
                 if (fl.tryLock())
                     try
                     {
-                        adr = fl.pull();
-                        if (adr != 0L)
-                            return adr;
+                        while (requiredBlocks > 0)
+                        {
+                            long adr = fl.pull();
+                            if (adr != 0L)
+                            {
+                                Uns.putLongVolatile(adr, lastAlloc);
+                                lastAlloc = adr;
+                                if (--requiredBlocks == 0)
+                                    return lastAlloc;
+                            }
+                            else
+                                break;
+                        }
                     }
                     finally
                     {
@@ -135,13 +158,17 @@ final class FreeBlocks
                     }
             }
             if (none)
+            {
+                if (lastAlloc != 0L)
+                    freeChain(lastAlloc);
                 return 0L;
+            }
 
             Uns.park(((spin & 3) + 1) * 5000);
         }
     }
 
-    void freeBlock(long adr)
+    void freeChain(long adr)
     {
         if (adr == 0L)
             return;
@@ -156,7 +183,7 @@ final class FreeBlocks
                 if (fl.tryLock())
                     try
                     {
-                        fl.push(adr);
+                        fl.pushChain(adr);
                         return;
                     }
                     finally

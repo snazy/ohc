@@ -44,7 +44,7 @@ public class ConcurrentTest
         cache.close();
     }
 
-    @Test(threadPoolSize = 1, invocationCount = 4)
+    @Test(threadPoolSize = 1, invocationCount = 4, enabled = false)
     public void threadCount1() throws IOException
     {
         withPieceOfData();

@@ -27,7 +27,7 @@ final class OHCacheImpl implements OHCache
         {
             Field f = AtomicLong.class.getDeclaredField("VM_SUPPORTS_LONG_CAS");
             f.setAccessible(true);
-            if (!(Boolean)f.get(null))
+            if (!(Boolean) f.get(null))
                 throw new IllegalStateException("Off Heap Cache implementation requires a JVM that supports CAS on long fields");
         }
         catch (Exception e)
@@ -38,7 +38,7 @@ final class OHCacheImpl implements OHCache
 
     public static final int MAX_HASH_TABLE_SIZE = 4194304;
     public static final int MIN_HASH_TABLE_SIZE = 32;
-    public static final int MAX_BLOCK_SIZE = 32768;
+    public static final int MAX_BLOCK_SIZE = 262144;
     public static final int MIN_BLOCK_SIZE = 2048;
 
     private final int blockSize;
@@ -148,39 +148,46 @@ final class OHCacheImpl implements OHCache
         if (valueSource.size() < 0)
             throw new ArrayIndexOutOfBoundsException();
 
-        // 1. find + lock hash partition
+        // allocate and fill new hash entry
+        long newHashEntryAdr = hashEntryAccess.createNewEntryChain(hash, keySource, valueSource);
+        if (newHashEntryAdr == 0L)
+            return PutResult.NO_MORE_SPACE;
+
+        long oldHashEntryAdr;
+
+        // find + lock hash partition
         long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
         try
         {
-            // 2. do work
-            long hashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
-            boolean replace = hashEntryAdr != 0L;
-            if (hashEntryAdr != 0L)
-            {
-                // remove existing entry
+            // find existing entry
+            oldHashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
 
-                if (oldValueSink != null)
-                    hashEntryAccess.writeValueToSink(hashEntryAdr, oldValueSink);
-
-                hashEntryAccess.removeFromLRU(partitionAdr, hashEntryAdr);
-                hashEntryAccess.freeHashEntryChain(hashEntryAdr);
-            }
-            hashEntryAdr = hashEntryAccess.allocateDataForEntry(hash, keySource, valueSource);
-
-            if (hashEntryAdr == 0L)
-                return PutResult.NO_MORE_SPACE;
+            // remove existing entry
+            if (oldHashEntryAdr != 0L)
+                hashEntryAccess.removeFromPartitionLRU(partitionAdr, oldHashEntryAdr);
 
             // add new entry
-
-            hashEntryAccess.addAsLRUHead(partitionAdr, hashEntryAdr);
-
-            return replace ? PutResult.REPLACE : PutResult.ADD;
+            hashEntryAccess.addAsPartitionLRUHead(partitionAdr, newHashEntryAdr);
         }
         finally
         {
-            // 3. release hash partition
+            // release hash partition
             hashPartitionAccess.unlockPartition(partitionAdr);
         }
+
+        try
+        {
+            // write old value (if wanted)
+            if (oldValueSink != null)
+                hashEntryAccess.writeValueToSink(oldHashEntryAdr, oldValueSink);
+        }
+        finally
+        {
+            // release old value
+            freeBlocks.freeChain(oldHashEntryAdr);
+        }
+
+        return oldHashEntryAdr != 0L ? PutResult.REPLACE : PutResult.ADD;
     }
 
     public boolean get(int hash, BytesSource keySource, BytesSink valueSink)
@@ -192,15 +199,15 @@ final class OHCacheImpl implements OHCache
         if (keySource.size() <= 0)
             throw new ArrayIndexOutOfBoundsException();
 
-        // 1. find + lock hash partition
+        // find + lock hash partition
         long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
         try
         {
-            // 2. do work
+            // find hash entry
             long hashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
             if (hashEntryAdr != 0L)
             {
-                hashEntryAccess.updateLRU(partitionAdr, hashEntryAdr);
+                hashEntryAccess.updatePartitionLRU(partitionAdr, hashEntryAdr);
 
                 hashEntryAccess.writeValueToSink(hashEntryAdr, valueSink);
 
@@ -211,7 +218,7 @@ final class OHCacheImpl implements OHCache
         }
         finally
         {
-            // 3. release hash partition
+            // release hash partition
             hashPartitionAccess.unlockPartition(partitionAdr);
         }
     }
@@ -223,28 +230,26 @@ final class OHCacheImpl implements OHCache
         if (keySource.size() <= 0)
             throw new ArrayIndexOutOfBoundsException();
 
-        // 1. find + lock hash partition
+        // find + lock hash partition
+        long hashEntryAdr;
         long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
         try
         {
-            // 2. do work
-            long hashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
+            // find hash entry
+            hashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
             if (hashEntryAdr != 0L)
-            {
-                hashEntryAccess.removeFromLRU(partitionAdr, hashEntryAdr);
-
-                hashEntryAccess.freeHashEntryChain(hashEntryAdr);
-
-                return true;
-            }
-
-            return false;
+                hashEntryAccess.removeFromPartitionLRU(partitionAdr, hashEntryAdr);
         }
         finally
         {
-            // 3. release hash partition
+            // release hash partition
             hashPartitionAccess.unlockPartition(partitionAdr);
         }
+
+        // free chain
+        freeBlocks.freeChain(hashEntryAdr);
+
+        return hashEntryAdr != 0L;
     }
 
     public long getFreeBlockSpins()
