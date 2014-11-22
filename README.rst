@@ -53,9 +53,6 @@ overall performance.
 Note on the ``hotN`` function: The implementation will take N divided by number of hash partitions keys and usually
 return more results than expected.
 
-Note on hashes: The implementation heavily relies on uniform distribution of hash values to spread load. If possible
-use algorithms like Murmur3 to calculate hash values instead.
-
 Configuration
 -------------
 

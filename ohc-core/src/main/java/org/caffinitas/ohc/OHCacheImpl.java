@@ -426,7 +426,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void invalidate(Object o)
     {
-        remove(o.hashCode(), keySource((K) o));
+        BytesSource.ByteArraySource ks = keySource((K) o);
+
+        remove(ks.hashCode(), ks);
     }
 
     public V getIfPresent(Object o)
@@ -434,9 +436,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (valueSerializer == null)
             throw new NullPointerException("no valueSerializer configured");
 
-        int hash = o.hashCode();
+        BytesSource.ByteArraySource ks = keySource((K) o);
 
-        long hashEntryAdr = getInternal(hash, keySource((K) o));
+        long hashEntryAdr = getInternal(ks.hashCode(), ks);
         if (hashEntryAdr == 0L)
             return null;
 
@@ -454,7 +456,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
-    private BytesSource keySource(K o)
+    private BytesSource.ByteArraySource keySource(K o)
     {
         if (keySerializer == null)
             throw new NullPointerException("no keySerializer configured");
@@ -481,15 +483,13 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (valueSerializer == null)
             throw new NullPointerException("no valueSerializer configured");
 
-        int hash = k.hashCode();
-
-        BytesSource keySource = keySource(k);
+        BytesSource.ByteArraySource ks = keySource(k);
 
         long valueLen = valueSerializer.serializedSize(v);
 
         // Allocate and fill new hash entry.
         // Do this outside of the hash-partition lock to hold that lock no longer than necessary.
-        long newHashEntryAdr = hashEntryAccess.createNewEntryChain(hash, keySource, null, valueLen);
+        long newHashEntryAdr = hashEntryAccess.createNewEntryChain(ks.hashCode(), ks, null, valueLen);
         if (newHashEntryAdr == 0L)
             return;
 
@@ -502,7 +502,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             throw new IOError(e);
         }
 
-        putInternal(hash, keySource, null, newHashEntryAdr);
+        putInternal(ks.hashCode(), ks, null, newHashEntryAdr);
     }
 
     public void cleanUp()

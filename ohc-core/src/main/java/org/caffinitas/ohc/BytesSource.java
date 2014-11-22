@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import com.google.common.hash.Hashing;
+
 public interface BytesSource
 {
     int size();
@@ -87,6 +89,11 @@ public interface BytesSource
             this.array = array;
             this.off = off;
             this.len = len;
+        }
+
+        public int hashCode()
+        {
+            return Hashing.murmur3_32().hashBytes(array, off, len).asInt();
         }
 
         public int size()
