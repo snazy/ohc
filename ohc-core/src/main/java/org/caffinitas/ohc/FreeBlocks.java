@@ -53,10 +53,10 @@ final class FreeBlocks
             long root = adr;
             for (int cnt = 1; ; cnt++)
             {
-                long next = uns.getLongVolatile(adr);
+                long next = uns.getAddress(adr);
                 if (next == 0L)
                 {
-                    uns.putLongVolatile(adr, freeBlockHead);
+                    uns.putAddress(adr, freeBlockHead);
                     freeBlockHead = root;
                     return cnt;
                 }
@@ -66,7 +66,7 @@ final class FreeBlocks
 
         void push(long adr)
         {
-            uns.putLongVolatile(adr, freeBlockHead);
+            uns.putAddress(adr, freeBlockHead);
             freeBlockHead = adr;
         }
 
@@ -76,7 +76,7 @@ final class FreeBlocks
             if (adr == 0L)
                 return 0L;
 
-            freeBlockHead = uns.getLongVolatile(adr);
+            freeBlockHead = uns.getAddress(adr);
 
             return adr;
         }
@@ -84,7 +84,7 @@ final class FreeBlocks
         int calcFreeBlockCount()
         {
             int free = 0;
-            for (long adr = freeBlockHead; adr != 0L; adr = uns.getLongVolatile(adr))
+            for (long adr = freeBlockHead; adr != 0L; adr = uns.getAddress(adr))
                 free++;
             return free;
         }
@@ -145,7 +145,7 @@ final class FreeBlocks
                             long adr = fl.pull();
                             if (adr != 0L)
                             {
-                                uns.putLongVolatile(adr, lastAlloc);
+                                uns.putAddress(adr, lastAlloc);
                                 lastAlloc = adr;
                                 if (--requiredBlocks == 0)
                                     return lastAlloc;

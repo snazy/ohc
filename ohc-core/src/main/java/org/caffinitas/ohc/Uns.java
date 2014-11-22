@@ -55,11 +55,13 @@ final class Uns
 
     final long address;
     private final long last;
+    private final int blockSize;
 
-    Uns(long size)
+    Uns(long size, int blockSize)
     {
-        address = unsafe.allocateMemory(size);
-        last = address + size;
+        this.address = unsafe.allocateMemory(size);
+        this.last = address + size;
+        this.blockSize = blockSize;
     }
 
     void validate(long address, int len)
@@ -73,14 +75,17 @@ final class Uns
         unsafe.freeMemory(address);
     }
 
-    void putLong(long address, long value)
-    {
-        unsafe.putLongVolatile(null, address, value);
-    }
-
     void putLongVolatile(long address, long value)
     {
         validate(address, 8);
+        unsafe.putLongVolatile(null, address, value);
+    }
+
+    void putAddress(long address, long value)
+    {
+        validate(address, 8);
+        if (value != 0L)
+            validate(value, blockSize);
         unsafe.putLongVolatile(null, address, value);
     }
 
@@ -104,6 +109,15 @@ final class Uns
     {
         validate(address, 8);
         return unsafe.getLongVolatile(null, address);
+    }
+
+    long getAddress(long address)
+    {
+        validate(address, 8);
+        long r = unsafe.getLongVolatile(null, address);
+        if (r != 0L)
+            validate(r, blockSize);
+        return r;
     }
 
     void putByte(long address, byte value)
@@ -162,11 +176,6 @@ final class Uns
     static void park(long nanos)
     {
         unsafe.park(false, nanos);
-    }
-
-    boolean tryLock(long address)
-    {
-        return compareAndSwap(address, 0L, Thread.currentThread().getId());
     }
 
     int lock(long address)

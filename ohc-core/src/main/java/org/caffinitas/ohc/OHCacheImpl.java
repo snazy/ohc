@@ -140,7 +140,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         long hashTableMem = HashPartitionAccess.sizeForEntries(hashTableSize);
 
-        this.uns = new Uns(capacity + hashTableMem);
+        this.uns = new Uns(capacity + hashTableMem, blockSize);
 
         long blocksAddress = uns.address + hashTableMem;
 

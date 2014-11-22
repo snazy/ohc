@@ -387,6 +387,8 @@ final class HashEntryAccess
             throw new IllegalStateException("integer overflow");
         valueSink.setSize((int) valueLen);
 
+        // TODO memory to array copy
+
         for (int p = 0; blkAdr != 0L && p < valueLen; p++)
         {
             byte b = uns.getByte(blkAdr + blkOff++);
@@ -491,7 +493,7 @@ final class HashEntryAccess
     {
         if (blockAdr == 0L)
             return 0L;
-        blockAdr = uns.getLongVolatile(blockAdr + OFF_NEXT_BLOCK);
+        blockAdr = uns.getAddress(blockAdr + OFF_NEXT_BLOCK);
         if (blockAdr == 0L)
             throw new NullPointerException();
         return blockAdr;
@@ -499,24 +501,24 @@ final class HashEntryAccess
 
     long getLRUNext(long hashEntryAdr)
     {
-        return hashEntryAdr != 0L ? uns.getLongVolatile(hashEntryAdr + OFF_LRU_NEXT) : 0L;
+        return hashEntryAdr != 0L ? uns.getAddress(hashEntryAdr + OFF_LRU_NEXT) : 0L;
     }
 
     long getLRUPrevious(long hashEntryAdr)
     {
-        return hashEntryAdr != 0L ? uns.getLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS) : 0L;
+        return hashEntryAdr != 0L ? uns.getAddress(hashEntryAdr + OFF_LRU_PREVIOUS) : 0L;
     }
 
     void setLRUPrevious(long hashEntryAdr, long previousAdr)
     {
         if (hashEntryAdr != 0L)
-            uns.putLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
+            uns.putAddress(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
     }
 
     void setLRUNext(long hashEntryAdr, long nextAdr)
     {
         if (hashEntryAdr != 0L)
-            uns.putLongVolatile(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
+            uns.putAddress(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
     }
 
     void removeAll()

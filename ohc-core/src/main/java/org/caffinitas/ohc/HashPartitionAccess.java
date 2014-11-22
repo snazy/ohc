@@ -81,13 +81,13 @@ final class HashPartitionAccess
     {
         if (partitionAdr == 0L)
             return 0L;
-        return uns.getLongVolatile(partitionAdr + OFF_LRU_HEAD);
+        return uns.getAddress(partitionAdr + OFF_LRU_HEAD);
     }
 
     void setLRUHead(long partitionAdr, long hashEntryAdr)
     {
         if (partitionAdr != 0L)
-            uns.putLong(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
+            uns.putAddress(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
     }
 
     long getLockPartitionSpins()
