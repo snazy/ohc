@@ -38,14 +38,12 @@ final class HashEntryAccess
     static final int OFF_LRU_PREVIOUS = 16;
     // offset of next hash entry in LRU list for this hash partition
     static final int OFF_LRU_NEXT = 24;
-    // offset of last used timestamp (System.currentTimeMillis)
-    static final int OFF_LAST_USED_TIMESTAMP = 32;
     // offset of serialized hash key length
-    static final int OFF_HASH_KEY_LENGTH = 40;
+    static final int OFF_HASH_KEY_LENGTH = 32;
     // offset of serialized value length
-    static final int OFF_VALUE_LENGTH = 48;
+    static final int OFF_VALUE_LENGTH = 40;
     // offset of entry lock
-    static final int OFF_ENTRY_LOCK = 56;
+    static final int OFF_ENTRY_LOCK = 48;
     // offset of data in first block
     static final int OFF_DATA_IN_FIRST = 64;
 
@@ -53,6 +51,7 @@ final class HashEntryAccess
     static final int OFF_DATA_IN_NEXT = 8;
 
     private final int blockSize;
+    private final int hashTableSize;
 
     private final FreeBlocks freeBlocks;
     private final HashPartitionAccess hashPartitionAccess;
@@ -63,11 +62,12 @@ final class HashEntryAccess
 
     private long lastLruWarn;
 
-    HashEntryAccess(int blockSize, FreeBlocks freeBlocks, HashPartitionAccess hashPartitionAccess, int lruIterationWarnTrigger)
+    HashEntryAccess(int blockSize, FreeBlocks freeBlocks, HashPartitionAccess hashPartitionAccess, int hashTableSize, int lruIterationWarnTrigger)
     {
         this.blockSize = blockSize;
         this.freeBlocks = freeBlocks;
         this.hashPartitionAccess = hashPartitionAccess;
+        this.hashTableSize = hashTableSize;
         this.lruIterationWarnTrigger = lruIterationWarnTrigger;
 
         firstBlockDataSpace = blockSize - OFF_DATA_IN_FIRST;
@@ -217,7 +217,6 @@ final class HashEntryAccess
 
     private void initHashEntry(int hash, BytesSource keySource, BytesSource valueSource, long valueLen, long hashEntryAdr)
     {
-        setLastUsed(hashEntryAdr);
         Uns.putLongVolatile(hashEntryAdr + OFF_HASH, hash);
         setLRUPrevious(hashEntryAdr, 0L);
         setLRUNext(hashEntryAdr, 0L);
@@ -256,15 +255,22 @@ final class HashEntryAccess
 
             return hashEntryAdr;
         }
+
+        if (loops >= lruIterationWarnTrigger)
+            lruListLongWarn(loops);
+
         return 0L;
     }
 
     private void lruListLongWarn(int loops)
     {
-        if (lastLruWarn + 5000L < System.currentTimeMillis())
+        if (lastLruWarn + 10000L < System.currentTimeMillis())
         {
-            LOGGER.warn("Degraded OHC performance! LRU list very long - check OHC hash table size ({} LRU links required to find hash entry)", loops);
             lastLruWarn = System.currentTimeMillis();
+            LOGGER.warn("Degraded OHC performance! LRU list very long - check OHC hash table size " +
+                        "({} LRU links required to find hash entry) " +
+                        "(this message will reappear in 10 seconds if the problem persists)",
+                        loops);
         }
     }
 
@@ -411,8 +417,6 @@ final class HashEntryAccess
             removeFromPartitionLRU(partitionAdr, hashEntryAdr, lruHead);
             addAsPartitionLRUHead(partitionAdr, hashEntryAdr, lruHead);
         }
-
-        setLastUsed(hashEntryAdr);
     }
 
     void addAsPartitionLRUHead(long partitionAdr, long hashEntryAdr)
@@ -503,20 +507,79 @@ final class HashEntryAccess
             Uns.putLongVolatile(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
     }
 
-    private void setLastUsed(long hashEntryAdr)
+    void removeAll()
     {
-        if (hashEntryAdr != 0L)
-            Uns.putLong(hashEntryAdr + OFF_LAST_USED_TIMESTAMP, System.currentTimeMillis());
+        for (int h = 0; h < hashTableSize; h++)
+        {
+            long lruHead;
+            long partitionAdr = hashPartitionAccess.lockPartitionForHash(h);
+            try
+            {
+                lruHead = hashPartitionAccess.getLRUHead(partitionAdr);
+                hashPartitionAccess.setLRUHead(partitionAdr, 0L);
+            }
+            finally
+            {
+                hashPartitionAccess.unlockPartition(partitionAdr);
+            }
+
+            for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
+            {
+                lockEntry(hashEntryAdr);
+                freeBlocks.freeChain(hashEntryAdr);
+                // do NOT unlock - data block might be used elsewhere
+            }
+        }
     }
 
-    InputStream readFrom(long hashEntryAdr)
+    int[] calcLruListLengths()
     {
-        return new HashEntryInput(hashEntryAdr);
+        int[] ll = new int[hashTableSize];
+        for (int h = 0; h < ll.length; h++)
+        {
+            long partitionAdr = hashPartitionAccess.lockPartitionForHash(h);
+            try
+            {
+                int l = 0;
+                for (long hashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr); hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
+                    l++;
+                ll[h] = l;
+            }
+            finally
+            {
+                hashPartitionAccess.unlockPartition(partitionAdr);
+            }
+        }
+        return ll;
+    }
+
+    InputStream readKeyFrom(long hashEntryAdr)
+    {
+        return new HashEntryInput(hashEntryAdr, false);
+    }
+
+    InputStream readValueFrom(long hashEntryAdr)
+    {
+        return new HashEntryInput(hashEntryAdr, true);
     }
 
     <V> void valueToHashEntry(long hashEntryAdr, CacheSerializer<V> valueSerializer, V v) throws IOException
     {
         valueSerializer.serialize(v, new HashEntryOutput(hashEntryAdr));
+    }
+
+    void hotN(int hash, HashEntryCallback heCb)
+    {
+        long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
+        try
+        {
+            for (long hashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr); hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
+                heCb.hashEntry(hashEntryAdr);
+        }
+        finally
+        {
+            hashPartitionAccess.unlockPartition(partitionAdr);
+        }
     }
 
     final class HashEntryOutput extends OutputStream
@@ -620,7 +683,7 @@ final class HashEntryAccess
         private long blkOff;
         private long available;
 
-        HashEntryInput(long hashEntryAdr)
+        HashEntryInput(long hashEntryAdr, boolean value)
         {
             if (hashEntryAdr == 0L)
                 throw new NullPointerException();
@@ -634,29 +697,36 @@ final class HashEntryAccess
             long blkAdr = hashEntryAdr;
             long blkOff;
 
-            // first block
-            if (serKeyLen >= firstBlockDataSpace)
+            if (value)
             {
-                serKeyLen -= firstBlockDataSpace;
-                blkAdr = getNextBlock(hashEntryAdr);
-
-                while (serKeyLen >= nextBlockDataSpace && blkAdr != 0L)
+                // first block
+                if (serKeyLen >= firstBlockDataSpace)
                 {
-                    serKeyLen -= nextBlockDataSpace;
-                    blkAdr = getNextBlock(blkAdr);
-                }
+                    serKeyLen -= firstBlockDataSpace;
+                    blkAdr = getNextBlock(hashEntryAdr);
 
-                blkOff = OFF_DATA_IN_NEXT + serKeyLen;
+                    while (serKeyLen >= nextBlockDataSpace && blkAdr != 0L)
+                    {
+                        serKeyLen -= nextBlockDataSpace;
+                        blkAdr = getNextBlock(blkAdr);
+                    }
+
+                    blkOff = OFF_DATA_IN_NEXT + serKeyLen;
+                }
+                else
+                    blkOff = OFF_DATA_IN_FIRST + serKeyLen;
             }
             else
-                blkOff = OFF_DATA_IN_FIRST + serKeyLen;
+            {
+                blkOff = 0L;
+            }
 
             if (valueLen > Integer.MAX_VALUE)
                 throw new IllegalStateException("integer overflow");
 
             this.blkAdr = blkAdr;
             this.blkOff = blkOff;
-            this.available = valueLen;
+            this.available = value ? valueLen : serKeyLen;
         }
 
         public int available() throws IOException
@@ -724,5 +794,10 @@ final class HashEntryAccess
 
             return b & 0xff;
         }
+    }
+
+    static abstract class HashEntryCallback
+    {
+        abstract void hashEntry(long hashEntryAdr);
     }
 }

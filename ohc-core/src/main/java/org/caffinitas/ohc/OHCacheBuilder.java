@@ -24,9 +24,10 @@ public class OHCacheBuilder<K, V>
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
-    private int lruListWarnTrigger = 50;
+    private int lruListWarnTrigger = 100;
     private double cleanUpTrigger = .25d;
     private long cleanupCheckInterval = 1000;
+    private boolean statisticsEnabled;
 
     private OHCacheBuilder()
     {
@@ -127,6 +128,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> cleanupCheckInterval(long cleanupCheckInterval, TimeUnit timeUnit)
     {
         this.cleanupCheckInterval = timeUnit.toMillis(cleanupCheckInterval);
+        return this;
+    }
+
+    public boolean isStatisticsEnabled()
+    {
+        return statisticsEnabled;
+    }
+
+    public OHCacheBuilder<K, V> statisticsEnabled(boolean statisticsEnable)
+    {
+        this.statisticsEnabled = statisticsEnable;
         return this;
     }
 }

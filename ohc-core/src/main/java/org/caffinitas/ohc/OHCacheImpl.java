@@ -17,9 +17,10 @@ package org.caffinitas.ohc;
 
 import java.io.IOError;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
@@ -31,6 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.cache.CacheStats;
+import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,6 +80,15 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     private final AtomicBoolean cleanupLock = new AtomicBoolean();
     private final ScheduledExecutorService executorService;
+
+    private volatile boolean statisticsEnabled;
+
+    private final AtomicLong hitCount = new AtomicLong();
+    private final AtomicLong missCount = new AtomicLong();
+    private final AtomicLong loadSuccessCount = new AtomicLong();
+    private final AtomicLong loadExceptionCount = new AtomicLong();
+    private final AtomicLong totalLoadTime = new AtomicLong();
+    private final AtomicLong evictionCount = new AtomicLong();
 
     OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
@@ -137,7 +148,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         this.freeBlocks = new FreeBlocks(blocksAddress, blocksAddress + capacity, blockSize);
         this.hashPartitionAccess = new HashPartitionAccess(hashTableSize, rootAddress);
-        this.hashEntryAccess = new HashEntryAccess(blockSize, freeBlocks, hashPartitionAccess, lruListWarnTrigger);
+        this.hashEntryAccess = new HashEntryAccess(blockSize, freeBlocks, hashPartitionAccess, hashTableSize, lruListWarnTrigger);
 
         this.keySerializer = builder.getKeySerializer();
         this.valueSerializer = builder.getValueSerializer();
@@ -153,6 +164,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             || (cut <= 0d && cleanupCheckInterval > 0L))
             throw new IllegalArgumentException("Incompatible settings - cleanup-check-interval " +
                                                cleanupCheckInterval + " vs cleanup-trigger " + String.format("%.2f", cut));
+
+
+        this.statisticsEnabled = builder.isStatisticsEnabled();
 
         ScheduledExecutorService es = null;
         if (cleanupCheckInterval > 0)
@@ -189,6 +203,16 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         // Need to orderly clear the cache before releasing (this involves hash-partition and hash-entry locks,
         // which ensure that no other thread is accessing OHC)
         Uns.free(rootAddress);
+    }
+
+    public boolean isStatisticsEnabled()
+    {
+        return statisticsEnabled;
+    }
+
+    public void setStatisticsEnabled(boolean statisticsEnabled)
+    {
+        this.statisticsEnabled = statisticsEnabled;
     }
 
     private void assertNotClosed()
@@ -348,6 +372,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             hashPartitionAccess.unlockPartition(partitionAdr);
         }
 
+        if (statisticsEnabled)
+            (hashEntryAdr == 0L ? missCount : hitCount).incrementAndGet();
+
         return hashEntryAdr;
     }
 
@@ -382,6 +409,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         // free chain
         freeBlocks.freeChain(hashEntryAdr);
+        // do NOT unlock - data block might be used elsewhere
 
         return true;
     }
@@ -395,13 +423,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         return hashPartitionAccess.getLockPartitionSpins();
     }
-
-    public Iterator<K> hotN(int n)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    // com.google.common.cache.Cache implementation
 
     public void invalidate(Object o)
     {
@@ -421,7 +442,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         try
         {
-            return valueSerializer.deserialize(hashEntryAccess.readFrom(hashEntryAdr));
+            return valueSerializer.deserialize(hashEntryAccess.readValueFrom(hashEntryAdr));
         }
         catch (IOException e)
         {
@@ -574,22 +595,17 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 {
                     next = hashEntryAccess.getLRUNext(hashEntryAdr);
 
-                    entriesRemoved ++;
+                    entriesRemoved++;
 
                     hashEntryAccess.lockEntry(hashEntryAdr);
-                    try
-                    {
-                        blocksFreed += freeBlocks.freeChain(hashEntryAdr);
-                    }
-                    finally
-                    {
-                        hashEntryAccess.unlockEntry(hashEntryAdr);
-                    }
+                    blocksFreed += freeBlocks.freeChain(hashEntryAdr);
+                    // do NOT unlock - data block might be used elsewhere
                 }
             }
 
-            LOGGER.info("Cleanup statistics: removed entries={} blocks recycled={}", entriesRemoved, blocksFreed);
+            evictionCount.addAndGet(entriesRemoved);
 
+            LOGGER.info("Cleanup statistics: removed entries={} blocks recycled={}", entriesRemoved, blocksFreed);
         }
         finally
         {
@@ -604,14 +620,22 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         return ((double) freeBlockCount) / totalBlockCount;
     }
 
-    public ConcurrentMap<K, V> asMap()
+    public OHCacheStats extendedStats()
     {
-        throw new UnsupportedOperationException();
+        return new OHCacheStats(stats(), freeBlocks.calcFreeBlockCounts(), hashEntryAccess.calcLruListLengths(),
+                                size(), blockSize, capacity);
     }
 
     public CacheStats stats()
     {
-        throw new UnsupportedOperationException();
+        return new CacheStats(
+                             hitCount.get(),
+                             missCount.get(),
+                             loadSuccessCount.get(),
+                             loadExceptionCount.get(),
+                             totalLoadTime.get(),
+                             evictionCount.get()
+        );
     }
 
     public long size()
@@ -636,7 +660,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void invalidateAll()
     {
-        throw new UnsupportedOperationException();
+        hashEntryAccess.removeAll();
     }
 
     public void invalidateAll(Iterable<?> iterable)
@@ -653,7 +677,14 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public ImmutableMap<K, V> getAllPresent(Iterable<?> iterable)
     {
-        throw new UnsupportedOperationException();
+        ImmutableMap.Builder<K, V> r = ImmutableMap.builder();
+        for (Object o : iterable)
+        {
+            V v = getIfPresent(o);
+            if (v != null)
+                r.put((K) o, v);
+        }
+        return r.build();
     }
 
     public V get(K k, Callable<? extends V> callable) throws ExecutionException
@@ -661,38 +692,72 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         V v = getIfPresent(k);
         if (v == null)
         {
+            long t0 = System.currentTimeMillis();
             try
             {
                 v = callable.call();
+                loadSuccessCount.incrementAndGet();
             }
             catch (Exception e)
             {
+                loadExceptionCount.incrementAndGet();
                 throw new ExecutionException(e);
+            }
+            finally
+            {
+                totalLoadTime.addAndGet(System.currentTimeMillis() - t0);
             }
             put(k, v);
         }
         return v;
     }
 
-    static final class ByteArrayOut extends OutputStream
+    public Iterator<K> hotN(int n)
     {
-        private final byte[] buffer;
-        private int pos;
+        if (keySerializer == null)
+            throw new NullPointerException("no keySerializer configured");
 
-        public ByteArrayOut(byte[] buffer)
-        {
-            this.buffer = buffer;
-        }
+        final int keysPerPartition = (n / hashTableSize) + 1;
 
-        public void write(int b) throws IOException
+        return new AbstractIterator<K>()
         {
-            buffer[pos++] = (byte) b;
-        }
+            public HashEntryAccess.HashEntryCallback cb = new HashEntryAccess.HashEntryCallback()
+            {
+                void hashEntry(long hashEntryAdr)
+                {
+                    try
+                    {
+                        keys.add(keySerializer.deserialize(hashEntryAccess.readKeyFrom(hashEntryAdr)));
+                    }
+                    catch (IOException e)
+                    {
+                        throw new IOError(e);
+                    }
+                }
+            };
+            private int h;
+            private final List<K> keys = new ArrayList<>();
+            private Iterator<K> subIter;
 
-        public void write(byte[] b, int off, int len) throws IOException
-        {
-            System.arraycopy(b, off, buffer, pos, len);
-            pos += len;
-        }
+            protected K computeNext()
+            {
+                while (true)
+                {
+                    if (h == hashTableSize)
+                        return endOfData();
+
+                    if (subIter != null && subIter.hasNext())
+                        return subIter.next();
+                    keys.clear();
+
+                    hashEntryAccess.hotN(h++, cb);
+                }
+            }
+        };
+    }
+
+    public ConcurrentMap<K, V> asMap()
+    {
+        throw new UnsupportedOperationException();
     }
 }

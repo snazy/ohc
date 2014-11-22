@@ -46,6 +46,16 @@ Plain ``OHCache`` interface provides low level get/put/remove operations that ta
 with the cost of a bit more verbose coding. For convenience ``OHCache`` extends the Guava ``Cache`` interface
 that takes Java objects as keys and values - you have to provide appropriate key and value serializers then.
 
+By default OHC performs cache eviction regularly on its own (default is to keep 25% free space). But be aware
+that calculation of entries to evict is based on averages and does its job not very accurately to increase
+overall performance.
+
+Note on the ``hotN`` function: The implementation will take N divided by number of hash partitions keys and usually
+return more results than expected.
+
+Note on hashes: The implementation heavily relies on uniform distribution of hash values to spread load. If possible
+use algorithms like Murmur3 to calculate hash values instead.
+
 Configuration
 -------------
 

@@ -216,6 +216,27 @@ final class FreeBlocks
         return free;
     }
 
+    int[] calcFreeBlockCounts()
+    {
+        int[] free = new int[freeLists.length];
+        for (int i = 0; i < free.length; i++)
+        {
+            FreeList freeList = freeLists[i];
+            for (int spin = 0; !freeList.tryLock(); spin++)
+                Uns.park(((spin & 3) + 1) * 5000);
+
+            try
+            {
+                free[i] = freeList.calcFreeBlockCount();
+            }
+            finally
+            {
+                freeList.unlock();
+            }
+        }
+        return free;
+    }
+
     long getFreeBlockSpins()
     {
         return freeBlockSpins.get();

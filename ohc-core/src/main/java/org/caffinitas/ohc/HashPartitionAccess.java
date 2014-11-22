@@ -82,7 +82,7 @@ final class HashPartitionAccess
         return Uns.getLongVolatile(partitionAdr + OFF_LRU_HEAD);
     }
 
-    public void setLRUHead(long partitionAdr, long hashEntryAdr)
+    void setLRUHead(long partitionAdr, long hashEntryAdr)
     {
         if (partitionAdr != 0L)
             Uns.putLong(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);

@@ -17,6 +17,7 @@ package org.caffinitas.ohc.benchmark;
 
 import java.io.DataInput;
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -212,13 +213,17 @@ public class BenchmarkOHC
                          FileUtils.byteCountToDisplaySize(((OHCache) cache).getMemUsed()),
                          FileUtils.byteCountToDisplaySize(((OHCache) cache).getCapacity()),
                          cache.size());
-//            Iterator<String> iterator = ((OHCache<String, String>) cache).hotN(5);
-//            printMessage("5 Hot entries are...");
-//            while (iterator.hasNext())
-//                System.out.print(iterator.next() + ", ");
+            Iterator<String> iterator = ((OHCache<String, String>) cache).hotN(5);
+            printMessage("5 Hot entries are...");
+            while (iterator.hasNext())
+                System.out.print(iterator.next() + ", ");
             printMessage("");
         }
         printMessage("VM total:%s", FileUtils.byteCountToDisplaySize(Runtime.getRuntime().totalMemory()));
         printMessage("VM free:%s", FileUtils.byteCountToDisplaySize(Runtime.getRuntime().freeMemory()));
+        if (cache instanceof OHCache)
+            printMessage("Cache stats:%s", ((OHCache)cache).extendedStats());
+        else
+            printMessage("Cache stats:%s", cache.stats());
     }
 }

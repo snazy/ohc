@@ -43,4 +43,6 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
     boolean remove(int hash, BytesSource keySource);
 
     Iterator<K> hotN(int n);
+
+    OHCacheStats extendedStats();
 }
