@@ -28,7 +28,7 @@ public class BasicTest
         try (OHCache cache = OHCacheBuilder.newBuilder()
                                            .build())
         {
-            int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
+            int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
             Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
 
             String k = "123";
@@ -48,12 +48,37 @@ public class BasicTest
     }
 
     @Test
+    public void serializing() throws IOException
+    {
+        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
+                                                           .keySerializer(CacheSerializers.stringSerializer)
+                                                           .valueSerializer(CacheSerializers.stringSerializer)
+                                                           .build())
+        {
+            int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
+            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+
+            String k = "123";
+            cache.put(k, "hello world");
+
+            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount - 1);
+
+            String v = cache.getIfPresent(k);
+            Assert.assertEquals(v, "hello world");
+
+            cache.invalidate(k);
+
+            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+        }
+    }
+
+    @Test
     public void fillWithSmall() throws IOException
     {
         try (OHCache cache = OHCacheBuilder.newBuilder()
                                            .build())
         {
-            int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
+            int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
 
             int cnt = dataBlockCount - 1;
 
@@ -102,7 +127,7 @@ public class BasicTest
         try (OHCache cache = OHCacheBuilder.newBuilder()
                                            .build())
         {
-            int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
+            int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
 
             int garbage = 2 * cache.getBlockSize();
             int cnt = dataBlockCount / 5 - 1;
@@ -215,7 +240,7 @@ public class BasicTest
 
     private void withKeyAndValLen(OHCache cache, final int keyLen, final int valLen, boolean array)
     {
-        int dataBlockCount = (int) cache.getTotalCapacity() / cache.getBlockSize();
+        int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
         Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
 
         BytesSource key = array

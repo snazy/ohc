@@ -32,9 +32,9 @@ public class BigConcurrentTest
     public void setup()
     {
         cache = OHCacheBuilder.newBuilder()
-                              .setHashTableSize(1024)
-//                              .setBlockSize(65536)
-                              .setTotalCapacity(256 * 1024 * 1024)
+                              .hashTableSize(1024)
+//                              .blockSize(65536)
+                              .capacity(256 * 1024 * 1024)
                               .build();
     }
 
@@ -46,37 +46,37 @@ public class BigConcurrentTest
         cache.close();
     }
 
-    @Test(threadPoolSize = 1, invocationCount = 4, enabled = false)
-    public void threadCount1() throws IOException
+    @Test(threadPoolSize = 1, invocationCount = 4)
+    public void threadCount01() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 2, invocationCount = 4, enabled = false)
-    public void threadCount2() throws IOException
+    @Test(threadPoolSize = 2, invocationCount = 4)
+    public void threadCount02() throws IOException
     {
         withPieceOfData();
     }
 
     @Test(threadPoolSize = 4, invocationCount = 16)
-    public void threadCount4() throws IOException
+    public void threadCount04() throws IOException
     {
         withPieceOfData();
     }
 
     @Test(threadPoolSize = 8, invocationCount = 32)
-    public void threadCount8() throws IOException
+    public void threadCount08() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 16, invocationCount = 16, enabled = false)
+    @Test(threadPoolSize = 16, invocationCount = 16)
     public void threadCount16() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 32, invocationCount = 32, enabled = false)
+    @Test(threadPoolSize = 32, invocationCount = 32)
     public void threadCount32() throws IOException
     {
         withPieceOfData();

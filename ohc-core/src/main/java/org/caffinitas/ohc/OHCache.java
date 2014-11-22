@@ -16,16 +16,23 @@
 package org.caffinitas.ohc;
 
 import java.io.Closeable;
+import java.util.Iterator;
 
-public interface OHCache extends Closeable
+import com.google.common.cache.Cache;
+
+public interface OHCache<K, V> extends Cache<K, V>, Closeable
 {
     int getBlockSize();
 
     int getHashTableSize();
 
-    long getTotalCapacity();
+    long getCapacity();
+
+    long getMemUsed();
 
     int calcFreeBlockCount();
+
+    double getFreeSpacePercentage();
 
     PutResult put(int hash, BytesSource keySource, BytesSource valueSource);
 
@@ -34,4 +41,6 @@ public interface OHCache extends Closeable
     boolean get(int hash, BytesSource keySource, BytesSink valueSink);
 
     boolean remove(int hash, BytesSource keySource);
+
+    Iterator<K> hotN(int n);
 }

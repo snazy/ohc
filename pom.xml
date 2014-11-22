@@ -4,10 +4,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.caffinitas.ohc</groupId>
-    <artifactId>off-heap-cache</artifactId>
+    <artifactId>ohc-parent</artifactId>
     <version>0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
 
-    <name>Off-Heap-Cache</name>
+    <name>OHC parent</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
     <organization>
         <name>Robert Stupp, Koeln, Germany, robert-stupp.de</name>
@@ -62,6 +63,11 @@
         <url>https://github.com/snazy/ohc</url>
     </issueManagement>
 
+    <modules>
+        <module>ohc-core</module>
+        <module>ohc-benchmark</module>
+    </modules>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
@@ -79,61 +85,69 @@
         <version.org.testng>6.8.8</version.org.testng>
     </properties>
 
-    <dependencies>
+    <dependencyManagement>
+        <dependencies>
 
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-api</artifactId>
-            <version>${version.org.apache.logging.log4j}</version>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.sun.jdmk</groupId>
-                    <artifactId>jmxtools</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.sun.jmx</groupId>
-                    <artifactId>jmxri</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-api</artifactId>
+                <version>${version.org.apache.logging.log4j}</version>
+                <scope>test</scope>
+                <exclusions>
+                    <exclusion>
+                        <groupId>com.sun.jdmk</groupId>
+                        <artifactId>jmxtools</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>com.sun.jmx</groupId>
+                        <artifactId>jmxri</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
 
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
-            <version>${version.org.apache.logging.log4j}</version>
-            <scope>test</scope>
-        </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-core</artifactId>
+                <version>${version.org.apache.logging.log4j}</version>
+                <scope>test</scope>
+            </dependency>
 
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-slf4j-impl</artifactId>
-            <version>${version.org.apache.logging.log4j}</version>
-            <scope>test</scope>
-        </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-slf4j-impl</artifactId>
+                <version>${version.org.apache.logging.log4j}</version>
+                <scope>test</scope>
+            </dependency>
 
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>${version.org.slf4j}</version>
-        </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${version.org.slf4j}</version>
+            </dependency>
 
-        <!--
-        <dependency>
-            <groupId>com.yammer.metrics</groupId>
-            <artifactId>metrics-core</artifactId>
-            <version>2.2.0</version>
-        </dependency>
-        -->
+            <!--
+            <dependency>
+                <groupId>com.yammer.metrics</groupId>
+                <artifactId>metrics-core</artifactId>
+                <version>2.2.0</version>
+            </dependency>
+            -->
 
-        <dependency>
-            <groupId>org.testng</groupId>
-            <artifactId>testng</artifactId>
-            <version>${version.org.testng}</version>
-            <scope>test</scope>
-        </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>16.0</version>
+            </dependency>
 
-    </dependencies>
+            <dependency>
+                <groupId>org.testng</groupId>
+                <artifactId>testng</artifactId>
+                <version>${version.org.testng}</version>
+                <scope>test</scope>
+            </dependency>
+
+        </dependencies>
+    </dependencyManagement>
 
     <build>
 
@@ -152,55 +166,59 @@
                     </execution>
                 </executions>
             </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>${version.org.apache.maven.plugins.maven-compiler-plugin}</version>
-                <configuration>
-                    <source>1.7</source>
-                    <target>1.7</target>
-                </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
-                <configuration>
-                    <excludes>
-                        <exclude>**/*DeveloperTest.java</exclude>
-                    </excludes>
-                    <forkCount>1</forkCount>
-                    <reuseForks>true</reuseForks>
-                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
-                </configuration>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-javadoc-plugin</artifactId>
-                <version>${version.org.apache.maven.plugins.maven-javadoc-plugin}</version>
-                <configuration>
-                    <windowtitle>Off-Heap Cache</windowtitle>
-                    <bottom>&amp;copy; 2014 ${project.organization.name} - licensed under &lt;a
-                        href="http://www.apache.org/licenses/LICENSE-2.0" target="_new"&gt;Apache License, Version 2&lt;/a&gt;
-                        - &lt;a href="http://caffinitas.org/" target="_new"&gt;Homepage&lt;/a&gt;</bottom>
-                    <show>protected</show>
-                    <includeDependencySources>false</includeDependencySources>
-                    <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
         </plugins>
+        <pluginManagement>
+            <plugins>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${version.org.apache.maven.plugins.maven-compiler-plugin}</version>
+                    <configuration>
+                        <source>1.7</source>
+                        <target>1.7</target>
+                    </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
+                    <configuration>
+                        <excludes>
+                            <exclude>**/*DeveloperTest.java</exclude>
+                        </excludes>
+                        <forkCount>1</forkCount>
+                        <reuseForks>true</reuseForks>
+                        <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                    </configuration>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>${version.org.apache.maven.plugins.maven-javadoc-plugin}</version>
+                    <configuration>
+                        <windowtitle>Off-Heap Cache</windowtitle>
+                        <bottom>&amp;copy; 2014 ${project.organization.name} - licensed under &lt;a
+                            href="http://www.apache.org/licenses/LICENSE-2.0" target="_new"&gt;Apache License, Version 2&lt;/a&gt;
+                            - &lt;a href="http://caffinitas.org/" target="_new"&gt;Homepage&lt;/a&gt;</bottom>
+                        <show>protected</show>
+                        <includeDependencySources>false</includeDependencySources>
+                        <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>attach-sources</id>
+                            <goals>
+                                <goal>jar</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+            </plugins>
+        </pluginManagement>
     </build>
 
     <reporting>

@@ -48,17 +48,17 @@ final class FreeBlocks
             return freeBlockHead == 0L;
         }
 
-        void pushChain(long adr)
+        int pushChain(long adr)
         {
             long root = adr;
-            while (true)
+            for (int cnt = 1; ; cnt++)
             {
                 long next = Uns.getLongVolatile(adr);
                 if (next == 0L)
                 {
                     Uns.putLongVolatile(adr, freeBlockHead);
                     freeBlockHead = root;
-                    return;
+                    return cnt;
                 }
                 adr = next;
             }
@@ -168,10 +168,10 @@ final class FreeBlocks
         }
     }
 
-    void freeChain(long adr)
+    int freeChain(long adr)
     {
         if (adr == 0L)
-            return;
+            return 0;
 
         int fli = freeListPtr.getAndIncrement();
         for (int spin = 0; ; spin++)
@@ -183,8 +183,7 @@ final class FreeBlocks
                 if (fl.tryLock())
                     try
                     {
-                        fl.pushChain(adr);
-                        return;
+                        return fl.pushChain(adr);
                     }
                     finally
                     {

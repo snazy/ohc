@@ -118,6 +118,11 @@ final class Uns
         unsafe.copyMemory(arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, null, address, len);
     }
 
+    static void copyMemory(long address, byte[] arr, int off, int len)
+    {
+        unsafe.copyMemory(null, address, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len);
+    }
+
     static void setMemory(long address, long len, byte val)
     {
         unsafe.setMemory(address, len, val);
@@ -138,6 +143,28 @@ final class Uns
     static void park(long nanos)
     {
         unsafe.park(false, nanos);
+    }
+
+    static boolean tryLock(long address)
+    {
+        return Uns.compareAndSwap(address, 0L, Thread.currentThread().getId());
+    }
+
+    static int lock(long address)
+    {
+        long tid = Thread.currentThread().getId();
+        for (int spin= 0;;spin++)
+        {
+            if (compareAndSwap(address, 0L, tid))
+                return spin;
+
+            park(((spin & 3) +1 ) * 5000);
+        }
+    }
+
+    static void unlock(long address)
+    {
+        Uns.putLongVolatile(address, 0L);
     }
 
     private Uns()

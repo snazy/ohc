@@ -29,6 +29,9 @@ final class HashPartitionAccess
     // total memory required for a hash-partition
     static final long PARTITION_ENTRY_LEN = 16L;
 
+    // TODO Check whether a LRU-tail field has benefits regarding eviction and hash-partition locks during eviction.
+    // Guess: no benefit if the hash-table is large (just a few entries in each hash-partition.
+
     private final int hashPartitionMask;
     private final long rootAddress;
 
@@ -59,21 +62,17 @@ final class HashPartitionAccess
     {
         long partAdr = partitionForHash(hash);
 
-        long tid = Thread.currentThread().getId();
-        for (int spin= 0;;spin++)
-        {
-            if (Uns.compareAndSwap(partAdr + OFF_LOCK, 0L, tid))
-                return partAdr;
+        int spins = Uns.lock(partAdr + OFF_LOCK);
+        if (spins > 0)
+            lockPartitionSpins.addAndGet(spins);
 
-            lockPartitionSpins.incrementAndGet();
-            Uns.park(((spin & 3) +1 ) * 5000);
-        }
+        return partAdr;
     }
 
     void unlockPartition(long partitionAdr)
     {
         if (partitionAdr != 0L)
-            Uns.putLong(partitionAdr + OFF_LOCK, 0L);
+            Uns.unlock(partitionAdr + OFF_LOCK);
     }
 
     long getLRUHead(long partitionAdr)

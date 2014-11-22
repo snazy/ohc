@@ -15,11 +15,21 @@
  */
 package org.caffinitas.ohc;
 
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Encapsulates access to hash entries.
  */
 final class HashEntryAccess
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(HashEntryAccess.class);
+
     // offset of next block address in a "next block"
     static final int OFF_NEXT_BLOCK = 0;
     // offset of serialized hash value
@@ -34,6 +44,8 @@ final class HashEntryAccess
     static final int OFF_HASH_KEY_LENGTH = 40;
     // offset of serialized value length
     static final int OFF_VALUE_LENGTH = 48;
+    // offset of entry lock
+    static final int OFF_ENTRY_LOCK = 56;
     // offset of data in first block
     static final int OFF_DATA_IN_FIRST = 64;
 
@@ -47,36 +59,29 @@ final class HashEntryAccess
 
     private final int firstBlockDataSpace;
     private final int nextBlockDataSpace;
+    private final int lruIterationWarnTrigger;
 
-    HashEntryAccess(int blockSize, FreeBlocks freeBlocks, HashPartitionAccess hashPartitionAccess)
+    private long lastLruWarn;
+
+    HashEntryAccess(int blockSize, FreeBlocks freeBlocks, HashPartitionAccess hashPartitionAccess, int lruIterationWarnTrigger)
     {
         this.blockSize = blockSize;
         this.freeBlocks = freeBlocks;
         this.hashPartitionAccess = hashPartitionAccess;
+        this.lruIterationWarnTrigger = lruIterationWarnTrigger;
 
         firstBlockDataSpace = blockSize - OFF_DATA_IN_FIRST;
         nextBlockDataSpace = blockSize - OFF_DATA_IN_NEXT;
     }
 
-    int calcRequiredNumberOfBlocks(BytesSource keySource, BytesSource valueSource)
+    long createNewEntryChain(int hash, BytesSource keySource, BytesSource valueSource, long valueLen)
     {
-        long total = keySource.size();
-        total += valueSource.size();
+        if (valueSource != null)
+            valueLen = valueSource.size();
+        if (valueLen < 0)
+            throw new IllegalArgumentException();
 
-        total -= firstBlockDataSpace;
-        if (total <= 0L)
-            return 1;
-
-        int blk = (int) (1L + total / nextBlockDataSpace);
-
-        return (total % nextBlockDataSpace) != 0
-               ? blk + 1
-               : blk;
-    }
-
-    long createNewEntryChain(int hash, BytesSource keySource, BytesSource valueSource)
-    {
-        int requiredBlocks = calcRequiredNumberOfBlocks(keySource, valueSource);
+        int requiredBlocks = calcRequiredNumberOfBlocks(keySource, valueLen);
         if (requiredBlocks < 1)
             throw new InternalError();
 
@@ -86,7 +91,7 @@ final class HashEntryAccess
             return 0L;
 
         // initialize hash entry fields
-        initHashEntry(hash, keySource, valueSource, hashEntryAdr);
+        initHashEntry(hash, keySource, valueSource, valueLen, hashEntryAdr);
 
         // write key + value to data
         long blkAdr = hashEntryAdr;
@@ -143,47 +148,50 @@ final class HashEntryAccess
             }
         }
 
-        // write value to data
-        //
-        // Although the following code is similar to the one used for the key above, it would require us to
-        // allocate objects to be able to use the same code for both - so...
-        //
-        len = valueSource.size();
-        if (valueSource.hasArray())
+        if (valueSource != null)
         {
-            // valueSource provides array access (can use Unsafe.copyMemory)
-            byte[] arr = valueSource.array();
-            int arrOff = valueSource.arrayOffset();
-            int arrIdx = 0;
-            while (arrIdx < len)
+            // write value to data
+            //
+            // Although the following code is similar to the one used for the key above, it would require us to
+            // allocate objects to be able to use the same code for both - so...
+            //
+            len = valueSource.size();
+            if (valueSource.hasArray())
             {
-                long remain = len - arrIdx;
-                if (remain > blkRemain)
+                // valueSource provides array access (can use Unsafe.copyMemory)
+                byte[] arr = valueSource.array();
+                int arrOff = valueSource.arrayOffset();
+                int arrIdx = 0;
+                while (arrIdx < len)
                 {
-                    Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
-                    arrIdx += blkRemain;
-                    blkAdr = getNextBlock(blkAdr);
-                    blkOff = OFF_DATA_IN_NEXT;
-                    blkRemain = nextBlockDataSpace;
-                }
-                else
-                {
-                    Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, (int) remain);
-                    break;
+                    long remain = len - arrIdx;
+                    if (remain > blkRemain)
+                    {
+                        Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
+                        arrIdx += blkRemain;
+                        blkAdr = getNextBlock(blkAdr);
+                        blkOff = OFF_DATA_IN_NEXT;
+                        blkRemain = nextBlockDataSpace;
+                    }
+                    else
+                    {
+                        Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, (int) remain);
+                        break;
+                    }
                 }
             }
-        }
-        else
-        {
-            // valueSource has no array
-            for (int p = 0; p < len; p++)
+            else
             {
-                byte b = valueSource.getByte(p);
-                Uns.putByte(blkAdr + blkOff++, b);
-                if (blkOff == blockSize)
+                // valueSource has no array
+                for (int p = 0; p < len; p++)
                 {
-                    blkAdr = getNextBlock(blkAdr);
-                    blkOff = OFF_DATA_IN_NEXT;
+                    byte b = valueSource.getByte(p);
+                    Uns.putByte(blkAdr + blkOff++, b);
+                    if (blkOff == blockSize)
+                    {
+                        blkAdr = getNextBlock(blkAdr);
+                        blkOff = OFF_DATA_IN_NEXT;
+                    }
                 }
             }
         }
@@ -191,14 +199,31 @@ final class HashEntryAccess
         return hashEntryAdr;
     }
 
-    private void initHashEntry(int hash, BytesSource keySource, BytesSource valueSource, long hashEntryAdr)
+    private int calcRequiredNumberOfBlocks(BytesSource keySource, long valueLen)
+    {
+        long total = keySource.size();
+        total += valueLen;
+
+        total -= firstBlockDataSpace;
+        if (total <= 0L)
+            return 1;
+
+        int blk = (int) (1L + total / nextBlockDataSpace);
+
+        return (total % nextBlockDataSpace) != 0
+               ? blk + 1
+               : blk;
+    }
+
+    private void initHashEntry(int hash, BytesSource keySource, BytesSource valueSource, long valueLen, long hashEntryAdr)
     {
         setLastUsed(hashEntryAdr);
         Uns.putLongVolatile(hashEntryAdr + OFF_HASH, hash);
         setLRUPrevious(hashEntryAdr, 0L);
         setLRUNext(hashEntryAdr, 0L);
+        Uns.putLongVolatile(hashEntryAdr + OFF_ENTRY_LOCK, 0L);
         Uns.putLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH, keySource.size());
-        Uns.putLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH, valueSource.size());
+        Uns.putLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH, valueSource != null ? valueSource.size() : valueLen);
     }
 
     long findHashEntry(long partitionAdr, int hash, BytesSource keySource)
@@ -208,7 +233,8 @@ final class HashEntryAccess
 
         long firstHashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr);
         boolean first = true;
-        for (long hashEntryAdr = firstHashEntryAdr; hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
+        int loops = 0;
+        for (long hashEntryAdr = firstHashEntryAdr; hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr), loops++)
         {
             if (!first && firstHashEntryAdr == hashEntryAdr)
                 throw new InternalError("endless loop");
@@ -225,9 +251,21 @@ final class HashEntryAccess
             if (!compareKey(hashEntryAdr, keySource, serKeyLen))
                 continue;
 
+            if (loops >= lruIterationWarnTrigger)
+                lruListLongWarn(loops);
+
             return hashEntryAdr;
         }
         return 0L;
+    }
+
+    private void lruListLongWarn(int loops)
+    {
+        if (lastLruWarn + 5000L < System.currentTimeMillis())
+        {
+            LOGGER.warn("Degraded OHC performance! LRU list very long - check OHC hash table size ({} LRU links required to find hash entry)", loops);
+            lastLruWarn = System.currentTimeMillis();
+        }
     }
 
 //    String dumpLRUList(long partitionAdr)
@@ -426,28 +464,40 @@ final class HashEntryAccess
         // we can leave the LRU next+previous pointers in hashEntryAdr alone
     }
 
+    void lockEntry(long hashEntryAdr)
+    {
+        if (hashEntryAdr != 0L)
+            Uns.lock(hashEntryAdr + OFF_ENTRY_LOCK);
+    }
+
+    void unlockEntry(long hashEntryAdr)
+    {
+        if (hashEntryAdr != 0L)
+            Uns.unlock(hashEntryAdr + OFF_ENTRY_LOCK);
+    }
+
     private long getNextBlock(long blockAdr)
     {
         return blockAdr != 0L ? Uns.getLongVolatile(blockAdr + OFF_NEXT_BLOCK) : 0L;
     }
 
-    private long getLRUNext(long hashEntryAdr)
+    long getLRUNext(long hashEntryAdr)
     {
         return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + OFF_LRU_NEXT) : 0L;
     }
 
-    private long getLRUPrevious(long hashEntryAdr)
+    long getLRUPrevious(long hashEntryAdr)
     {
         return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS) : 0L;
     }
 
-    private void setLRUPrevious(long hashEntryAdr, long previousAdr)
+    void setLRUPrevious(long hashEntryAdr, long previousAdr)
     {
         if (hashEntryAdr != 0L)
             Uns.putLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
     }
 
-    private void setLRUNext(long hashEntryAdr, long nextAdr)
+    void setLRUNext(long hashEntryAdr, long nextAdr)
     {
         if (hashEntryAdr != 0L)
             Uns.putLongVolatile(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
@@ -457,5 +507,222 @@ final class HashEntryAccess
     {
         if (hashEntryAdr != 0L)
             Uns.putLong(hashEntryAdr + OFF_LAST_USED_TIMESTAMP, System.currentTimeMillis());
+    }
+
+    InputStream readFrom(long hashEntryAdr)
+    {
+        return new HashEntryInput(hashEntryAdr);
+    }
+
+    <V> void valueToHashEntry(long hashEntryAdr, CacheSerializer<V> valueSerializer, V v) throws IOException
+    {
+        valueSerializer.serialize(v, new HashEntryOutput(hashEntryAdr));
+    }
+
+    final class HashEntryOutput extends OutputStream
+    {
+        private long blkAdr;
+        private long blkOff;
+        private long available;
+
+        HashEntryOutput(long hashEntryAdr)
+        {
+            if (hashEntryAdr == 0L)
+                throw new NullPointerException();
+
+            long serKeyLen = Uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
+            if (serKeyLen < 0L)
+                throw new InternalError();
+            long valueLen = Uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
+            if (valueLen < 0L)
+                throw new InternalError();
+            long blkAdr = hashEntryAdr;
+            long blkOff;
+
+            // first block
+            if (serKeyLen >= firstBlockDataSpace)
+            {
+                serKeyLen -= firstBlockDataSpace;
+                blkAdr = getNextBlock(hashEntryAdr);
+
+                while (serKeyLen >= nextBlockDataSpace && blkAdr != 0L)
+                {
+                    serKeyLen -= nextBlockDataSpace;
+                    blkAdr = getNextBlock(blkAdr);
+                }
+
+                blkOff = OFF_DATA_IN_NEXT + serKeyLen;
+            }
+            else
+                blkOff = OFF_DATA_IN_FIRST + serKeyLen;
+
+            if (valueLen > Integer.MAX_VALUE)
+                throw new IllegalStateException("integer overflow");
+
+            this.blkAdr = blkAdr;
+            this.blkOff = blkOff;
+            this.available = valueLen;
+        }
+
+        public void write(byte[] b, int off, int len) throws IOException
+        {
+            if (b == null)
+                throw new NullPointerException();
+            if (off < 0 || off + len > b.length || len < 0)
+                throw new ArrayIndexOutOfBoundsException();
+
+            if (len > available)
+                len = (int) available;
+            if (len <= 0)
+                throw new EOFException();
+
+            while (len > 0)
+            {
+                int blkAvail = (int) (blockSize - blkOff);
+                int r = (blkAvail >= len) ? len : blkAvail;
+                if (r > available)
+                    r = (int) available;
+                if (available <= 0)
+                    throw new EOFException();
+
+                Uns.copyMemory(b, off, blkAdr + blkOff, r);
+                len -= r;
+                off += r;
+                available -= r;
+
+                if (blkOff == blockSize)
+                {
+                    blkAdr = getNextBlock(blkAdr);
+                    blkOff = OFF_DATA_IN_NEXT;
+                }
+            }
+        }
+
+        public void write(int b) throws IOException
+        {
+            if (available < 1)
+                throw new EOFException();
+
+            available--;
+
+            Uns.putByte(blkAdr + blkOff++, (byte) b);
+            if (blkOff == blockSize)
+            {
+                blkAdr = getNextBlock(blkAdr);
+                blkOff = OFF_DATA_IN_NEXT;
+            }
+        }
+    }
+
+    final class HashEntryInput extends InputStream
+    {
+        private long blkAdr;
+        private long blkOff;
+        private long available;
+
+        HashEntryInput(long hashEntryAdr)
+        {
+            if (hashEntryAdr == 0L)
+                throw new NullPointerException();
+
+            long serKeyLen = Uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
+            if (serKeyLen < 0L)
+                throw new InternalError();
+            long valueLen = Uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
+            if (valueLen < 0L)
+                throw new InternalError();
+            long blkAdr = hashEntryAdr;
+            long blkOff;
+
+            // first block
+            if (serKeyLen >= firstBlockDataSpace)
+            {
+                serKeyLen -= firstBlockDataSpace;
+                blkAdr = getNextBlock(hashEntryAdr);
+
+                while (serKeyLen >= nextBlockDataSpace && blkAdr != 0L)
+                {
+                    serKeyLen -= nextBlockDataSpace;
+                    blkAdr = getNextBlock(blkAdr);
+                }
+
+                blkOff = OFF_DATA_IN_NEXT + serKeyLen;
+            }
+            else
+                blkOff = OFF_DATA_IN_FIRST + serKeyLen;
+
+            if (valueLen > Integer.MAX_VALUE)
+                throw new IllegalStateException("integer overflow");
+
+            this.blkAdr = blkAdr;
+            this.blkOff = blkOff;
+            this.available = valueLen;
+        }
+
+        public int available() throws IOException
+        {
+            return available > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) available;
+        }
+
+        public long skip(long n) throws IOException
+        {
+            return super.skip(n);
+        }
+
+        public int read(byte[] b, int off, int len) throws IOException
+        {
+            if (b == null)
+                throw new NullPointerException();
+            if (off < 0 || off + len > b.length || len < 0)
+                throw new ArrayIndexOutOfBoundsException();
+
+            if (len > available)
+                len = (int) available;
+            if (len <= 0)
+                return -1;
+
+            int rd = 0;
+
+            while (len > 0)
+            {
+                int blkAvail = (int) (blockSize - blkOff);
+                int r = (blkAvail >= len) ? len : blkAvail;
+                if (r > available)
+                    r = (int) available;
+                if (r <= 0)
+                    break;
+
+                Uns.copyMemory(blkAdr + blkOff, b, off, r);
+                rd += r;
+                off += r;
+                len -= r;
+                available -= r;
+
+                if (blkOff == blockSize)
+                {
+                    blkAdr = getNextBlock(blkAdr);
+                    blkOff = OFF_DATA_IN_NEXT;
+                }
+            }
+
+            return rd;
+        }
+
+        public int read() throws IOException
+        {
+            if (available < 1)
+                return -1;
+
+            available--;
+
+            byte b = Uns.getByte(blkAdr + blkOff++);
+            if (blkOff == blockSize)
+            {
+                blkAdr = getNextBlock(blkAdr);
+                blkOff = OFF_DATA_IN_NEXT;
+            }
+
+            return b & 0xff;
+        }
     }
 }
