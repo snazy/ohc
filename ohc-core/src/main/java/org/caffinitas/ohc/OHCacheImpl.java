@@ -69,9 +69,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     private final CacheSerializer<K> keySerializer;
     private final CacheSerializer<V> valueSerializer;
 
-    // off-heap address offset
-    private final long rootAddress;
-
+    private final Uns uns;
     private final FreeBlocks freeBlocks;
     private final HashEntryAccess hashEntryAccess;
     private final HashPartitionAccess hashPartitionAccess;
@@ -142,13 +140,13 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         long hashTableMem = HashPartitionAccess.sizeForEntries(hashTableSize);
 
-        this.rootAddress = Uns.allocate(capacity + hashTableMem);
+        this.uns = new Uns(capacity + hashTableMem);
 
-        long blocksAddress = this.rootAddress + hashTableMem;
+        long blocksAddress = uns.address + hashTableMem;
 
-        this.freeBlocks = new FreeBlocks(blocksAddress, blocksAddress + capacity, blockSize);
-        this.hashPartitionAccess = new HashPartitionAccess(hashTableSize, rootAddress);
-        this.hashEntryAccess = new HashEntryAccess(blockSize, freeBlocks, hashPartitionAccess, hashTableSize, lruListWarnTrigger);
+        this.freeBlocks = new FreeBlocks(uns, blocksAddress, blocksAddress + capacity, blockSize);
+        this.hashPartitionAccess = new HashPartitionAccess(uns, hashTableSize, uns.address);
+        this.hashEntryAccess = new HashEntryAccess(uns, blockSize, freeBlocks, hashPartitionAccess, hashTableSize, lruListWarnTrigger);
 
         this.keySerializer = builder.getKeySerializer();
         this.valueSerializer = builder.getValueSerializer();
@@ -189,20 +187,23 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         closed = true;
 
-        executorService.shutdown();
-        try
+        if (executorService != null)
         {
-            executorService.awaitTermination(60, TimeUnit.SECONDS);
-        }
-        catch (InterruptedException e)
-        {
-            Thread.currentThread().interrupt();
+            executorService.shutdown();
+            try
+            {
+                executorService.awaitTermination(60, TimeUnit.SECONDS);
+            }
+            catch (InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+            }
         }
 
         // TODO releasing memory immediately is dangerous since other threads may still access the data
         // Need to orderly clear the cache before releasing (this involves hash-partition and hash-entry locks,
         // which ensure that no other thread is accessing OHC)
-        Uns.free(rootAddress);
+        uns.free();
     }
 
     public boolean isStatisticsEnabled()

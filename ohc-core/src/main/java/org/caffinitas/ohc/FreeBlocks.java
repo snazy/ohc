@@ -21,7 +21,9 @@ import java.util.concurrent.atomic.AtomicLong;
 final class FreeBlocks
 {
 
-    static final class FreeList
+    private static final long freeListLockOffset = Uns.fieldOffset(FreeList.class, "freeListLock");
+
+    final class FreeList
     {
         private volatile long freeBlockHead;
         private volatile long freeListLock;
@@ -30,8 +32,6 @@ final class FreeBlocks
         private volatile long pad3;
         private volatile long pad4;
         private volatile long pad5;
-
-        private static final long freeListLockOffset = Uns.fieldOffset(FreeList.class, "freeListLock");
 
         boolean tryLock()
         {
@@ -53,10 +53,10 @@ final class FreeBlocks
             long root = adr;
             for (int cnt = 1; ; cnt++)
             {
-                long next = Uns.getLongVolatile(adr);
+                long next = uns.getLongVolatile(adr);
                 if (next == 0L)
                 {
-                    Uns.putLongVolatile(adr, freeBlockHead);
+                    uns.putLongVolatile(adr, freeBlockHead);
                     freeBlockHead = root;
                     return cnt;
                 }
@@ -66,7 +66,7 @@ final class FreeBlocks
 
         void push(long adr)
         {
-            Uns.putLongVolatile(adr, freeBlockHead);
+            uns.putLongVolatile(adr, freeBlockHead);
             freeBlockHead = adr;
         }
 
@@ -76,7 +76,7 @@ final class FreeBlocks
             if (adr == 0L)
                 return 0L;
 
-            freeBlockHead = Uns.getLongVolatile(adr);
+            freeBlockHead = uns.getLongVolatile(adr);
 
             return adr;
         }
@@ -84,7 +84,7 @@ final class FreeBlocks
         int calcFreeBlockCount()
         {
             int free = 0;
-            for (long adr = freeBlockHead; adr != 0L; adr = Uns.getLongVolatile(adr))
+            for (long adr = freeBlockHead; adr != 0L; adr = uns.getLongVolatile(adr))
                 free++;
             return free;
         }
@@ -102,15 +102,17 @@ final class FreeBlocks
                                                        new FreeList()
     };
 
+    private final Uns uns;
     private final AtomicInteger freeListPtr = new AtomicInteger();
     private final AtomicLong freeBlockSpins = new AtomicLong();
 
-    FreeBlocks(long firstFreeBlockAddress, long firstNonUsableAddress, int blockSize)
+    FreeBlocks(Uns uns, long firstFreeBlockAddress, long firstNonUsableAddress, int blockSize)
     {
+        this.uns = uns;
         int fli = 0;
         for (long adr = firstFreeBlockAddress; adr < firstNonUsableAddress; adr += blockSize)
         {
-            Uns.putLongVolatile(adr, 0L);
+            uns.putLongVolatile(adr, 0L);
 
             freeLists[fli & MASK].push(adr);
             fli++;
@@ -143,7 +145,7 @@ final class FreeBlocks
                             long adr = fl.pull();
                             if (adr != 0L)
                             {
-                                Uns.putLongVolatile(adr, lastAlloc);
+                                uns.putLongVolatile(adr, lastAlloc);
                                 lastAlloc = adr;
                                 if (--requiredBlocks == 0)
                                     return lastAlloc;

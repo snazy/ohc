@@ -53,23 +53,34 @@ final class Uns
         }
     }
 
-    static long allocate(long size)
+    final long address;
+    private final long last;
+
+    Uns(long size)
     {
-        return unsafe.allocateMemory(size);
+        address = unsafe.allocateMemory(size);
+        last = address + size;
     }
 
-    static void free(long address)
+    void validate(long address, int len)
+    {
+        if (address < this.address || address + len > last)
+            throw new ArrayIndexOutOfBoundsException("Address " + address + "+" + len + " outside allowed range " + address + ".." + last);
+    }
+
+    void free()
     {
         unsafe.freeMemory(address);
     }
 
-    static void putLong(long address, long value)
+    void putLong(long address, long value)
     {
         unsafe.putLongVolatile(null, address, value);
     }
 
-    static void putLongVolatile(long address, long value)
+    void putLongVolatile(long address, long value)
     {
+        validate(address, 8);
         unsafe.putLongVolatile(null, address, value);
     }
 
@@ -78,33 +89,38 @@ final class Uns
         unsafe.putLongVolatile(obj, offset, value);
     }
 
-    static long getLongFromByteArray(byte[] array, int offset)
+    long getLongFromByteArray(byte[] array, int offset)
     {
         return unsafe.getLong(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
     }
 
-    static long getLong(long address)
+    long getLong(long address)
     {
+        validate(address, 8);
         return unsafe.getLong(null, address);
     }
 
-    static long getLongVolatile(long address)
+    long getLongVolatile(long address)
     {
+        validate(address, 8);
         return unsafe.getLongVolatile(null, address);
     }
 
-    static void putByte(long address, byte value)
+    void putByte(long address, byte value)
     {
+        validate(address, 1);
         unsafe.putByte(null, address, value);
     }
 
-    static byte getByte(long address)
+    byte getByte(long address)
     {
+        validate(address, 1);
         return unsafe.getByte(null, address);
     }
 
-    static boolean compareAndSwap(long address, long expected, long value)
+    boolean compareAndSwap(long address, long expected, long value)
     {
+        validate(address, 8);
         return unsafe.compareAndSwapLong(null, address, expected, value);
     }
 
@@ -113,18 +129,21 @@ final class Uns
         return unsafe.compareAndSwapLong(obj, offset, expected, value);
     }
 
-    static void copyMemory(byte[] arr, int off, long address, int len)
+    void copyMemory(byte[] arr, int off, long address, int len)
     {
+        validate(address, len);
         unsafe.copyMemory(arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, null, address, len);
     }
 
-    static void copyMemory(long address, byte[] arr, int off, int len)
+    void copyMemory(long address, byte[] arr, int off, int len)
     {
+        validate(address, len);
         unsafe.copyMemory(null, address, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len);
     }
 
-    static void setMemory(long address, long len, byte val)
+    void setMemory(long address, int len, byte val)
     {
+        validate(address, len);
         unsafe.setMemory(address, len, val);
     }
 
@@ -145,29 +164,25 @@ final class Uns
         unsafe.park(false, nanos);
     }
 
-    static boolean tryLock(long address)
+    boolean tryLock(long address)
     {
-        return Uns.compareAndSwap(address, 0L, Thread.currentThread().getId());
+        return compareAndSwap(address, 0L, Thread.currentThread().getId());
     }
 
-    static int lock(long address)
+    int lock(long address)
     {
         long tid = Thread.currentThread().getId();
-        for (int spin= 0;;spin++)
+        for (int spin = 0; ; spin++)
         {
             if (compareAndSwap(address, 0L, tid))
                 return spin;
 
-            park(((spin & 3) +1 ) * 5000);
+            park(((spin & 3) + 1) * 5000);
         }
     }
 
-    static void unlock(long address)
+    void unlock(long address)
     {
-        Uns.putLongVolatile(address, 0L);
-    }
-
-    private Uns()
-    {
+        putLongVolatile(address, 0L);
     }
 }

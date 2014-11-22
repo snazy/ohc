@@ -16,6 +16,7 @@
 package org.caffinitas.ohc;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -25,8 +26,7 @@ public class BasicTest
     @Test
     public void basic() throws IOException
     {
-        try (OHCache cache = OHCacheBuilder.newBuilder()
-                                           .build())
+        try (OHCache cache = nonEvicting())
         {
             int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
             Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
@@ -75,8 +75,7 @@ public class BasicTest
     @Test
     public void fillWithSmall() throws IOException
     {
-        try (OHCache cache = OHCacheBuilder.newBuilder()
-                                           .build())
+        try (OHCache cache = nonEvicting())
         {
             int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
 
@@ -124,8 +123,7 @@ public class BasicTest
     @Test
     public void fillWithBig() throws IOException
     {
-        try (OHCache cache = OHCacheBuilder.newBuilder()
-                                           .build())
+        try (OHCache cache = nonEvicting())
         {
             int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
 
@@ -171,26 +169,10 @@ public class BasicTest
         }
     }
 
-    private BytesSource bigSourceFor(int prefix, int v)
-    {
-        String s = bigFor(prefix, v);
-        return new BytesSource.StringSource(s);
-    }
-
-    private String bigFor(int prefix, int v)
-    {
-        StringBuilder sb = new StringBuilder(prefix + 6);
-        for (int i = 0; i < prefix; i++)
-            sb.append('a');
-        sb.append(v);
-        return sb.toString();
-    }
-
     @Test
     public void bigThingSerial() throws IOException
     {
-        try (OHCache cache = OHCacheBuilder.newBuilder()
-                                           .build())
+        try (OHCache cache = nonEvicting())
         {
             withKeyAndValLen(cache,
                              4321,
@@ -215,8 +197,7 @@ public class BasicTest
     @Test
     public void bigThingArray() throws IOException
     {
-        try (OHCache cache = OHCacheBuilder.newBuilder()
-                                           .build())
+        try (OHCache cache = nonEvicting())
         {
             withKeyAndValLen(cache,
                              4321,
@@ -236,6 +217,29 @@ public class BasicTest
                              987654,
                              true);
         }
+    }
+
+    private BytesSource bigSourceFor(int prefix, int v)
+    {
+        String s = bigFor(prefix, v);
+        return new BytesSource.StringSource(s);
+    }
+
+    private OHCache<Object, Object> nonEvicting()
+    {
+        return OHCacheBuilder.newBuilder()
+                             .cleanUpTrigger(0d)
+                             .cleanupCheckInterval(0, TimeUnit.MILLISECONDS)
+                             .build();
+    }
+
+    private String bigFor(int prefix, int v)
+    {
+        StringBuilder sb = new StringBuilder(prefix + 6);
+        for (int i = 0; i < prefix; i++)
+            sb.append('a');
+        sb.append(v);
+        return sb.toString();
     }
 
     private void withKeyAndValLen(OHCache cache, final int keyLen, final int valLen, boolean array)

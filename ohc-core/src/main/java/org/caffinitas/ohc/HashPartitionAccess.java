@@ -27,29 +27,31 @@ final class HashPartitionAccess
     // offset of CAS style lock field
     static final long OFF_LOCK = 8L;
     // total memory required for a hash-partition
-    static final long PARTITION_ENTRY_LEN = 16L;
+    static final int PARTITION_ENTRY_LEN = 16;
 
     // TODO Check whether a LRU-tail field has benefits regarding eviction and hash-partition locks during eviction.
     // Guess: no benefit if the hash-table is large (just a few entries in each hash-partition.
 
     private final int hashPartitionMask;
     private final long rootAddress;
+    private final Uns uns;
 
     private final AtomicLong lockPartitionSpins = new AtomicLong();
 
-    static long sizeForEntries(int hashTableSize)
+    static int sizeForEntries(int hashTableSize)
     {
         return PARTITION_ENTRY_LEN * hashTableSize;
     }
 
-    HashPartitionAccess(int hashTableSize, long rootAddress)
+    HashPartitionAccess(Uns uns, int hashTableSize, long rootAddress)
     {
+        this.uns = uns;
         this.hashPartitionMask = hashTableSize - 1;
         this.rootAddress = rootAddress;
 
         // it's important to initialize the hash partition memory!
         // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
-        Uns.setMemory(rootAddress, sizeForEntries(hashTableSize), (byte) 0);
+        uns.setMemory(rootAddress, sizeForEntries(hashTableSize), (byte) 0);
     }
 
     long partitionForHash(int hash)
@@ -62,7 +64,7 @@ final class HashPartitionAccess
     {
         long partAdr = partitionForHash(hash);
 
-        int spins = Uns.lock(partAdr + OFF_LOCK);
+        int spins = uns.lock(partAdr + OFF_LOCK);
         if (spins > 0)
             lockPartitionSpins.addAndGet(spins);
 
@@ -72,20 +74,20 @@ final class HashPartitionAccess
     void unlockPartition(long partitionAdr)
     {
         if (partitionAdr != 0L)
-            Uns.unlock(partitionAdr + OFF_LOCK);
+            uns.unlock(partitionAdr + OFF_LOCK);
     }
 
     long getLRUHead(long partitionAdr)
     {
         if (partitionAdr == 0L)
             return 0L;
-        return Uns.getLongVolatile(partitionAdr + OFF_LRU_HEAD);
+        return uns.getLongVolatile(partitionAdr + OFF_LRU_HEAD);
     }
 
     void setLRUHead(long partitionAdr, long hashEntryAdr)
     {
         if (partitionAdr != 0L)
-            Uns.putLong(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
+            uns.putLong(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
     }
 
     long getLockPartitionSpins()

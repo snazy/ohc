@@ -53,6 +53,7 @@ final class HashEntryAccess
     private final int blockSize;
     private final int hashTableSize;
 
+    private final Uns uns;
     private final FreeBlocks freeBlocks;
     private final HashPartitionAccess hashPartitionAccess;
 
@@ -62,8 +63,9 @@ final class HashEntryAccess
 
     private long lastLruWarn;
 
-    HashEntryAccess(int blockSize, FreeBlocks freeBlocks, HashPartitionAccess hashPartitionAccess, int hashTableSize, int lruIterationWarnTrigger)
+    HashEntryAccess(Uns uns, int blockSize, FreeBlocks freeBlocks, HashPartitionAccess hashPartitionAccess, int hashTableSize, int lruIterationWarnTrigger)
     {
+        this.uns = uns;
         this.blockSize = blockSize;
         this.freeBlocks = freeBlocks;
         this.hashPartitionAccess = hashPartitionAccess;
@@ -85,7 +87,7 @@ final class HashEntryAccess
         if (requiredBlocks < 1)
             throw new InternalError();
 
-        // allocate memory for whole hash-entry-chain
+        // allocate memory for whole hash-entry block-chain
         long hashEntryAdr = freeBlocks.allocateChain(requiredBlocks);
         if (hashEntryAdr == 0L)
             return 0L;
@@ -111,7 +113,7 @@ final class HashEntryAccess
                 long remain = len - arrIdx;
                 if (remain > blkRemain)
                 {
-                    Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
+                    uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
                     arrIdx += blkRemain;
                     blkAdr = getNextBlock(blkAdr);
                     blkOff = OFF_DATA_IN_NEXT;
@@ -119,7 +121,7 @@ final class HashEntryAccess
                 }
                 else
                 {
-                    Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, (int) remain);
+                    uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, (int) remain);
                     blkOff += remain;
                     if (blkOff == blockSize)
                     {
@@ -139,13 +141,23 @@ final class HashEntryAccess
             for (int p = 0; p < len; p++)
             {
                 byte b = keySource.getByte(p);
-                Uns.putByte(blkAdr + blkOff++, b);
+                uns.putByte(blkAdr + blkOff++, b);
                 if (blkOff == blockSize)
                 {
                     blkAdr = getNextBlock(blkAdr);
                     blkOff = OFF_DATA_IN_NEXT;
                 }
             }
+        }
+
+        // round up to next 8 byte boundary (8 byte copy operations on 8 byte boundaries are faster)
+        long add = roundUpRel(blkOff);
+        blkOff += add;
+        blkRemain -= add;
+        if (blkOff >= blockSize)
+        {
+            blkAdr = getNextBlock(blkAdr);
+            blkOff = OFF_DATA_IN_NEXT;
         }
 
         if (valueSource != null)
@@ -167,7 +179,7 @@ final class HashEntryAccess
                     long remain = len - arrIdx;
                     if (remain > blkRemain)
                     {
-                        Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
+                        uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
                         arrIdx += blkRemain;
                         blkAdr = getNextBlock(blkAdr);
                         blkOff = OFF_DATA_IN_NEXT;
@@ -175,7 +187,7 @@ final class HashEntryAccess
                     }
                     else
                     {
-                        Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, (int) remain);
+                        uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, (int) remain);
                         break;
                     }
                 }
@@ -186,7 +198,7 @@ final class HashEntryAccess
                 for (int p = 0; p < len; p++)
                 {
                     byte b = valueSource.getByte(p);
-                    Uns.putByte(blkAdr + blkOff++, b);
+                    uns.putByte(blkAdr + blkOff++, b);
                     if (blkOff == blockSize)
                     {
                         blkAdr = getNextBlock(blkAdr);
@@ -201,8 +213,7 @@ final class HashEntryAccess
 
     private int calcRequiredNumberOfBlocks(BytesSource keySource, long valueLen)
     {
-        long total = keySource.size();
-        total += valueLen;
+        long total = roundUp(keySource.size()) + valueLen;
 
         total -= firstBlockDataSpace;
         if (total <= 0L)
@@ -217,12 +228,12 @@ final class HashEntryAccess
 
     private void initHashEntry(int hash, BytesSource keySource, BytesSource valueSource, long valueLen, long hashEntryAdr)
     {
-        Uns.putLongVolatile(hashEntryAdr + OFF_HASH, hash);
+        uns.putLongVolatile(hashEntryAdr + OFF_HASH, hash);
         setLRUPrevious(hashEntryAdr, 0L);
         setLRUNext(hashEntryAdr, 0L);
-        Uns.putLongVolatile(hashEntryAdr + OFF_ENTRY_LOCK, 0L);
-        Uns.putLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH, keySource.size());
-        Uns.putLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH, valueSource != null ? valueSource.size() : valueLen);
+        uns.putLongVolatile(hashEntryAdr + OFF_ENTRY_LOCK, 0L);
+        uns.putLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH, keySource.size());
+        uns.putLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH, valueSource != null ? valueSource.size() : valueLen);
     }
 
     long findHashEntry(long partitionAdr, int hash, BytesSource keySource)
@@ -239,11 +250,11 @@ final class HashEntryAccess
                 throw new InternalError("endless loop");
             first = false;
 
-            long hashEntryHash = Uns.getLongVolatile(hashEntryAdr + OFF_HASH);
+            long hashEntryHash = uns.getLongVolatile(hashEntryAdr + OFF_HASH);
             if (hashEntryHash != hash)
                 continue;
 
-            long serKeyLen = Uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
+            long serKeyLen = uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
             if (serKeyLen != keySource.size())
                 continue;
 
@@ -274,26 +285,6 @@ final class HashEntryAccess
         }
     }
 
-//    String dumpLRUList(long partitionAdr)
-//    {
-//        StringBuilder sb = new StringBuilder()
-//                           .append("partition=").append(partitionAdr).append("\n");
-//        long firstHashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr);
-//        boolean first = true;
-//        for (long hashEntryAdr = firstHashEntryAdr; hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
-//        {
-//            sb.append("     next=").append(hashEntryAdr).append("\n");
-//
-//            if (!first && firstHashEntryAdr == hashEntryAdr)
-//            {
-//                sb.append("*** FAILURE !!! LOOOPS TO FIRST ENTRY!");
-//                break;
-//            }
-//            first = false;
-//        }
-//        return sb.toString();
-//    }
-
     private boolean compareKey(long hashEntryAdr, BytesSource keySource, long serKeyLen)
     {
         if (hashEntryAdr == 0L)
@@ -311,8 +302,8 @@ final class HashEntryAccess
             {
                 if (serKeyLen - p >= 8)
                 {
-                    long lSer = Uns.getLong(blkAdr + blkOff);
-                    long lKey = Uns.getLongFromByteArray(arr, arrOff + p);
+                    long lSer = uns.getLong(blkAdr + blkOff);
+                    long lKey = uns.getLongFromByteArray(arr, arrOff + p);
                     if (lSer != lKey)
                         return false;
                     blkOff += 8;
@@ -320,7 +311,7 @@ final class HashEntryAccess
                 }
                 else
                 {
-                    byte bSer = Uns.getByte(blkAdr + blkOff++);
+                    byte bSer = uns.getByte(blkAdr + blkOff++);
                     byte bKey = keySource.getByte(p++);
 
                     if (bSer != bKey)
@@ -343,7 +334,7 @@ final class HashEntryAccess
             if (blkAdr == 0L)
                 return false;
 
-            byte bSer = Uns.getByte(blkAdr + blkOff++);
+            byte bSer = uns.getByte(blkAdr + blkOff++);
             byte bKey = keySource.getByte(p);
 
             if (bSer != bKey)
@@ -364,16 +355,18 @@ final class HashEntryAccess
         if (hashEntryAdr == 0L)
             return;
 
-        long serKeyLen = Uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
+        long serKeyLen = uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
         if (serKeyLen < 0L)
             throw new InternalError();
-        long valueLen = Uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
+        long valueLen = uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
         if (valueLen < 0L)
             throw new InternalError();
         long blkAdr = hashEntryAdr;
         long blkOff;
 
-        // first block
+        serKeyLen = roundUp(serKeyLen);
+
+        // skip key
         if (serKeyLen >= firstBlockDataSpace)
         {
             serKeyLen -= firstBlockDataSpace;
@@ -396,7 +389,7 @@ final class HashEntryAccess
 
         for (int p = 0; blkAdr != 0L && p < valueLen; p++)
         {
-            byte b = Uns.getByte(blkAdr + blkOff++);
+            byte b = uns.getByte(blkAdr + blkOff++);
             if (blkOff == blockSize)
             {
                 blkAdr = getNextBlock(blkAdr);
@@ -404,6 +397,20 @@ final class HashEntryAccess
             }
             valueSink.putByte(p, b);
         }
+    }
+
+    static long roundUp(long val)
+    {
+        long rem = val & 7;
+        if (rem != 0)
+            val += 8L - rem;
+        return val;
+    }
+
+    static long roundUpRel(long val)
+    {
+        long rem = val & 7;
+        return rem != 0 ? 8L - rem : 0L;
     }
 
     void updatePartitionLRU(long partitionAdr, long hashEntryAdr)
@@ -471,40 +478,45 @@ final class HashEntryAccess
     void lockEntry(long hashEntryAdr)
     {
         if (hashEntryAdr != 0L)
-            Uns.lock(hashEntryAdr + OFF_ENTRY_LOCK);
+            uns.lock(hashEntryAdr + OFF_ENTRY_LOCK);
     }
 
     void unlockEntry(long hashEntryAdr)
     {
         if (hashEntryAdr != 0L)
-            Uns.unlock(hashEntryAdr + OFF_ENTRY_LOCK);
+            uns.unlock(hashEntryAdr + OFF_ENTRY_LOCK);
     }
 
     private long getNextBlock(long blockAdr)
     {
-        return blockAdr != 0L ? Uns.getLongVolatile(blockAdr + OFF_NEXT_BLOCK) : 0L;
+        if (blockAdr == 0L)
+            return 0L;
+        blockAdr = uns.getLongVolatile(blockAdr + OFF_NEXT_BLOCK);
+        if (blockAdr == 0L)
+            throw new NullPointerException();
+        return blockAdr;
     }
 
     long getLRUNext(long hashEntryAdr)
     {
-        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + OFF_LRU_NEXT) : 0L;
+        return hashEntryAdr != 0L ? uns.getLongVolatile(hashEntryAdr + OFF_LRU_NEXT) : 0L;
     }
 
     long getLRUPrevious(long hashEntryAdr)
     {
-        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS) : 0L;
+        return hashEntryAdr != 0L ? uns.getLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS) : 0L;
     }
 
     void setLRUPrevious(long hashEntryAdr, long previousAdr)
     {
         if (hashEntryAdr != 0L)
-            Uns.putLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
+            uns.putLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
     }
 
     void setLRUNext(long hashEntryAdr, long nextAdr)
     {
         if (hashEntryAdr != 0L)
-            Uns.putLongVolatile(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
+            uns.putLongVolatile(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
     }
 
     void removeAll()
@@ -593,16 +605,18 @@ final class HashEntryAccess
             if (hashEntryAdr == 0L)
                 throw new NullPointerException();
 
-            long serKeyLen = Uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
+            long serKeyLen = uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
             if (serKeyLen < 0L)
                 throw new InternalError();
-            long valueLen = Uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
+            long valueLen = uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
             if (valueLen < 0L)
                 throw new InternalError();
             long blkAdr = hashEntryAdr;
             long blkOff;
 
-            // first block
+            serKeyLen = roundUp(serKeyLen);
+
+            // skip key
             if (serKeyLen >= firstBlockDataSpace)
             {
                 serKeyLen -= firstBlockDataSpace;
@@ -648,7 +662,7 @@ final class HashEntryAccess
                 if (available <= 0)
                     throw new EOFException();
 
-                Uns.copyMemory(b, off, blkAdr + blkOff, r);
+                uns.copyMemory(b, off, blkAdr + blkOff, r);
                 len -= r;
                 off += r;
                 available -= r;
@@ -668,7 +682,7 @@ final class HashEntryAccess
 
             available--;
 
-            Uns.putByte(blkAdr + blkOff++, (byte) b);
+            uns.putByte(blkAdr + blkOff++, (byte) b);
             if (blkOff == blockSize)
             {
                 blkAdr = getNextBlock(blkAdr);
@@ -688,10 +702,10 @@ final class HashEntryAccess
             if (hashEntryAdr == 0L)
                 throw new NullPointerException();
 
-            long serKeyLen = Uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
+            long serKeyLen = uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
             if (serKeyLen < 0L)
                 throw new InternalError();
-            long valueLen = Uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
+            long valueLen = uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
             if (valueLen < 0L)
                 throw new InternalError();
             long blkAdr = hashEntryAdr;
@@ -699,7 +713,10 @@ final class HashEntryAccess
 
             if (value)
             {
-                // first block
+
+                serKeyLen = roundUp(serKeyLen);
+
+                // skip key
                 if (serKeyLen >= firstBlockDataSpace)
                 {
                     serKeyLen -= firstBlockDataSpace;
@@ -762,7 +779,7 @@ final class HashEntryAccess
                 if (r <= 0)
                     break;
 
-                Uns.copyMemory(blkAdr + blkOff, b, off, r);
+                uns.copyMemory(blkAdr + blkOff, b, off, r);
                 rd += r;
                 off += r;
                 len -= r;
@@ -785,7 +802,7 @@ final class HashEntryAccess
 
             available--;
 
-            byte b = Uns.getByte(blkAdr + blkOff++);
+            byte b = uns.getByte(blkAdr + blkOff++);
             if (blkOff == blockSize)
             {
                 blkAdr = getNextBlock(blkAdr);
