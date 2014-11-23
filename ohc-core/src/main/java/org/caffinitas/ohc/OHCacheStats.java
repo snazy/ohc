@@ -44,7 +44,7 @@ public final class OHCacheStats
         this.capacity = capacity;
     }
 
-    public int getFreeBlockCount()
+    public long getFreeBlockCount()
     {
         return sumOf(freeListLengths);
     }
@@ -125,9 +125,9 @@ public final class OHCacheStats
         return r;
     }
 
-    private static int sumOf(int[] arr)
+    private static long sumOf(int[] arr)
     {
-        int r = 0;
+        long r = 0;
         for (int l : arr)
             r += l;
         return r;

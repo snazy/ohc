@@ -15,11 +15,9 @@
  */
 package org.caffinitas.ohc.benchmark;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.List;
 import java.util.concurrent.Future;
 
@@ -29,17 +27,15 @@ import org.caffinitas.ohc.CacheSerializer;
 
 public class BenchmarkUtils {
     public static CacheSerializer<String> serializer = new CacheSerializer<String>() {
-        public void serialize(String t, OutputStream stream) throws IOException {
-            DataOutputStream out = new DataOutputStream(stream);
+        public void serialize(String t, DataOutput stream) throws IOException {
             byte[] bytes = t.getBytes(Charsets.UTF_8);
-            out.writeInt(bytes.length);
-            out.write(bytes);
+            stream.writeInt(bytes.length);
+            stream.write(bytes);
         }
 
-        public String deserialize(InputStream stream) throws IOException {
-            DataInputStream in = new DataInputStream(stream);
-            byte[] bytes = new byte[in.readInt()];
-            in.readFully(bytes);
+        public String deserialize(DataInput stream) throws IOException {
+            byte[] bytes = new byte[stream.readInt()];
+            stream.readFully(bytes);
             return new String(bytes, Charsets.UTF_8);
         }
 

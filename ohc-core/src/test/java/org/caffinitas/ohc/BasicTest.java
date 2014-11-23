@@ -16,6 +16,7 @@
 package org.caffinitas.ohc;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
 import org.testng.Assert;
@@ -59,12 +60,17 @@ public class BasicTest
             Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
 
             String k = "123";
-            cache.put(k, "hello world");
+            cache.put(k, "hello world \u00e4\u00f6\u00fc\u00df");
 
             Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount - 1);
 
             String v = cache.getIfPresent(k);
-            Assert.assertEquals(v, "hello world");
+            Assert.assertEquals(v, "hello world \u00e4\u00f6\u00fc\u00df");
+
+            Iterator<String> iter = cache.hotN(1);
+            Assert.assertTrue(iter.hasNext());
+            Assert.assertEquals(iter.next(), "123");
+            Assert.assertFalse(iter.hasNext());
 
             cache.invalidate(k);
 

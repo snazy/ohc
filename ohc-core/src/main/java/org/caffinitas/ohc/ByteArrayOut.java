@@ -18,7 +18,7 @@ package org.caffinitas.ohc;
 import java.io.IOException;
 import java.io.OutputStream;
 
-final class ByteArrayOut extends OutputStream
+final class ByteArrayOut extends AbstractDataOutput
 {
     private final byte[] buffer;
     private int pos;

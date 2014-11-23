@@ -15,10 +15,9 @@
  */
 package org.caffinitas.ohc;
 
+import java.io.DataInput;
 import java.io.EOFException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -582,17 +581,17 @@ final class HashEntryAccess
         return ll;
     }
 
-    InputStream readKeyFrom(long hashEntryAdr)
+    DataInput readKeyFrom(long hashEntryAdr)
     {
         return new HashEntryInput(hashEntryAdr, false);
     }
 
-    InputStream readValueFrom(long hashEntryAdr)
+    DataInput readValueFrom(long hashEntryAdr)
     {
         return new HashEntryInput(hashEntryAdr, true);
     }
 
-    <K, V> void valueToHashEntry(long hashEntryAdr, CacheSerializer<V> valueSerializer, V v, long keyLen, long valueLen) throws IOException
+    <V> void valueToHashEntry(long hashEntryAdr, CacheSerializer<V> valueSerializer, V v, long keyLen, long valueLen) throws IOException
     {
         HashEntryOutput entryOutput = new HashEntryOutput(hashEntryAdr, keyLen, valueLen);
         valueSerializer.serialize(v, entryOutput);
@@ -612,7 +611,7 @@ final class HashEntryAccess
         }
     }
 
-    final class HashEntryOutput extends OutputStream
+    final class HashEntryOutput extends AbstractDataOutput
     {
         private long blkAdr;
         private long blkOff;
@@ -703,7 +702,7 @@ final class HashEntryAccess
         }
     }
 
-    final class HashEntryInput extends InputStream
+    final class HashEntryInput extends AbstractDataInput
     {
         private long blkAdr;
         private long blkOff;
@@ -746,9 +745,7 @@ final class HashEntryAccess
                     blkOff = OFF_DATA_IN_FIRST + serKeyLen;
             }
             else
-            {
-                blkOff = 0L;
-            }
+                blkOff = OFF_DATA_IN_FIRST;
 
             if (valueLen > Integer.MAX_VALUE)
                 throw new IllegalStateException("integer overflow");
@@ -763,12 +760,7 @@ final class HashEntryAccess
             return available > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) available;
         }
 
-        public long skip(long n) throws IOException
-        {
-            return super.skip(n);
-        }
-
-        public int read(byte[] b, int off, int len) throws IOException
+        public void readFully(byte[] b, int off, int len) throws IOException
         {
             if (b == null)
                 throw new NullPointerException();
@@ -776,11 +768,7 @@ final class HashEntryAccess
                 throw new ArrayIndexOutOfBoundsException();
 
             if (len > available)
-                len = (int) available;
-            if (len <= 0)
-                return -1;
-
-            int rd = 0;
+                throw new EOFException();
 
             while (len > 0)
             {
@@ -792,7 +780,6 @@ final class HashEntryAccess
                     break;
 
                 uns.copyMemory(blkAdr + blkOff, b, off, r);
-                rd += r;
                 off += r;
                 len -= r;
                 available -= r;
@@ -803,14 +790,12 @@ final class HashEntryAccess
                     blkOff = OFF_DATA_IN_NEXT;
                 }
             }
-
-            return rd;
         }
 
-        public int read() throws IOException
+        public byte readByte() throws IOException
         {
             if (available < 1)
-                return -1;
+                throw new EOFException();
 
             available--;
 
@@ -821,7 +806,7 @@ final class HashEntryAccess
                 blkOff = OFF_DATA_IN_NEXT;
             }
 
-            return b & 0xff;
+            return b;
         }
     }
 

@@ -182,7 +182,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
             executorService = es;
 
-            LOGGER.info("Initialized OHC with capacity={}, hash-table-size={}, block-size={}", cap, hts, bs);
+            if (LOGGER.isDebugEnabled())
+                LOGGER.debug("Initialized OHC with capacity={}, hash-table-size={}, block-size={}", cap, hts, bs);
         }
         catch (Throwable t)
         {
@@ -197,7 +198,13 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void close()
     {
+        if (closed)
+            return;
+
         closed = true;
+
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("Closing OHC instance");
 
         if (executorService != null)
         {
@@ -215,7 +222,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         // releasing memory immediately is dangerous since other threads may still access the data
         // Need to orderly clear the cache before releasing (this involves hash-partition and hash-entry locks,
         // which ensure that no other thread is accessing OHC)
-        invalidateAll();
+        hashEntryAccess.removeAll();
 
         uns.free();
     }
@@ -238,25 +245,23 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public int getBlockSize()
     {
-        assertNotClosed();
         return blockSize;
     }
 
     public long getCapacity()
     {
-        assertNotClosed();
         return capacity;
     }
 
     public int getHashTableSize()
     {
-        assertNotClosed();
         return hashTableSize;
     }
 
     public int calcFreeBlockCount()
     {
         assertNotClosed();
+
         return freeBlocks.calcFreeBlockCount();
     }
 
@@ -272,6 +277,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public PutResult put(int hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink)
     {
+        assertNotClosed();
+
         if (keySource == null)
             throw new NullPointerException();
         if (valueSource == null)
@@ -339,6 +346,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public boolean get(int hash, BytesSource keySource, BytesSink valueSink)
     {
+        assertNotClosed();
+
         if (keySource == null)
             throw new NullPointerException();
         if (valueSink == null)
@@ -395,6 +404,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public boolean remove(int hash, BytesSource keySource)
     {
+        assertNotClosed();
+
         if (keySource == null)
             throw new NullPointerException();
         if (keySource.size() <= 0)
@@ -448,6 +459,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public V getIfPresent(Object o)
     {
+        assertNotClosed();
+
         if (valueSerializer == null)
             throw new NullPointerException("no valueSerializer configured");
 
@@ -495,6 +508,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void put(K k, V v)
     {
+        assertNotClosed();
+
         if (valueSerializer == null)
             throw new NullPointerException("no valueSerializer configured");
 
@@ -523,6 +538,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void cleanUp()
     {
+        assertNotClosed();
+
         if (!cleanupLock.compareAndSet(false, true))
             return;
         try
@@ -544,12 +561,13 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             int entriesToRemovePerPartition = (int) ((expectedFreeBlockCount - freeBlockCount) * blocksPerEntry / hashTableSize);
             if (entriesToRemovePerPartition < 1)
                 entriesToRemovePerPartition = 1;
-            LOGGER.info("OHC cleanup starts with free-space percentage {}, entries={}, blocks-per-entry={}, entries-to-remove={}",
-                        String.format("%.2f", fsPerc),
-                        entries,
-                        String.format("%.2f", blocksPerEntry),
-                        entriesToRemove
-            );
+            if (LOGGER.isDebugEnabled())
+                LOGGER.debug("Cleanup starts with free-space percentage {}, entries={}, blocks-per-entry={}, entries-to-remove={}",
+                            String.format("%.2f", fsPerc),
+                            entries,
+                            String.format("%.2f", blocksPerEntry),
+                            entriesToRemove
+                );
 
             int blocksFreed = 0;
             int entriesRemoved = 0;
@@ -621,7 +639,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
             evictionCount.addAndGet(entriesRemoved);
 
-            LOGGER.info("Cleanup statistics: removed entries={} blocks recycled={}", entriesRemoved, blocksFreed);
+            if (LOGGER.isDebugEnabled())
+                LOGGER.debug("Cleanup statistics: removed entries={} blocks recycled={}", entriesRemoved, blocksFreed);
         }
         finally
         {
@@ -644,6 +663,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public CacheStats stats()
     {
+        assertNotClosed();
+
         return new CacheStats(
                              hitCount.get(),
                              missCount.get(),
@@ -656,6 +677,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public long size()
     {
+        assertNotClosed();
+
         long sz = 0L;
         for (int p = 0; p < hashTableSize; p++)
         {
@@ -676,6 +699,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void invalidateAll()
     {
+        assertNotClosed();
+
         hashEntryAccess.removeAll();
     }
 
@@ -693,6 +718,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public ImmutableMap<K, V> getAllPresent(Iterable<?> iterable)
     {
+        assertNotClosed();
+
         ImmutableMap.Builder<K, V> r = ImmutableMap.builder();
         for (Object o : iterable)
         {
@@ -705,6 +732,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public V get(K k, Callable<? extends V> callable) throws ExecutionException
     {
+        assertNotClosed();
+
         V v = getIfPresent(k);
         if (v == null)
         {
@@ -730,6 +759,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public Iterator<K> hotN(int n)
     {
+        assertNotClosed();
+
         if (keySerializer == null)
             throw new NullPointerException("no keySerializer configured");
 
@@ -765,6 +796,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     if (subIter != null && subIter.hasNext())
                         return subIter.next();
                     keys.clear();
+
+                    assertNotClosed();
 
                     hashEntryAccess.hotN(h++, cb, keysPerPartition);
                     subIter = keys.iterator();

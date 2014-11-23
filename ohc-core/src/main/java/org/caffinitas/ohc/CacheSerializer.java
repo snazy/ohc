@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -28,7 +30,7 @@ public interface CacheSerializer<T>
      * @param out OutputStream into which serialization needs to happen.
      * @throws java.io.IOException
      */
-    public void serialize(T t, OutputStream out) throws IOException;
+    public void serialize(T t, DataOutput out) throws IOException;
 
     /**
      * Deserialize from the specified DataInput instance.
@@ -37,7 +39,7 @@ public interface CacheSerializer<T>
      * @return the type that was deserialized
      * @throws IOException
      */
-    public T deserialize(InputStream in) throws IOException;
+    public T deserialize(DataInput in) throws IOException;
 
     public long serializedSize(T t);
 }

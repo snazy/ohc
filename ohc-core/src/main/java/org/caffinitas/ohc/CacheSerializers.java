@@ -1,42 +1,42 @@
 package org.caffinitas.ohc;
 
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 
 public final class CacheSerializers
 {
     public static final CacheSerializer<String> stringSerializer = new CacheSerializer<String>()
     {
-        public void serialize(String s, OutputStream out) throws IOException
+        public void serialize(String s, DataOutput out) throws IOException
         {
-            out.write(s.getBytes());
+            out.writeUTF(s);
         }
 
-        public String deserialize(InputStream in) throws IOException
+        public String deserialize(DataInput in) throws IOException
         {
-            byte[] b = new byte[in.available()];
-            in.read(b);
-            return new String(b);
+            return in.readUTF();
         }
 
         public long serializedSize(String s)
         {
-            return s.getBytes().length;
+            return AbstractDataOutput.writeUTFLen(s);
         }
     };
 
     public static final CacheSerializer<byte[]> byteArraySerializer = new CacheSerializer<byte[]>()
     {
-        public void serialize(byte[] s, OutputStream out) throws IOException
+        public void serialize(byte[] s, DataOutput out) throws IOException
         {
+            out.write(s.length);
             out.write(s);
         }
 
-        public byte[] deserialize(InputStream in) throws IOException
+        public byte[] deserialize(DataInput in) throws IOException
         {
-            byte[] b = new byte[in.available()];
-            in.read(b);
+            int l = in.readInt();
+            byte[] b = new byte[l];
+            in.readFully(b);
             return b;
         }
 
