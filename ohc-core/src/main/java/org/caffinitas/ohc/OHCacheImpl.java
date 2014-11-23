@@ -732,8 +732,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public V get(K k, Callable<? extends V> callable) throws ExecutionException
     {
-        assertNotClosed();
-
         V v = getIfPresent(k);
         if (v == null)
         {
