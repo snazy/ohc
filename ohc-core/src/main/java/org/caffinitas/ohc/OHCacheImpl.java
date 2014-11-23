@@ -141,46 +141,58 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         long hashTableMem = HashPartitionAccess.sizeForEntries(hashTableSize);
 
         this.uns = new Uns(capacity + hashTableMem, blockSize);
-
-        long blocksAddress = uns.address + hashTableMem;
-
-        this.freeBlocks = new FreeBlocks(uns, blocksAddress, blocksAddress + capacity, blockSize);
-        this.hashPartitionAccess = new HashPartitionAccess(uns, hashTableSize, uns.address);
-        this.hashEntryAccess = new HashEntryAccess(uns, blockSize, freeBlocks, hashPartitionAccess, hashTableSize, lruListWarnTrigger);
-
-        this.keySerializer = builder.getKeySerializer();
-        this.valueSerializer = builder.getValueSerializer();
-
-        double cut = builder.getCleanUpTrigger();
-        if (cut < 0d || cut > 1d)
-            throw new IllegalArgumentException("Invalid clean-up percentage trigger value " + String.format("%.2f", cut));
-        this.cleanUpTrigger = cut;
-
-        long cleanupCheckInterval = builder.getCleanupCheckInterval();
-
-        if ((cut > 0d && cleanupCheckInterval <= 0L)
-            || (cut <= 0d && cleanupCheckInterval > 0L))
-            throw new IllegalArgumentException("Incompatible settings - cleanup-check-interval " +
-                                               cleanupCheckInterval + " vs cleanup-trigger " + String.format("%.2f", cut));
-
-
-        this.statisticsEnabled = builder.isStatisticsEnabled();
-
-        ScheduledExecutorService es = null;
-        if (cleanupCheckInterval > 0)
+        try
         {
-            es = Executors.newScheduledThreadPool(1);
-            es.scheduleWithFixedDelay(new Runnable()
-            {
-                public void run()
-                {
-                    cleanUp();
-                }
-            }, cleanupCheckInterval, cleanupCheckInterval, TimeUnit.MILLISECONDS);
-        }
-        executorService = es;
 
-        LOGGER.info("Initialized OHC with capacity={}, hash-table-size={}, block-size={}", cap, hts, bs);
+            long blocksAddress = uns.address + hashTableMem;
+
+            this.freeBlocks = new FreeBlocks(uns, blocksAddress, blocksAddress + capacity, blockSize);
+            this.hashPartitionAccess = new HashPartitionAccess(uns, hashTableSize, uns.address);
+            this.hashEntryAccess = new HashEntryAccess(uns, blockSize, freeBlocks, hashPartitionAccess, hashTableSize, lruListWarnTrigger);
+
+            this.keySerializer = builder.getKeySerializer();
+            this.valueSerializer = builder.getValueSerializer();
+
+            double cut = builder.getCleanUpTrigger();
+            if (cut < 0d || cut > 1d)
+                throw new IllegalArgumentException("Invalid clean-up percentage trigger value " + String.format("%.2f", cut));
+            this.cleanUpTrigger = cut;
+
+            long cleanupCheckInterval = builder.getCleanupCheckInterval();
+
+            if ((cut > 0d && cleanupCheckInterval <= 0L)
+                || (cut <= 0d && cleanupCheckInterval > 0L))
+                throw new IllegalArgumentException("Incompatible settings - cleanup-check-interval " +
+                                                   cleanupCheckInterval + " vs cleanup-trigger " + String.format("%.2f", cut));
+
+
+            this.statisticsEnabled = builder.isStatisticsEnabled();
+
+            ScheduledExecutorService es = null;
+            if (cleanupCheckInterval > 0)
+            {
+                es = Executors.newScheduledThreadPool(1);
+                es.scheduleWithFixedDelay(new Runnable()
+                {
+                    public void run()
+                    {
+                        cleanUp();
+                    }
+                }, cleanupCheckInterval, cleanupCheckInterval, TimeUnit.MILLISECONDS);
+            }
+            executorService = es;
+
+            LOGGER.info("Initialized OHC with capacity={}, hash-table-size={}, block-size={}", cap, hts, bs);
+        }
+        catch (Throwable t)
+        {
+            uns.free();
+            if (t instanceof RuntimeException)
+                throw (RuntimeException) t;
+            if (t instanceof Error)
+                throw (Error) t;
+            throw new RuntimeException(t);
+        }
     }
 
     public void close()
@@ -200,9 +212,11 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
         }
 
-        // TODO releasing memory immediately is dangerous since other threads may still access the data
+        // releasing memory immediately is dangerous since other threads may still access the data
         // Need to orderly clear the cache before releasing (this involves hash-partition and hash-entry locks,
         // which ensure that no other thread is accessing OHC)
+        invalidateAll();
+
         uns.free();
     }
 
@@ -485,25 +499,26 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             throw new NullPointerException("no valueSerializer configured");
 
         BytesSource.ByteArraySource ks = keySource(k);
-
+        int hash = ks.hashCode();
         long valueLen = valueSerializer.serializedSize(v);
 
         // Allocate and fill new hash entry.
         // Do this outside of the hash-partition lock to hold that lock no longer than necessary.
-        long newHashEntryAdr = hashEntryAccess.createNewEntryChain(ks.hashCode(), ks, null, valueLen);
+        long newHashEntryAdr = hashEntryAccess.createNewEntryChain(hash, ks, null, valueLen);
         if (newHashEntryAdr == 0L)
             return;
 
         try
         {
-            hashEntryAccess.valueToHashEntry(newHashEntryAdr, valueSerializer, v);
+            hashEntryAccess.valueToHashEntry(newHashEntryAdr, valueSerializer, v, ks.size(), valueLen);
         }
         catch (IOException e)
         {
+            freeBlocks.freeChain(newHashEntryAdr);
             throw new IOError(e);
         }
 
-        putInternal(ks.hashCode(), ks, null, newHashEntryAdr);
+        putInternal(hash, ks, null, newHashEntryAdr);
     }
 
     public void cleanUp()
@@ -751,7 +766,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                         return subIter.next();
                     keys.clear();
 
-                    hashEntryAccess.hotN(h++, cb);
+                    hashEntryAccess.hotN(h++, cb, keysPerPartition);
+                    subIter = keys.iterator();
                 }
             }
         };

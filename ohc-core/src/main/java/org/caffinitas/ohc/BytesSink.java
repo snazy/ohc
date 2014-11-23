@@ -21,10 +21,49 @@ public interface BytesSink
 
     void putByte(int pos, byte value);
 
+    boolean hasArray();
+
+    byte[] array();
+
+    int arrayOffset();
+
+    public abstract class AbstractSink implements BytesSink
+    {
+        public int arrayOffset()
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        public byte[] array()
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        public boolean hasArray()
+        {
+            return false;
+        }
+    }
+
     public static class ByteArraySink implements BytesSink
     {
 
         private byte[] array;
+
+        public int arrayOffset()
+        {
+            return 0;
+        }
+
+        public byte[] array()
+        {
+            return array;
+        }
+
+        public boolean hasArray()
+        {
+            return true;
+        }
 
         public void setSize(int size)
         {

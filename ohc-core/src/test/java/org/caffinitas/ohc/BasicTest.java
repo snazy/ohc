@@ -178,7 +178,14 @@ public class BasicTest
                              4321,
                              987654,
                              false);
+        }
+    }
 
+    @Test
+    public void blockBoundaries() throws IOException
+    {
+        try (OHCache cache = nonEvicting())
+        {
             // on first block boundary
             withKeyAndValLen(cache,
                              cache.getBlockSize() - 64, // HashPartitionAccess.OFF_DATA_IN_FIRST
@@ -253,7 +260,7 @@ public class BasicTest
         BytesSource val = array
                           ? new ThirteenBytesSource(valLen)
                           : new ThirteenSource(valLen);
-        BytesSink valSink = new BytesSink()
+        BytesSink valSink = new BytesSink.AbstractSink()
         {
             public void setSize(int size)
             {
