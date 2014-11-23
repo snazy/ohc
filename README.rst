@@ -4,17 +4,14 @@ OHC - A off-heap-cache
 Status
 ------
 
-This library should be considered as *experimental* and *not production ready*.
+This library should be considered as *experimental* and **not production ready**.
 
 Performance
 -----------
 
 (No performance test results available yet - you may try the ohc-benchmark tool)
 
-OHC shall provide a good performance on commodity hardware and on big systems using non-uniform-memory-architectures.
-
-Generally you should work with a large hash table. The larger the hash table, the shorter the LRU list in each
-hash partition - that means less LRU link walks and increased performance.
+OHC shall provide a good performance on both commodity hardware and big systems using non-uniform-memory-architectures.
 
 Requirements
 ------------
@@ -25,8 +22,8 @@ Architecture
 ------------
 
 OHC uses a simple hash table as its primary data structure. Each hash partition basically consists of a pointer
-to the last recently used hash entry. And each hash entry has a pointer to its successor and predecessor building a
-LRU list. The hash table does not support re-hashing - it must be sized appropriately by the user.
+to the least recently used hash entry (LRU head). And each hash entry has a pointer to its successor and predecessor
+building a LRU list. The hash table does not support re-hashing - it must be sized appropriately by the user.
 
 Data memory is organized in fixed size blocks. Multiple free-block-lists are used as a simple memory management.
 
@@ -34,24 +31,29 @@ CAS based locks are used on each free list, each hash partition and each hash en
 required because OHC tries to release each lock on a whole hash partition as soon as possible. OHC has to
 ensure that data blocks for a hash entry are not recycled for other data while the application is reading from it.
 
-OHC will provide a purely LRU based eviction mechanism. Eviction shall take place concurrently with a very low
-influence to the overall performance.
-
 Put operations do not succeed if there is not enough free space to serialize the data. Reason is that OHC will
 not block any operation longer than really necessary. This should be completely fine for caches since it is better
-to let a cache-put not succeed than to block the calling application.
+to let a cache-put not succeed than to block the calling application. If there's demand for a *put guarantee*
+it can be implemented.
 
-Plain ``OHCache`` interface provides low level get/put/remove operations that take a ``BytesSource`` or a
+The plain ``OHCache`` interface provides low level get/put/remove operations that take a ``BytesSource`` or a
 ``BytesSink``. Reason for this is that you usually do not need to allocate more objects in the calling code -
 with the cost of a bit more verbose coding. For convenience ``OHCache`` extends the Guava ``Cache`` interface
 that takes Java objects as keys and values - you have to provide appropriate key and value serializers then.
+Note that this approach requires to serialize the key to a byte array for each get/put/remove operation.
 
-By default OHC performs cache eviction regularly on its own (default is to keep 25% free space). But be aware
-that calculation of entries to evict is based on averages and does its job not very accurately to increase
-overall performance.
+OHC provides a pure LRU based eviction mechanism. By default OHC performs cache eviction regularly on its
+own (default is to keep 25% free space). But be aware that calculation of entries to evict is based on averages
+and does its job not very accurately to increase overall performance - it's a trade-off between performance
+and accuracy.
 
 Note on the ``hotN`` function: The implementation will take N divided by number of hash partitions keys and usually
-return more results than expected.
+return much more results than expected (the results are not ordered - the results just represent some least
+recently accessed entries).
+
+Be careful with statistics and aggregation functions like ``size``, ``hotN`` or ``extendedStats``. These methods
+walk over the hash partitions (and lock them) or lock other data structures like the free lists. Although
+locks are not held longer than necessary, you should not call these methods just because you can.
 
 Configuration
 -------------
@@ -60,16 +62,34 @@ Use the class ``OHCacheBuilder`` to configure all necessary parameter like
 
 - hash table size (must be a power of 2)
 - data block size (must be a power of 2)
-- total capacity
+- capacity for data blocks
+- eviction configuration
+- key and value serializers
+
+Generally you should work with a large hash table. The larger the hash table, the shorter the LRU list in each
+hash partition - that means less LRU link walks and increased performance. By default OHC calculates the size of the
+hash table on its own using the formula ``hash_table_size = capacity / block_size / 16``.
 
 The total amount of required off heap memory is the *total capacity* plus *hash table*. Each hash partition (currently)
-requires 16 bytes - so the formula is ``total_capacity + hash_table_size * 16``.
+requires 16 bytes - so the formula is ``capacity + hash_table_size * 16``.
 
-Configure your data block size to somewhat that a single hash entry needs approximately 1 or 2 data blocks.
+Configure your data block size wisely. Too many data blocks for a single entry may degrade performance, too much
+wasted space degrades usable capacity.
+
 The first data block for a hash entry has an overhead of 64 bytes - each other data block has an overhead
 of 8 bytes. Means the first block has ``block_size - 64`` bytes available for key+value and each other
 ``block_size - 8`` bytes.
-Why off heap memory
+
+Important note on hash codes
+----------------------------
+
+Hash codes are essential for caches to distribute load. Many hash code implementations
+(like ``java.lang.String.hashCode()``) are not optimal for hash tables (``HashMap`` uses an alternative
+hash if the key is a ``String``) because hash code distribution is not uniform. Consider using something
+like Murmur3 or some fast cryptographic hash code - Google's Guava provides a lot of different hash algorithms.
+Consider using ``OHCache.extendedStats().getHashPartitionLengths()`` plus a histogram for your tests.
+
+Why off-heap memory
 -------------------
 
 When using a very huge number of objects in a very large heap, Virtual machines will suffer from increased GC
@@ -87,14 +107,8 @@ want to say that access to off heap memory is slower than access to data in the 
 has some "escape from JVM context" cost.
 
 But off heap memory is great when you have to deal with a huge amount of several/many GB of cache memory since
-you do not put pressure on the Java garbage collector. Let the Java GC do its job for the application where
+that dos not put any pressure on the Java garbage collector. Let the Java GC do its job for the application where
 this library does its job for the cached data.
-
-Concurrency
------------
-
-Caches must be designed for a good performance and good concurrency management where many threads perform
-possibly concurrent read and write operations.
 
 License
 -------
