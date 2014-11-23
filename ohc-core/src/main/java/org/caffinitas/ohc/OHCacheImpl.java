@@ -292,7 +292,10 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         // Do this outside of the hash-partition lock to hold that lock no longer than necessary.
         long newHashEntryAdr = hashEntryAccess.createNewEntryChain(hash, keySource, valueSource, -1L);
         if (newHashEntryAdr == 0L)
+        {
+            remove(hash, keySource);
             return PutResult.NO_MORE_SPACE;
+        }
 
         return putInternal(hash, keySource, oldValueSink, newHashEntryAdr);
     }
@@ -521,7 +524,10 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         // Do this outside of the hash-partition lock to hold that lock no longer than necessary.
         long newHashEntryAdr = hashEntryAccess.createNewEntryChain(hash, ks, null, valueLen);
         if (newHashEntryAdr == 0L)
+        {
+            remove(ks.hashCode(), ks);
             return;
+        }
 
         try
         {
