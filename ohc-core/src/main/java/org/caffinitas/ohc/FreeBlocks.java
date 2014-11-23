@@ -106,11 +106,11 @@ final class FreeBlocks
     private final AtomicInteger freeListPtr = new AtomicInteger();
     private final AtomicLong freeBlockSpins = new AtomicLong();
 
-    FreeBlocks(Uns uns, long firstFreeBlockAddress, long firstNonUsableAddress, int blockSize)
+    FreeBlocks(Uns uns, long capacity, int blockSize)
     {
         this.uns = uns;
         int fli = 0;
-        for (long adr = firstFreeBlockAddress; adr < firstNonUsableAddress; adr += blockSize)
+        for (long adr = uns.address; adr < uns.address + capacity; adr += blockSize)
         {
             uns.putLongVolatile(adr, 0L);
 

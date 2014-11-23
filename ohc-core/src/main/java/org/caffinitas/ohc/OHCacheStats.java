@@ -27,8 +27,9 @@ public final class OHCacheStats
     private final int blockSize;
     private final long capacity;
     private final long size;
+    private final int rehashCount;
 
-    public OHCacheStats(CacheStats cacheStats, int[] freeListLengths, int[] hashPartitionLengths, long size, int blockSize, long capacity)
+    public OHCacheStats(CacheStats cacheStats, int[] freeListLengths, int[] hashPartitionLengths, long size, int blockSize, long capacity, int rehashCount)
     {
         this.cacheStats = cacheStats;
         this.freeListLengths = freeListLengths;
@@ -42,6 +43,12 @@ public final class OHCacheStats
 
         this.blockSize = blockSize;
         this.capacity = capacity;
+        this.rehashCount = rehashCount;
+    }
+
+    public int getRehashCount()
+    {
+        return rehashCount;
     }
 
     public long getFreeBlockCount()
@@ -144,6 +151,7 @@ public final class OHCacheStats
                       .add("freeSpace", getFreeBlockCount() * blockSize)
                       .add("capacity", capacity)
                       .add("blocks(free/total)", String.format("%d/%d", getFreeBlockCount(), (capacity / blockSize)))
+                      .add("rehashCount", rehashCount)
                       .toString();
     }
 }

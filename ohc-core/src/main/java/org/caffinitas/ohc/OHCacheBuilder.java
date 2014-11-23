@@ -24,7 +24,7 @@ public class OHCacheBuilder<K, V>
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
-    private int lruListWarnTrigger = 100;
+    private int lruListLenTrigger = 100;
     private double cleanUpTrigger = .25d;
     private long cleanupCheckInterval = 1000;
     private boolean statisticsEnabled;
@@ -98,14 +98,14 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public int getLruListWarnTrigger()
+    public int getLruListLenTrigger()
     {
-        return lruListWarnTrigger;
+        return lruListLenTrigger;
     }
 
-    public OHCacheBuilder<K, V> lruListWarnTrigger(int lruListWarnTrigger)
+    public OHCacheBuilder<K, V> lruListLenTrigger(int lruListWarnTrigger)
     {
-        this.lruListWarnTrigger = lruListWarnTrigger;
+        this.lruListLenTrigger = lruListWarnTrigger;
         return this;
     }
 

@@ -15,6 +15,7 @@
  */
 package org.caffinitas.ohc;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -29,12 +30,14 @@ final class HashPartitionAccess
     // total memory required for a hash-partition
     static final int PARTITION_ENTRY_LEN = 16;
 
-    // TODO Check whether a LRU-tail field has benefits regarding eviction and hash-partition locks during eviction.
-    // Guess: no benefit if the hash-table is large (just a few entries in each hash-partition.
+    private volatile int hashPartitionMask;
+    private volatile Uns unsMain;
 
-    private final int hashPartitionMask;
-    private final long rootAddress;
-    private final Uns uns;
+    private volatile int hashPartitionMaskAlt;
+    private volatile Uns unsAlt;
+
+    // all hash partitions ins 'unsMain' smaller than this value must be looked up in 'unsAlt'
+    private final AtomicInteger rehashSplit = new AtomicInteger();
 
     private final AtomicLong lockPartitionSpins = new AtomicLong();
 
@@ -43,28 +46,37 @@ final class HashPartitionAccess
         return PARTITION_ENTRY_LEN * hashTableSize;
     }
 
-    HashPartitionAccess(Uns uns, int hashTableSize, long rootAddress)
+    HashPartitionAccess(int hashTableSize)
     {
-        this.uns = uns;
+        this.unsMain = new Uns((long) hashTableSize * PARTITION_ENTRY_LEN, PARTITION_ENTRY_LEN);
         this.hashPartitionMask = hashTableSize - 1;
-        this.rootAddress = rootAddress;
 
         // it's important to initialize the hash partition memory!
         // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
-        uns.setMemory(rootAddress, sizeForEntries(hashTableSize), (byte) 0);
+        unsMain.setMemory(unsMain.address, sizeForEntries(hashTableSize), (byte) 0);
+    }
+
+    int getHashTableSize()
+    {
+        return hashPartitionMask + 1;
     }
 
     long partitionForHash(int hash)
     {
         int partition = hash & hashPartitionMask;
-        return rootAddress + partition * PARTITION_ENTRY_LEN;
+        if (rehashSplit.get() <= partition)
+            return unsMain.address + partition * PARTITION_ENTRY_LEN;
+
+        // partition already rehashed - look it up in alternate location
+        partition = hash & hashPartitionMaskAlt;
+        return unsAlt.address + partition * PARTITION_ENTRY_LEN;
     }
 
     long lockPartitionForHash(int hash)
     {
         long partAdr = partitionForHash(hash);
 
-        int spins = uns.lock(partAdr + OFF_LOCK);
+        int spins = unsMain.lock(partAdr + OFF_LOCK);
         if (spins > 0)
             lockPartitionSpins.addAndGet(spins);
 
@@ -74,24 +86,57 @@ final class HashPartitionAccess
     void unlockPartition(long partitionAdr)
     {
         if (partitionAdr != 0L)
-            uns.unlock(partitionAdr + OFF_LOCK);
+            unsMain.unlock(partitionAdr + OFF_LOCK);
     }
 
     long getLRUHead(long partitionAdr)
     {
         if (partitionAdr == 0L)
             return 0L;
-        return uns.getAddress(partitionAdr + OFF_LRU_HEAD);
+        return unsMain.getLongVolatile(partitionAdr + OFF_LRU_HEAD);
     }
 
     void setLRUHead(long partitionAdr, long hashEntryAdr)
     {
         if (partitionAdr != 0L)
-            uns.putAddress(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
+            unsMain.putLongVolatile(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
+    }
+
+    void setLRUHeadAlt(long partitionAdr, long hashEntryAdr)
+    {
+        if (partitionAdr != 0L)
+            unsAlt.putLongVolatile(partitionAdr + OFF_LRU_HEAD, hashEntryAdr);
     }
 
     long getLockPartitionSpins()
     {
         return lockPartitionSpins.get();
+    }
+
+    void prepareRehash(int newHashTableSize)
+    {
+        this.unsAlt = new Uns((long) newHashTableSize * PARTITION_ENTRY_LEN, PARTITION_ENTRY_LEN);
+        hashPartitionMaskAlt = newHashTableSize - 1;
+        // it's important to initialize the hash partition memory!
+        // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
+        unsAlt.setMemory(unsAlt.address, sizeForEntries(newHashTableSize), (byte) 0);
+    }
+
+    void finishRehash()
+    {
+        unsMain = unsAlt;
+        hashPartitionMask = hashPartitionMaskAlt;
+        rehashSplit.set(0);
+    }
+
+    public void rehashProgress(int partition)
+    {
+        rehashSplit.set(partition + 1);
+    }
+
+    long rehashPartitionForHash(int hash)
+    {
+        int partition = hash & hashPartitionMaskAlt;
+        return unsAlt.address + partition * PARTITION_ENTRY_LEN;
     }
 }

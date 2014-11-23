@@ -50,7 +50,6 @@ final class HashEntryAccess
     static final int OFF_DATA_IN_NEXT = 8;
 
     private final int blockSize;
-    private final int hashTableSize;
 
     private final Uns uns;
     private final FreeBlocks freeBlocks;
@@ -62,13 +61,12 @@ final class HashEntryAccess
 
     private long lastLruWarn;
 
-    HashEntryAccess(Uns uns, int blockSize, FreeBlocks freeBlocks, HashPartitionAccess hashPartitionAccess, int hashTableSize, int lruIterationWarnTrigger)
+    HashEntryAccess(Uns uns, int blockSize, FreeBlocks freeBlocks, HashPartitionAccess hashPartitionAccess, int lruIterationWarnTrigger)
     {
         this.uns = uns;
         this.blockSize = blockSize;
         this.freeBlocks = freeBlocks;
         this.hashPartitionAccess = hashPartitionAccess;
-        this.hashTableSize = hashTableSize;
         this.lruIterationWarnTrigger = lruIterationWarnTrigger;
 
         firstBlockDataSpace = blockSize - OFF_DATA_IN_FIRST;
@@ -244,7 +242,7 @@ final class HashEntryAccess
                 throw new InternalError("endless loop");
             first = false;
 
-            long hashEntryHash = uns.getLongVolatile(hashEntryAdr + OFF_HASH);
+            int hashEntryHash = getEntryHash(hashEntryAdr);
             if (hashEntryHash != hash)
                 continue;
 
@@ -513,6 +511,11 @@ final class HashEntryAccess
         return blockAdr;
     }
 
+    int getEntryHash(long hashEntryAdr)
+    {
+        return (int) uns.getLongVolatile(hashEntryAdr + OFF_HASH);
+    }
+
     long getLRUNext(long hashEntryAdr)
     {
         return hashEntryAdr != 0L ? uns.getAddress(hashEntryAdr + OFF_LRU_NEXT) : 0L;
@@ -525,60 +528,18 @@ final class HashEntryAccess
 
     void setLRUPrevious(long hashEntryAdr, long previousAdr)
     {
+        if (hashEntryAdr == previousAdr)
+            throw new IllegalArgumentException();
         if (hashEntryAdr != 0L)
             uns.putAddress(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
     }
 
     void setLRUNext(long hashEntryAdr, long nextAdr)
     {
+        if (hashEntryAdr == nextAdr)
+            throw new IllegalArgumentException();
         if (hashEntryAdr != 0L)
             uns.putAddress(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
-    }
-
-    void removeAll()
-    {
-        for (int h = 0; h < hashTableSize; h++)
-        {
-            long lruHead;
-            long partitionAdr = hashPartitionAccess.lockPartitionForHash(h);
-            try
-            {
-                lruHead = hashPartitionAccess.getLRUHead(partitionAdr);
-                hashPartitionAccess.setLRUHead(partitionAdr, 0L);
-            }
-            finally
-            {
-                hashPartitionAccess.unlockPartition(partitionAdr);
-            }
-
-            for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
-            {
-                lockEntry(hashEntryAdr);
-                freeBlocks.freeChain(hashEntryAdr);
-                // do NOT unlock - data block might be used elsewhere
-            }
-        }
-    }
-
-    int[] calcLruListLengths()
-    {
-        int[] ll = new int[hashTableSize];
-        for (int h = 0; h < ll.length; h++)
-        {
-            long partitionAdr = hashPartitionAccess.lockPartitionForHash(h);
-            try
-            {
-                int l = 0;
-                for (long hashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr); hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
-                    l++;
-                ll[h] = l;
-            }
-            finally
-            {
-                hashPartitionAccess.unlockPartition(partitionAdr);
-            }
-        }
-        return ll;
     }
 
     DataInput readKeyFrom(long hashEntryAdr)

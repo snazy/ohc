@@ -24,6 +24,75 @@ import org.testng.annotations.Test;
 
 public class BasicTest
 {
+    @Test(expectedExceptions = OutOfMemoryError.class)
+    public void tooBig() throws IOException
+    {
+        // Note: this test may produce something like this on stderr:
+        //
+        // java(10093,0x103960000) malloc: *** mach_vm_map(size=9223372036854775808) failed (error code=3)
+        // *** error: can't allocate region
+        // *** set a breakpoint in malloc_error_break to debug
+
+        OHCacheBuilder.newBuilder()
+                      .capacity(Long.MAX_VALUE)
+                      .build();
+    }
+
+    @Test
+    public void rehashTest() throws IOException
+    {
+        try (OHCache cache = OHCacheBuilder.newBuilder()
+                                           .capacity(1024 * 1024 * 64)
+                                           .blockSize(128)
+                                           .hashTableSize(32)
+                                           .cleanupCheckInterval(0, TimeUnit.MILLISECONDS)
+                                           .lruListLenTrigger(4)
+                                           .build())
+        {
+            for (int i = 0; i < 4 * 32; i++)
+                Assert.assertSame(cache.put(i, new BytesSource.StringSource(Integer.toString(i)), new BytesSource.StringSource(Integer.toString(i))), PutResult.ADD);
+
+            for (int i = 0; i < 4 * 32; i++)
+            {
+                BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), valueSink));
+                Assert.assertEquals(valueSink.toString(), Integer.toString(i));
+            }
+
+            Assert.assertEquals(cache.getHashTableSize(), 32);
+            Assert.assertTrue(cache.rehash());
+            Assert.assertEquals(cache.getHashTableSize(), 64);
+
+            for (int i = 0; i < 4 * 32; i++)
+            {
+                BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), valueSink));
+                Assert.assertEquals(valueSink.toString(), Integer.toString(i));
+            }
+
+            for (int i = 4 * 32; i < 4 * 128; i++)
+                Assert.assertSame(cache.put(i, new BytesSource.StringSource(Integer.toString(i)), new BytesSource.StringSource(Integer.toString(i))), PutResult.ADD);
+
+            for (int i = 0; i < 4 * 128; i++)
+            {
+                BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), valueSink));
+                Assert.assertEquals(valueSink.toString(), Integer.toString(i));
+            }
+
+            Assert.assertEquals(cache.getHashTableSize(), 64);
+            Assert.assertTrue(cache.rehash());
+            Assert.assertEquals(cache.getHashTableSize(), 128);
+
+            for (int i = 0; i < 4 * 128; i++)
+            {
+                BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), valueSink));
+                Assert.assertEquals(valueSink.toString(), Integer.toString(i));
+            }
+        }
+    }
+
     @Test
     public void basic() throws IOException
     {

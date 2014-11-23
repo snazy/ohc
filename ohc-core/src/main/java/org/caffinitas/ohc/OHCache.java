@@ -45,4 +45,6 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
     Iterator<K> hotN(int n);
 
     OHCacheStats extendedStats();
+
+    boolean rehash();
 }
