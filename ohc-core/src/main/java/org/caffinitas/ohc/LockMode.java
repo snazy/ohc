@@ -32,5 +32,5 @@ package org.caffinitas.ohc;
 
 public enum LockMode
 {
-    READ, WRITE, REHASH
+    READ, WRITE, LONG_RUN
 }

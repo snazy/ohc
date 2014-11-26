@@ -79,7 +79,7 @@ final class HashPartitions implements Constants
     {
         long[] rehashLocks = new long[newHashTableSize];
         for (int partNo = 0; partNo < newHashTableSize; partNo++)
-            rehashLocks[partNo] = lockPartitionForRehash(partNo);
+            rehashLocks[partNo] = lockPartitionForLongRun(true, partNo);
         return rehashLocks;
     }
 
@@ -110,9 +110,9 @@ final class HashPartitions implements Constants
             return Uns.lock(unsAlt.address + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, write ? LockMode.WRITE : LockMode.READ);
     }
 
-    long lockPartitionForRehash(int partNo)
+    long lockPartitionForLongRun(boolean alt, int partNo)
     {
-        return Uns.lock(unsAlt.address + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK, LockMode.REHASH);
+        return Uns.lock((alt ? unsAlt : unsMain).address + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK, LockMode.LONG_RUN);
     }
 
     void unlockPartition(long lock, int hash, boolean write)
@@ -124,14 +124,19 @@ final class HashPartitions implements Constants
             Uns.unlock(unsAlt.address + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock, write ? LockMode.WRITE : LockMode.READ);
     }
 
+    void unlockPartitionForLongRun(boolean alt, long lock, int partNo)
+    {
+        Uns.unlock((alt ? unsAlt : unsMain).address + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock, LockMode.LONG_RUN);
+    }
+
     public void rehashProgress(long lock, int partition, long[] rehashLocks)
     {
         rehashSplit.set(partition);
-        Uns.unlock(unsMain.address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock, LockMode.REHASH);
+        Uns.unlock(unsMain.address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock, LockMode.LONG_RUN);
         int partNew = partition * 2;
-        Uns.unlock(unsAlt.address + (partition * 2) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew], LockMode.REHASH);
+        Uns.unlock(unsAlt.address + (partition * 2) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew], LockMode.LONG_RUN);
         partNew++;
-        Uns.unlock(unsAlt.address + (partition * 2 + 1) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew], LockMode.REHASH);
+        Uns.unlock(unsAlt.address + (partition * 2 + 1) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew], LockMode.LONG_RUN);
     }
 
     private boolean inMain(int hash)

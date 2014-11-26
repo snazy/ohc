@@ -127,7 +127,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             // auto-size hash table
             int blockCount = (int) (cap / bs);
-            hts = blockCount / 16;
+            hts = blockCount / 4;
         }
 
         int lruListLenTrigger = builder.getLruListLenTrigger();
@@ -144,15 +144,15 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             // auto-sizing
 
-            // 25% if capacity less than 8GB
-            // 20% if capacity less than 16 GB
-            // 10% if capacity is higher than 16GB
+            // 12.5% if capacity less than 8GB
+            // 10% if capacity less than 16 GB
+            // 5% if capacity is higher than 16GB
             if (capacity < 8L * ONE_GIGABYTE)
-                cleanUpTriggerMinFree = (long) (.25d * capacity);
+                cleanUpTriggerMinFree = (long) (.125d * capacity);
             else if (capacity < 16L * ONE_GIGABYTE)
-                cleanUpTriggerMinFree = (long) (.20d * capacity);
-            else
                 cleanUpTriggerMinFree = (long) (.10d * capacity);
+            else
+                cleanUpTriggerMinFree = (long) (.05d * capacity);
         }
         else
         {
@@ -452,7 +452,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             hashEntryAdr = hashEntryAccess.findHashEntry(hash, keySource);
             if (hashEntryAdr != 0L)
             {
-                hashEntryAccess.updatePartitionLRU(hash, hashEntryAdr);
+                // don't modify partition LRU with only read-lock acquired on partition
+                //hashEntryAccess.updatePartitionLRU(hash, hashEntryAdr);
 
                 // to keep the hash-partition lock short, lock the entry here
                 entryLock = hashEntryAccess.lockEntry(hashEntryAdr, false);
@@ -718,7 +719,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             {
                 long startAt = 0L;
 
-                long lock = hashPartitions.lockPartition(partNo, true);
+                long lock = hashPartitions.lockPartitionForLongRun(false, partNo);
                 try
                 {
                     long lastHashEntryAdr = 0L;
@@ -766,7 +767,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 finally
                 {
-                    hashPartitions.unlockPartition(lock, partNo, true);
+                    hashPartitions.unlockPartitionForLongRun(false, lock, partNo);
                 }
 
                 // remove entries
@@ -976,7 +977,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             long curr0 = 0L;
             long curr1 = 0L;
 
-            long lock = hashPartitions.lockPartition(partNo, true);
+            long lock = hashPartitions.lockPartitionForLongRun(false, partNo);
             try
             {
                 long next;

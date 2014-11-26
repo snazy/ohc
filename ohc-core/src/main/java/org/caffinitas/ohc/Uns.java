@@ -186,8 +186,6 @@ final class Uns
     static void initLock(long address)
     {
         initStamped(address);
-
-//        Uns.putLongVolatile(address, 0L);
     }
 
     static long lock(long address, LockMode lockMode)
@@ -198,18 +196,10 @@ final class Uns
                 return lockStampedRead(address);
             case WRITE:
                 return lockStampedWrite(address);
-            case REHASH:
-                return lockStampedRehash(address);
+            case LONG_RUN:
+                return lockStampedLongRun(address);
         }
         throw new Error();
-//        long tid = Thread.currentThread().getId();
-//        for (int spin = 0; ; spin++)
-//        {
-//            if (compareAndSwap(address, 0L, tid))
-//                return spin;
-//
-//            park(((spin & 3) + 1) * 5000);
-//        }
     }
 
     static void unlock(long address, long stamp, LockMode lockMode)
@@ -222,13 +212,11 @@ final class Uns
             case WRITE:
                 unlockStampedWrite(address, stamp);
                 return;
-            case REHASH:
-                unlockStampedRehash(address, stamp);
+            case LONG_RUN:
+                unlockStampedLongRun(address, stamp);
                 return;
         }
         throw new Error();
-
-//        putLongVolatile(address, 0L);
     }
 
     static long allocate(long bytes)
@@ -254,13 +242,13 @@ final class Uns
     private static final int LG_READERS = 7;
 
     private static final long RUNIT = 1L;
-    private static final long RHBIT  = 2L << LG_READERS;
     private static final long WBIT  = 1L << LG_READERS;
+    private static final long LRBIT = WBIT << 1L;
     private static final long RBITS = WBIT - 1L;
     private static final long RFULL = RBITS - 1L;
-    private static final long ABITS = RBITS | WBIT | RHBIT;
+    private static final long ABITS = RBITS | WBIT | LRBIT;
     private static final long SBITS = ~RBITS; // note overlap with ABITS
-    private static final long ORIGIN = RHBIT << 1;
+    private static final long ORIGIN = LRBIT << 1;
 
     static void initStamped(long address)
     {
@@ -273,16 +261,11 @@ final class Uns
             throw new NullPointerException();
 
         for (int spin=spinSeed();;spin++) {
-            long s, m, next;
-            if ((m = (s = getLongVolatile(address)) & ABITS) == WBIT)
-            {
-                // write lock present
-            }
-            else if (m < RFULL)
-            {
-                if (compareAndSwap(address, s, next = s + RUNIT))
-                    return next;
-            }
+            long s = getLongVolatile(address);
+            long m = s & ABITS;
+            long next;
+            if (m < RFULL && compareAndSwap(address, s, next = s + RUNIT))
+                return next;
 
             spinLock(spin, inRehash(s));
         }
@@ -296,14 +279,14 @@ final class Uns
         for (int spin=spinSeed();;spin++) {
             long s, next;
             if (((s = getLongVolatile(address)) & ABITS) == 0L &&
-                compareAndSwap(address, s, next = s + WBIT))
+                compareAndSwap(address, s, next = s | WBIT))
                 return next;
 
             spinLock(spin, inRehash(s));
         }
     }
 
-    static long lockStampedRehash(long address)
+    static long lockStampedLongRun(long address)
     {
         if (address == 0L)
             throw new NullPointerException();
@@ -311,16 +294,16 @@ final class Uns
         for (int spin=spinSeed();;spin++) {
             long s, next;
             if (((s = getLongVolatile(address)) & ABITS) == 0L &&
-                compareAndSwap(address, s, next = s + RHBIT))
+                compareAndSwap(address, s, next = s | LRBIT))
                 return next;
 
-            spinLock(spin, inRehash(s));
+            spinLock(spin, false);
         }
     }
 
     private static boolean inRehash(long s)
     {
-        return (s & RHBIT)!=0;
+        return (s & LRBIT)!=0;
     }
 
     private static int spinSeed()
@@ -361,12 +344,12 @@ final class Uns
         putLongVolatile(address,ORIGIN);
     }
 
-    static void unlockStampedRehash(long address, long stamp)
+    static void unlockStampedLongRun(long address, long stamp)
     {
         if (address == 0L)
             throw new NullPointerException();
 
-        if (getLongVolatile(address) != stamp || (stamp & RHBIT) == 0L)
+        if (getLongVolatile(address) != stamp || (stamp & LRBIT) == 0L)
             throw new IllegalMonitorStateException();
         putLongVolatile(address,ORIGIN);
     }
