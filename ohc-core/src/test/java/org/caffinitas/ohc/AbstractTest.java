@@ -12,10 +12,7 @@ public abstract class AbstractTest
 
     protected OHCacheBuilder<Object, Object> newBuilder()
     {
-        return OHCacheBuilder.newBuilder()
-                             .dataManagement(DataManagement.FIXED_BLOCKS);
+        return OHCacheBuilder.newBuilder();
     }
-
-    protected abstract boolean withPartitionReadWriteLocks();
 
 }

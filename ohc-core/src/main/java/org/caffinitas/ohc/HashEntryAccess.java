@@ -32,8 +32,6 @@ final class HashEntryAccess implements Constants
     private final DataMemory dataMemory;
     private final HashPartitions hashPartitions;
 
-    private final long firstBlockDataSpace;
-    private final long nextBlockDataSpace;
     private final int lruListLenTrigger;
     private final Signals signals;
 
@@ -43,9 +41,6 @@ final class HashEntryAccess implements Constants
         this.hashPartitions = hashPartitions;
         this.lruListLenTrigger = lruListLenTrigger;
         this.signals = signals;
-
-        firstBlockDataSpace = dataMemory.blockSize() - ENTRY_OFF_DATA_IN_FIRST;
-        nextBlockDataSpace = dataMemory.blockSize() - ENTRY_OFF_DATA_IN_NEXT;
     }
 
     long createNewEntryChain(int hash, BytesSource keySource, BytesSource valueSource, long valueLen)
@@ -67,8 +62,7 @@ final class HashEntryAccess implements Constants
         initHashEntry(hash, keyLen, valueLen, hashEntryAdr);
 
         // write key + value to data
-        long blkAdr = hashEntryAdr;
-        long blkOff = ENTRY_OFF_DATA_IN_FIRST;
+        long blkOff = ENTRY_OFF_DATA;
 
         // write key to data
         long len = keySource.size();
@@ -77,30 +71,7 @@ final class HashEntryAccess implements Constants
             // keySource provides array access (can use Unsafe.copyMemory)
             byte[] arr = keySource.array();
             int arrOff = keySource.arrayOffset();
-            int arrIdx = 0;
-            while (arrIdx < len)
-            {
-                long remain = len - arrIdx;
-                long blkRemain = blkRemain(blkOff);
-                if (remain > blkRemain)
-                {
-                    Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
-                    arrIdx += blkRemain;
-                    blkAdr = getNextBlock(blkAdr);
-                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
-                }
-                else
-                {
-                    Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, remain);
-                    blkOff += remain;
-                    if (blkOff == dataMemory.blockSize())
-                    {
-                        blkAdr = getNextBlock(blkAdr);
-                        blkOff = ENTRY_OFF_DATA_IN_NEXT;
-                    }
-                    break;
-                }
-            }
+            Uns.copyMemory(arr, arrOff, hashEntryAdr + blkOff, len);
         }
         else
         {
@@ -108,22 +79,12 @@ final class HashEntryAccess implements Constants
             for (int p = 0; p < len; p++)
             {
                 byte b = keySource.getByte(p);
-                Uns.putByte(blkAdr + blkOff++, b);
-                if (blkOff == dataMemory.blockSize())
-                {
-                    blkAdr = getNextBlock(blkAdr);
-                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
-                }
+                Uns.putByte(hashEntryAdr + blkOff++, b);
             }
         }
 
         // round up to next 8 byte boundary (8 byte copy operations on 8 byte boundaries are faster)
         blkOff = roundUp(blkOff);
-        if (blkOff >= dataMemory.blockSize())
-        {
-            blkAdr = getNextBlock(blkAdr);
-            blkOff = ENTRY_OFF_DATA_IN_NEXT;
-        }
 
         if (valueSource != null)
         {
@@ -138,24 +99,7 @@ final class HashEntryAccess implements Constants
                 // valueSource provides array access (can use Unsafe.copyMemory)
                 byte[] arr = valueSource.array();
                 int arrOff = valueSource.arrayOffset();
-                int arrIdx = 0;
-                while (arrIdx < len)
-                {
-                    long remain = len - arrIdx;
-                    long blkRemain = blkRemain(blkOff);
-                    if (remain > blkRemain)
-                    {
-                        Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
-                        arrIdx += blkRemain;
-                        blkAdr = getNextBlock(blkAdr);
-                        blkOff = ENTRY_OFF_DATA_IN_NEXT;
-                    }
-                    else
-                    {
-                        Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, remain);
-                        break;
-                    }
-                }
+                Uns.copyMemory(arr, arrOff, hashEntryAdr + blkOff, len);
             }
             else
             {
@@ -163,12 +107,7 @@ final class HashEntryAccess implements Constants
                 for (int p = 0; p < len; p++)
                 {
                     byte b = valueSource.getByte(p);
-                    Uns.putByte(blkAdr + blkOff++, b);
-                    if (blkOff == dataMemory.blockSize())
-                    {
-                        blkAdr = getNextBlock(blkAdr);
-                        blkOff = ENTRY_OFF_DATA_IN_NEXT;
-                    }
+                    Uns.putByte(hashEntryAdr + blkOff++, b);
                 }
             }
         }
@@ -176,13 +115,9 @@ final class HashEntryAccess implements Constants
         return hashEntryAdr;
     }
 
-    long blkRemain(long blkOff)
-    {
-        return dataMemory.blockSize() - blkOff;
-    }
-
     void initHashEntry(int hash, long keyLen, long valueLen, long hashEntryAdr)
     {
+        touchEntry(hashEntryAdr);
         Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_HASH, hash);
         setPreviousEntry(hashEntryAdr, 0L);
         setNextEntry(hashEntryAdr, 0L);
@@ -214,18 +149,18 @@ final class HashEntryAccess implements Constants
                 continue;
 
             if (loops >= lruListLenTrigger)
-                lruListLongWarn(loops);
+                entryListLongWarn(loops);
 
             return hashEntryAdr;
         }
 
         if (loops >= lruListLenTrigger)
-            lruListLongWarn(loops);
+            entryListLongWarn(loops);
 
         return 0L;
     }
 
-    private void lruListLongWarn(int loops)
+    private void entryListLongWarn(int loops)
     {
         if (signals.triggerRehash())
             LOGGER.warn("Degraded OHC performance! Partition linked list very long - check OHC hash table size " +
@@ -239,8 +174,7 @@ final class HashEntryAccess implements Constants
         if (hashEntryAdr == 0L)
             return false;
 
-        long blkOff = ENTRY_OFF_DATA_IN_FIRST;
-        long blkAdr = hashEntryAdr;
+        long blkOff = ENTRY_OFF_DATA;
 
         // array optimized version
         if (keySource.hasArray())
@@ -251,7 +185,7 @@ final class HashEntryAccess implements Constants
             {
                 if (serKeyLen - p >= 8)
                 {
-                    long lSer = Uns.getLong(blkAdr + blkOff);
+                    long lSer = Uns.getLong(hashEntryAdr + blkOff);
                     long lKey = Uns.getLongFromByteArray(arr, arrOff + p);
                     if (lSer != lKey)
                         return false;
@@ -260,17 +194,11 @@ final class HashEntryAccess implements Constants
                 }
                 else
                 {
-                    byte bSer = Uns.getByte(blkAdr + blkOff++);
+                    byte bSer = Uns.getByte(hashEntryAdr + blkOff++);
                     byte bKey = keySource.getByte(p++);
 
                     if (bSer != bKey)
                         return false;
-                }
-
-                if (blkOff == dataMemory.blockSize())
-                {
-                    blkAdr = getNextBlock(blkAdr);
-                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
                 }
             }
 
@@ -280,20 +208,11 @@ final class HashEntryAccess implements Constants
         // last-resort byte-by-byte compare
         for (int p = 0; p < serKeyLen; p++)
         {
-            if (blkAdr == 0L)
-                return false;
-
-            byte bSer = Uns.getByte(blkAdr + blkOff++);
+            byte bSer = Uns.getByte(hashEntryAdr + blkOff++);
             byte bKey = keySource.getByte(p);
 
             if (bSer != bKey)
                 return false;
-
-            if (blkOff == dataMemory.blockSize())
-            {
-                blkAdr = getNextBlock(blkAdr);
-                blkOff = ENTRY_OFF_DATA_IN_NEXT;
-            }
         }
 
         return true;
@@ -310,27 +229,12 @@ final class HashEntryAccess implements Constants
         long valueLen = Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_VALUE_LENGTH);
         if (valueLen < 0L)
             throw new InternalError();
-        long blkAdr = hashEntryAdr;
         long blkOff;
 
         serKeyLen = roundUp(serKeyLen);
 
         // skip key
-        if (serKeyLen >= firstBlockDataSpace)
-        {
-            serKeyLen -= firstBlockDataSpace;
-            blkAdr = getNextBlock(hashEntryAdr);
-
-            while (serKeyLen >= nextBlockDataSpace && blkAdr != 0L)
-            {
-                serKeyLen -= nextBlockDataSpace;
-                blkAdr = getNextBlock(blkAdr);
-            }
-
-            blkOff = ENTRY_OFF_DATA_IN_NEXT + serKeyLen;
-        }
-        else
-            blkOff = ENTRY_OFF_DATA_IN_FIRST + serKeyLen;
+        blkOff = ENTRY_OFF_DATA + serKeyLen;
 
         if (valueLen > Integer.MAX_VALUE)
             throw new IllegalStateException("integer overflow");
@@ -341,36 +245,14 @@ final class HashEntryAccess implements Constants
             // valueSink provides array access (can use Unsafe.copyMemory)
             byte[] arr = valueSink.array();
             int arrOff = valueSink.arrayOffset();
-            int arrIdx = 0;
-            while (arrIdx < valueLen)
-            {
-                long remain = valueLen - arrIdx;
-                long blkRemain = blkRemain(blkOff);
-                if (remain > blkRemain)
-                {
-                    Uns.copyMemory(blkAdr + blkOff, arr, arrIdx + arrOff, blkRemain);
-                    arrIdx += blkRemain;
-                    blkAdr = getNextBlock(blkAdr);
-                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
-                }
-                else
-                {
-                    Uns.copyMemory(blkAdr + blkOff, arr, arrIdx + arrOff, remain);
-                    break;
-                }
-            }
+            Uns.copyMemory(hashEntryAdr + blkOff, arr, arrOff, valueLen);
         }
         else
         {
             // last-resort byte-by-byte copy
-            for (int p = 0; blkAdr != 0L && p < valueLen; p++)
+            for (int p = 0; p < valueLen; p++)
             {
-                byte b = Uns.getByte(blkAdr + blkOff++);
-                if (blkOff == dataMemory.blockSize())
-                {
-                    blkAdr = getNextBlock(blkAdr);
-                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
-                }
+                byte b = Uns.getByte(hashEntryAdr + blkOff++);
                 valueSink.putByte(p, b);
             }
         }
@@ -384,34 +266,17 @@ final class HashEntryAccess implements Constants
         return val;
     }
 
-    void updatePartitionLRU(int hash, long hashEntryAdr)
-    {
-        if (hashEntryAdr == 0L)
-            return;
-
-        long lruHead = hashPartitions.getPartitionHead(hash);
-        if (lruHead != hashEntryAdr)
-        {
-            removeFromPartitionLinkedList(hash, hashEntryAdr, lruHead);
-            addAsPartitionHead(hash, hashEntryAdr, lruHead);
-        }
-    }
-
     void addAsPartitionHead(int hash, long hashEntryAdr)
     {
-        long lruHead = hashPartitions.getPartitionHead(hash);
-        addAsPartitionHead(hash, hashEntryAdr, lruHead);
-    }
-
-    void addAsPartitionHead(int hash, long hashEntryAdr, long lruHead)
-    {
         if (hashEntryAdr == 0L)
             return;
 
-        if (lruHead != 0L)
+        long partHead = hashPartitions.getPartitionHead(hash);
+
+        if (partHead != 0L)
         {
-            setNextEntry(hashEntryAdr, lruHead);
-            setPreviousEntry(lruHead, hashEntryAdr);
+            setNextEntry(hashEntryAdr, partHead);
+            setPreviousEntry(partHead, hashEntryAdr);
         }
         else
             setNextEntry(hashEntryAdr, 0L);
@@ -422,14 +287,10 @@ final class HashEntryAccess implements Constants
 
     void removeFromPartitionLinkedList(int hash, long hashEntryAdr)
     {
-        long lruHead = hashPartitions.getPartitionHead(hash);
-        removeFromPartitionLinkedList(hash, hashEntryAdr, lruHead);
-    }
-
-    void removeFromPartitionLinkedList(int hash, long hashEntryAdr, long lruHead)
-    {
         if (hashEntryAdr == 0L)
             return;
+
+        long partHead = hashPartitions.getPartitionHead(hash);
 
         long entryPrev = getPreviousEntry(hashEntryAdr);
         long entryNext = getNextEntry(hashEntryAdr);
@@ -440,7 +301,7 @@ final class HashEntryAccess implements Constants
         if (entryPrev != 0L)
             setNextEntry(entryPrev, entryNext);
 
-        if (lruHead == hashEntryAdr)
+        if (partHead == hashEntryAdr)
             hashPartitions.setPartitionHead(hash, entryNext);
 
         // we can leave the LRU next+previous pointers in hashEntryAdr alone
@@ -472,14 +333,15 @@ final class HashEntryAccess implements Constants
             Uns.unlockStampedWrite(hashEntryAdr + ENTRY_OFF_LOCK, stamp);
     }
 
-    private long getNextBlock(long blockAdr)
+    long getEntryTimestamp(long hashEntryAdr)
     {
-        if (blockAdr == 0L)
-            return 0L;
-        blockAdr = Uns.getLongVolatile(blockAdr + ENTRY_OFF_NEXT_BLOCK);
-        if (blockAdr == 0L)
-            throw new NullPointerException();
-        return blockAdr;
+        return hashEntryAdr != 0L ? Uns.getLong(hashEntryAdr + ENTRY_OFF_TIMESTAMP) : 0L;
+    }
+
+    void touchEntry(long hashEntryAdr)
+    {
+        if (hashEntryAdr != 0L)
+            Uns.putLong(hashEntryAdr + ENTRY_OFF_TIMESTAMP, System.currentTimeMillis());
     }
 
     int getEntryHash(long hashEntryAdr)
@@ -557,41 +419,19 @@ final class HashEntryAccess implements Constants
     {
         private long blkAdr;
         private long blkOff;
-        private long available;
+        private final long blkEnd;
 
         HashEntryOutput(long hashEntryAdr, long keyLen, long valueLen)
         {
             if (hashEntryAdr == 0L)
                 throw new NullPointerException();
 
-            long blkAdr = hashEntryAdr;
-            long blkOff;
-
-            keyLen = roundUp(keyLen);
-
-            // skip key
-            if (keyLen >= firstBlockDataSpace)
-            {
-                keyLen -= firstBlockDataSpace;
-                blkAdr = getNextBlock(hashEntryAdr);
-
-                while (keyLen >= nextBlockDataSpace && blkAdr != 0L)
-                {
-                    keyLen -= nextBlockDataSpace;
-                    blkAdr = getNextBlock(blkAdr);
-                }
-
-                blkOff = ENTRY_OFF_DATA_IN_NEXT + keyLen;
-            }
-            else
-                blkOff = ENTRY_OFF_DATA_IN_FIRST + keyLen;
-
             if (valueLen > Integer.MAX_VALUE)
                 throw new IllegalStateException("integer overflow");
 
-            this.blkAdr = blkAdr;
-            this.blkOff = blkOff;
-            this.available = valueLen;
+            this.blkAdr = hashEntryAdr;
+            this.blkOff = ENTRY_OFF_DATA + roundUp(keyLen);
+            this.blkEnd = this.blkOff + valueLen;
         }
 
         public void write(byte[] b, int off, int len) throws IOException
@@ -601,61 +441,36 @@ final class HashEntryAccess implements Constants
             if (off < 0 || off + len > b.length || len < 0)
                 throw new ArrayIndexOutOfBoundsException();
 
-            if (len > available)
-                len = (int) available;
+            if (len > avail())
+                len = (int) avail();
             if (len <= 0)
                 throw new EOFException();
 
-            while (len > 0)
-            {
-                long blkAvail = blkRemain(blkOff);
-                long r = (blkAvail >= len) ? len : blkAvail;
-                if (r > available)
-                    r = (int) available;
-                if (available <= 0)
-                    throw new EOFException();
+            Uns.copyMemory(b, off, blkAdr + blkOff, len);
+            blkOff += len;
+        }
 
-                Uns.copyMemory(b, off, blkAdr + blkOff, r);
-                len -= r;
-                off += r;
-                available -= r;
+        private void assertAvail(int req) throws IOException
+        {
+            if (avail() < req)
+                throw new EOFException();
+        }
 
-                if (blkOff == dataMemory.blockSize())
-                {
-                    blkAdr = getNextBlock(blkAdr);
-                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
-                }
-            }
+        private long avail()
+        {
+            return blkEnd-blkOff;
         }
 
         public void write(int b) throws IOException
         {
-            if (available < 1)
-                throw new EOFException();
-
-            available--;
+            assertAvail(1);
 
             Uns.putByte(blkAdr + blkOff++, (byte) b);
-            if (blkOff == dataMemory.blockSize())
-            {
-                blkAdr = getNextBlock(blkAdr);
-                blkOff = ENTRY_OFF_DATA_IN_NEXT;
-            }
         }
 
         public void writeShort(int v) throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-            {
-                // block-oriented needs respect to blocks
-                super.writeShort(v);
-                return;
-            }
-
-            if (available < 2)
-                throw new EOFException();
-
-            available -= 2;
+            assertAvail(2);
 
             Uns.putShort(blkAdr + blkOff, (short) v);
             blkOff += 2;
@@ -663,17 +478,7 @@ final class HashEntryAccess implements Constants
 
         public void writeChar(int v) throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-            {
-                // block-oriented needs respect to blocks
-                super.writeChar(v);
-                return;
-            }
-
-            if (available < 2)
-                throw new EOFException();
-
-            available -= 2;
+            assertAvail(2);
 
             Uns.putChar(blkAdr + blkOff, (char) v);
             blkOff += 2;
@@ -681,17 +486,7 @@ final class HashEntryAccess implements Constants
 
         public void writeInt(int v) throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-            {
-                // block-oriented needs respect to blocks
-                super.writeInt(v);
-                return;
-            }
-
-            if (available < 4)
-                throw new EOFException();
-
-            available -= 4;
+            assertAvail(4);
 
             Uns.putInt(blkAdr + blkOff, v);
             blkOff += 4;
@@ -699,17 +494,7 @@ final class HashEntryAccess implements Constants
 
         public void writeLong(long v) throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-            {
-                // block-oriented needs respect to blocks
-                super.writeLong(v);
-                return;
-            }
-
-            if (available < 8)
-                throw new EOFException();
-
-            available -= 8;
+            assertAvail(8);
 
             Uns.putLong(blkAdr + blkOff, v);
             blkOff += 8;
@@ -717,17 +502,7 @@ final class HashEntryAccess implements Constants
 
         public void writeFloat(float v) throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-            {
-                // block-oriented needs respect to blocks
-                super.writeFloat(v);
-                return;
-            }
-
-            if (available < 4)
-                throw new EOFException();
-
-            available -= 4;
+            assertAvail(4);
 
             Uns.putFloat(blkAdr + blkOff, v);
             blkOff += 4;
@@ -735,17 +510,7 @@ final class HashEntryAccess implements Constants
 
         public void writeDouble(double v) throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-            {
-                // block-oriented needs respect to blocks
-                super.writeDouble(v);
-                return;
-            }
-
-            if (available < 8)
-                throw new EOFException();
-
-            available -= 8;
+            assertAvail(8);
 
             Uns.putDouble(blkAdr + blkOff, v);
             blkOff += 8;
@@ -756,7 +521,7 @@ final class HashEntryAccess implements Constants
     {
         private long blkAdr;
         private long blkOff;
-        private long available;
+        private final long blkEnd;
 
         HashEntryInput(long hashEntryAdr, boolean value)
         {
@@ -769,45 +534,39 @@ final class HashEntryAccess implements Constants
             long valueLen = getValueLen(hashEntryAdr);
             if (valueLen < 0L)
                 throw new InternalError();
-            long blkAdr = hashEntryAdr;
-            long blkOff;
+            long blkOff = ENTRY_OFF_DATA;
 
             if (value)
             {
-
                 serKeyLen = roundUp(serKeyLen);
 
                 // skip key
-                if (serKeyLen >= firstBlockDataSpace)
-                {
-                    serKeyLen -= firstBlockDataSpace;
-                    blkAdr = getNextBlock(hashEntryAdr);
-
-                    while (serKeyLen >= nextBlockDataSpace && blkAdr != 0L)
-                    {
-                        serKeyLen -= nextBlockDataSpace;
-                        blkAdr = getNextBlock(blkAdr);
-                    }
-
-                    blkOff = ENTRY_OFF_DATA_IN_NEXT + serKeyLen;
-                }
-                else
-                    blkOff = ENTRY_OFF_DATA_IN_FIRST + serKeyLen;
+                blkOff += serKeyLen;
             }
-            else
-                blkOff = ENTRY_OFF_DATA_IN_FIRST;
 
             if (valueLen > Integer.MAX_VALUE)
                 throw new IllegalStateException("integer overflow");
 
-            this.blkAdr = blkAdr;
+            this.blkAdr = hashEntryAdr;
             this.blkOff = blkOff;
-            this.available = value ? valueLen : serKeyLen;
+            this.blkEnd = blkOff + (value ? valueLen : serKeyLen);
         }
 
-        public int available() throws IOException
+        private long avail()
         {
-            return available > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) available;
+            return blkEnd-blkOff;
+        }
+
+        private void assertAvail(int req) throws IOException
+        {
+            if (avail() < req)
+                throw new EOFException();
+        }
+
+        public int available()
+        {
+            long av = avail();
+            return av > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int)av;
         }
 
         public void readFully(byte[] b, int off, int len) throws IOException
@@ -817,58 +576,22 @@ final class HashEntryAccess implements Constants
             if (off < 0 || off + len > b.length || len < 0)
                 throw new ArrayIndexOutOfBoundsException();
 
-            if (len > available)
-                throw new EOFException();
+            assertAvail(len);
 
-            while (len > 0)
-            {
-                long blkAvail = blkRemain(blkOff);
-                long r = (blkAvail >= len) ? len : blkAvail;
-                if (r > available)
-                    r = (int) available;
-                if (r <= 0)
-                    break;
-
-                Uns.copyMemory(blkAdr + blkOff, b, off, r);
-                off += r;
-                len -= r;
-                available -= r;
-
-                if (blkOff == dataMemory.blockSize())
-                {
-                    blkAdr = getNextBlock(blkAdr);
-                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
-                }
-            }
+            Uns.copyMemory(blkAdr + blkOff, b, off, len);
         }
 
         public byte readByte() throws IOException
         {
-            if (available < 1)
-                throw new EOFException();
+            assertAvail(1);
 
-            available--;
-
-            byte b = Uns.getByte(blkAdr + blkOff++);
-            if (blkOff == dataMemory.blockSize())
-            {
-                blkAdr = getNextBlock(blkAdr);
-                blkOff = ENTRY_OFF_DATA_IN_NEXT;
-            }
-
-            return b;
+            return Uns.getByte(blkAdr + blkOff++);
         }
 
         public int readUnsignedShort() throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-                // block-oriented needs respect to blocks
-                return super.readUnsignedShort();
+            assertAvail(2);
 
-            if (available < 2)
-                throw new EOFException();
-
-            available -= 2;
             int r = Uns.getShort(blkAdr + blkOff) & 0xffff;
             blkOff += 2;
             return r;
@@ -876,14 +599,8 @@ final class HashEntryAccess implements Constants
 
         public short readShort() throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-                // block-oriented needs respect to blocks
-                return super.readShort();
+            assertAvail(2);
 
-            if (available < 2)
-                throw new EOFException();
-
-            available -= 2;
             short r = Uns.getShort(blkAdr + blkOff);
             blkOff += 2;
             return r;
@@ -891,14 +608,8 @@ final class HashEntryAccess implements Constants
 
         public char readChar() throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-                // block-oriented needs respect to blocks
-                return super.readChar();
+            assertAvail(2);
 
-            if (available < 2)
-                throw new EOFException();
-
-            available -= 2;
             char r = Uns.getChar(blkAdr + blkOff);
             blkOff += 2;
             return r;
@@ -906,14 +617,8 @@ final class HashEntryAccess implements Constants
 
         public int readInt() throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-                // block-oriented needs respect to blocks
-                return super.readUnsignedShort();
+            assertAvail(4);
 
-            if (available < 4)
-                throw new EOFException();
-
-            available -= 4;
             int r = Uns.getInt(blkAdr + blkOff);
             blkOff += 4;
             return r;
@@ -921,14 +626,8 @@ final class HashEntryAccess implements Constants
 
         public long readLong() throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-                // block-oriented needs respect to blocks
-                return super.readUnsignedShort();
+            assertAvail(8);
 
-            if (available < 8)
-                throw new EOFException();
-
-            available -= 8;
             long r = Uns.getLong(blkAdr + blkOff);
             blkOff += 8;
             return r;
@@ -936,14 +635,8 @@ final class HashEntryAccess implements Constants
 
         public float readFloat() throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-                // block-oriented needs respect to blocks
-                return super.readUnsignedShort();
+            assertAvail(4);
 
-            if (available < 4)
-                throw new EOFException();
-
-            available -= 4;
             float r = Uns.getFloat(blkAdr + blkOff);
             blkOff += 4;
             return r;
@@ -951,14 +644,8 @@ final class HashEntryAccess implements Constants
 
         public double readDouble() throws IOException
         {
-            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
-                // block-oriented needs respect to blocks
-                return super.readUnsignedShort();
+            assertAvail(8);
 
-            if (available < 8)
-                throw new EOFException();
-
-            available -= 8;
             double r = Uns.getDouble(blkAdr + blkOff);
             blkOff += 8;
             return r;

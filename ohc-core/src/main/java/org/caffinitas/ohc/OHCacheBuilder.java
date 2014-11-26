@@ -25,7 +25,6 @@ public class OHCacheBuilder<K, V>
     private int lruListLenTrigger = 10;
     private double cleanUpTriggerMinFree = -1d;
     private boolean statisticsEnabled;
-    private DataManagement dataManagement = DataManagement.FLOATING;
 
     private OHCacheBuilder()
     {
@@ -126,17 +125,6 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> statisticsEnabled(boolean statisticsEnable)
     {
         this.statisticsEnabled = statisticsEnable;
-        return this;
-    }
-
-    public DataManagement getDataManagement()
-    {
-        return dataManagement;
-    }
-
-    public OHCacheBuilder<K, V> dataManagement(DataManagement dataManagement)
-    {
-        this.dataManagement = dataManagement;
         return this;
     }
 }

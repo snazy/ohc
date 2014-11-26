@@ -23,25 +23,17 @@ public final class OHCacheStats
     private final CacheStats cacheStats;
     private final int[] freeListLengths;
     private final int[] hashPartitionLengths;
-    private final double blocksPerEntry;
-    private final int blockSize;
     private final long capacity;
     private final long size;
     private final long rehashCount;
 
-    public OHCacheStats(CacheStats cacheStats, int[] freeListLengths, int[] hashPartitionLengths, long size, int blockSize, long capacity, long rehashCount)
+    public OHCacheStats(CacheStats cacheStats, int[] freeListLengths, int[] hashPartitionLengths, long size, long capacity, long rehashCount)
     {
         this.cacheStats = cacheStats;
         this.freeListLengths = freeListLengths;
         this.hashPartitionLengths = hashPartitionLengths;
         this.size = size;
 
-        double blocksPerEntry = capacity / blockSize - sumOf(freeListLengths);
-        blocksPerEntry /= size;
-
-        this.blocksPerEntry = blocksPerEntry;
-
-        this.blockSize = blockSize;
         this.capacity = capacity;
         this.rehashCount = rehashCount;
     }
@@ -147,10 +139,7 @@ public final class OHCacheStats
                       .add("size", size)
                       .add("freeLists(#/min/max/avg)", String.format("%d/%d/%d/%.2f", freeListLengths.length, minFreeListLength(), maxFreeListLength(), averageFreeListLength()))
                       .add("hashPartitionLengths(#/min/max/avg)", String.format("%d/%d/%d/%.2f", hashPartitionLengths.length, minHashPartitionLength(), maxHashPartitionLength(), averageHashPartitionLength()))
-                      .add("blocksPerEntry", String.format("%.2f", blocksPerEntry))
-                      .add("freeSpace", getFreeBlockCount() * blockSize)
                       .add("capacity", capacity)
-                      .add("blocks(free/total)", String.format("%d/%d", getFreeBlockCount(), (capacity / blockSize)))
                       .add("rehashCount", rehashCount)
                       .toString();
     }

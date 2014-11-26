@@ -22,8 +22,6 @@ import com.google.common.cache.Cache;
 
 public interface OHCache<K, V> extends Cache<K, V>, Closeable
 {
-    int getBlockSize();
-
     int getHashTableSize();
 
     long getCapacity();
@@ -43,6 +41,4 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
     Iterator<K> hotN(int n);
 
     OHCacheStats extendedStats();
-
-    DataManagement getDataManagement();
 }

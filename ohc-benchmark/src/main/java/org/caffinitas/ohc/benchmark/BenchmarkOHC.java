@@ -36,7 +36,6 @@ import org.apache.commons.io.FileUtils;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Timer;
 import com.yammer.metrics.stats.Snapshot;
-import org.caffinitas.ohc.DataManagement;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.benchmark.distribution.Distribution;
@@ -97,17 +96,12 @@ public class BenchmarkOHC
                                   .hashTableSize(hashTableSize)
                                   .blockSize(blockSize)
                                   .capacity(size)
-                                  .dataManagement(DataManagement.FLOATING)
                                   .build();
 
             printMessage("Cache configuration: hash-table-size: %d%n" +
-                         "                     block-size     : %d%n" +
-                         "                     capacity       : %d%n" +
-                         "                     data-management: %s%n",
+                         "                     capacity       : %d%n",
                          cache.getHashTableSize(),
-                         cache.getBlockSize(),
-                         cache.getCapacity(),
-                         cache.getDataManagement());
+                         cache.getCapacity());
 
             LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>(10000);
             ThreadPoolExecutor exec = new ThreadPoolExecutor(threads, threads,

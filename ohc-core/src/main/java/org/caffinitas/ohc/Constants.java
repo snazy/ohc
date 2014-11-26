@@ -21,7 +21,7 @@ public interface Constants
 // Hash entries
 
     // offset of next block address in a "next block"
-    static final int ENTRY_OFF_NEXT_BLOCK = 0;
+    static final int ENTRY_OFF_TIMESTAMP = 0;
     // offset of total length
     static final int ENTRY_OFF_DATA_LENGTH = 8;
     // offset of serialized hash value
@@ -37,10 +37,7 @@ public interface Constants
     // offset of entry lock
     static final int ENTRY_OFF_LOCK = 56;
     // offset of data in first block
-    static final int ENTRY_OFF_DATA_IN_FIRST = 64;
-
-    // offset of data in "next block"
-    static final int ENTRY_OFF_DATA_IN_NEXT = 8;
+    static final int ENTRY_OFF_DATA = 64;
 
 // Hash partitions (segments)
 

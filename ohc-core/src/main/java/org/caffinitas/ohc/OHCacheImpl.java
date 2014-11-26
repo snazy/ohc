@@ -59,12 +59,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     }
 
     public static final int MIN_HASH_TABLE_SIZE = 32;
-    public static final int MAX_BLOCK_SIZE = 262144;
-    public static final int MIN_BLOCK_SIZE = 128;
     private static final int MAXIMUM_INT = 1 << 30;
     public static final int ONE_GIGABYTE = 1024 * 1024 * 1024;
 
-    private final int blockSize;
     private final long capacity;
     private final CacheSerializer<K> keySerializer;
     private final CacheSerializer<V> valueSerializer;
@@ -95,24 +92,11 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
-        if (builder.getBlockSize() < MIN_BLOCK_SIZE)
-            throw new IllegalArgumentException("Block size must not be less than " + MIN_BLOCK_SIZE + " is (" + builder.getBlockSize() + ')');
-        if (builder.getBlockSize() > MAX_BLOCK_SIZE)
-            throw new IllegalArgumentException("Block size must not be greater than " + MAX_BLOCK_SIZE + " is (" + builder.getBlockSize() + ')');
-        int bs = roundUpToPowerOf2(builder.getBlockSize());
-        if (bs != builder.getBlockSize())
-            LOGGER.warn("Using block size {} instead of configured block size {} - adjust your configuration to be precise", bs, builder.getBlockSize());
-        blockSize = bs;
-
         long minSize = 8 * 1024 * 1024; // very small
 
         long cap = builder.getCapacity();
-        cap /= bs;
-        cap *= bs;
         if (cap < minSize)
             throw new IllegalArgumentException("Total size must not be less than " + minSize + " is (" + builder.getCapacity() + ')');
-        if (cap != builder.getCapacity())
-            LOGGER.warn("Using capacity {} instead of configured capacity {} - adjust your configuration to be precise", cap, builder.getCapacity());
         capacity = cap;
 
         int hts = builder.getHashTableSize();
@@ -127,8 +111,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         else
         {
             // auto-size hash table
-            int blockCount = (int) (cap / bs);
-            hts = blockCount / 4;
+            if (cap / 1024 > Integer.MAX_VALUE)
+                throw new UnsupportedOperationException("Cannot calculate hash table size");
+            hts = (int) (cap / 4096);
         }
 
         int lruListLenTrigger = builder.getLruListLenTrigger();
@@ -165,21 +150,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         this.statisticsEnabled = builder.isStatisticsEnabled();
 
-        DataMemory dm;
-        switch (builder.getDataManagement())
-        {
-            case FIXED_BLOCKS:
-                dm = new DataMemoryFixedBlockSize(capacity, blockSize, cleanUpTriggerMinFree);
-                break;
-            case FLOATING:
-                dm = new DataMemoryFloating(capacity, cleanUpTriggerMinFree);
-                break;
-            case VARIABLE_BLOCKS:
-                throw new UnsupportedOperationException();
-            default:
-                throw new IllegalArgumentException();
-        }
-        this.dataMemory = dm;
+        this.dataMemory = new DataMemory(capacity, cleanUpTriggerMinFree);
 
         try
         {
@@ -213,16 +184,14 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             }, 10, 10, TimeUnit.MILLISECONDS);
 
             if (LOGGER.isDebugEnabled())
-                LOGGER.debug("Initialized OHC with capacity={}, hash-table-size={}, block-size={}", cap, hts, bs);
+                LOGGER.debug("Initialized OHC with capacity={}, hash-table-size={}", cap, hts);
         }
         catch (Throwable t)
         {
             dataMemory.close();
             if (t instanceof RuntimeException)
                 throw (RuntimeException) t;
-            if (t instanceof Error)
-                throw (Error) t;
-            throw new RuntimeException(t);
+            throw (Error) t;
         }
     }
 
@@ -231,11 +200,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         return number >= MAXIMUM_INT
                ? MAXIMUM_INT
                : (number > 1) ? Integer.highestOneBit((number - 1) << 1) : 1;
-    }
-
-    public DataManagement getDataManagement()
-    {
-        return dataMemory.getDataManagement();
     }
 
     public void close()
@@ -296,6 +260,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
             for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr))
             {
+                size.add(-1);
+
                 // need to lock the entry since another thread might still read from it
                 hashEntryAccess.lockEntryWrite(hashEntryAdr);
                 dataMemory.free(hashEntryAdr);
@@ -303,22 +269,28 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
-    int[] calcLruListLengths()
+    int[] calcLruListLengths(boolean longestOnly)
     {
-        int[] ll = new int[getHashTableSize()];
+        int[] ll = new int[longestOnly ? 1 : getHashTableSize()];
         for (int partNo = 0; partNo < ll.length; partNo++)
         {
-            long lock = hashPartitions.lockPartition(partNo, true);
+            long lock = hashPartitions.lockPartition(partNo, false);
             try
             {
                 int l = 0;
                 for (long hashEntryAdr = hashPartitions.getPartitionHead(partNo); hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr))
                     l++;
-                ll[partNo] = l;
+                if (longestOnly)
+                {
+                    if (l > ll[0])
+                        ll[0] = l;
+                }
+                else
+                    ll[partNo] = l;
             }
             finally
             {
-                hashPartitions.unlockPartition(lock, partNo, true);
+                hashPartitions.unlockPartition(lock, partNo, false);
             }
         }
         return ll;
@@ -338,11 +310,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         if (closed)
             throw new IllegalStateException("OHCache instance already closed");
-    }
-
-    public int getBlockSize()
-    {
-        return blockSize;
     }
 
     public long getCapacity()
@@ -463,9 +430,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             hashEntryAdr = hashEntryAccess.findHashEntry(hash, keySource);
             if (hashEntryAdr != 0L)
             {
-                // don't modify partition LRU with only read-lock acquired on partition
-                //hashEntryAccess.updatePartitionLRU(hash, hashEntryAdr);
-
                 // to keep the hash-partition lock short, lock the entry here
                 entryLock = hashEntryAccess.lockEntryRead(hashEntryAdr);
             }
@@ -481,6 +445,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         if (hashEntryAdr == 0L)
             return false;
+
+        hashEntryAccess.touchEntry(hashEntryAdr);
 
         // Write the value to the caller and unlock the entry.
         try
@@ -567,9 +533,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             hashEntryAdr = hashEntryAccess.findHashEntry(hash, ks);
             if (hashEntryAdr != 0L)
             {
-                // don't modify partition LRU with only read-lock acquired on partition
-                //hashEntryAccess.updatePartitionLRU(hash, hashEntryAdr);
-
                 // to keep the hash-partition lock short, lock the entry here
                 entryLock = hashEntryAccess.lockEntryRead(hashEntryAdr);
             }
@@ -585,6 +548,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         if (hashEntryAdr == 0L)
             return null;
+
+        hashEntryAccess.touchEntry(hashEntryAdr);
 
         try
         {
@@ -663,32 +628,13 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             return false;
         try
         {
+            // check if we need to rehash
+            if (calcLruListLengths(true)[0] >= lruListLenTrigger)
+                return false;
 
-            boolean rehashRequired = false;
+            rehashInt();
 
-            for (int partNo = 0; partNo < getHashTableSize() && !rehashRequired; partNo++)
-            {
-                long lock = hashPartitions.lockPartition(partNo, true);
-                try
-                {
-                    long lruHead = hashPartitions.getPartitionHead(partNo);
-                    int listLen = 0;
-                    for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr))
-                        listLen++;
-
-                    if (listLen >= lruListLenTrigger)
-                        rehashRequired = true;
-                }
-                finally
-                {
-                    hashPartitions.unlockPartition(lock, partNo, true);
-                }
-            }
-
-            if (rehashRequired)
-                rehashInt();
-
-            return rehashRequired;
+            return true;
         }
         finally
         {
@@ -822,8 +768,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public OHCacheStats extendedStats()
     {
-        return new OHCacheStats(stats(), dataMemory.calcFreeBlockCounts(), calcLruListLengths(),
-                                size(), blockSize, capacity, rehashCount.longValue());
+        return new OHCacheStats(stats(), dataMemory.calcFreeBlockCounts(), calcLruListLengths(false),
+                                size(), capacity, rehashCount.longValue());
     }
 
     public CacheStats stats()

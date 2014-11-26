@@ -15,33 +15,70 @@
  */
 package org.caffinitas.ohc;
 
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
 
-abstract class DataMemory
+final class DataMemory implements Constants
 {
     final long cleanUpTriggerMinFree;
     final LongAdder freeCapacity = new LongAdder();
 
-    protected DataMemory(long capacity, long cleanUpTriggerMinFree)
+    DataMemory(long capacity, long cleanUpTriggerMinFree)
     {
         this.freeCapacity.add(capacity);
         this.cleanUpTriggerMinFree = cleanUpTriggerMinFree;
+
+        // just try to allocate the memory once to ensure that the configured capacity is available (at least during init)
+        Uns.free(Uns.allocate(capacity));
     }
 
-    abstract long allocate(long bytes);
-    abstract long free(long address);
+    void close()
+    {
+        // nop
+    }
+
+    long blockSize()
+    {
+        return Long.MAX_VALUE;
+    }
+
+    long allocate(long bytes)
+    {
+        bytes += ENTRY_OFF_DATA;
+
+        freeCapacity.add(-bytes);
+        long newFree = freeCapacity.longValue();
+        if (newFree < 0L)
+        {
+            freeCapacity.add(bytes);
+            return 0L;
+        }
+
+        long adr = Uns.allocate(bytes);
+        if (adr != 0L)
+            Uns.putLongVolatile(adr + ENTRY_OFF_DATA_LENGTH, bytes);
+        return adr;
+    }
+
+    long free(long address)
+    {
+        long bytes = Uns.getLongVolatile(address + ENTRY_OFF_DATA_LENGTH);
+        Uns.free(address);
+        freeCapacity.add(bytes);
+        return bytes;
+    }
+
+    long getFreeListSpins()
+    {
+        return 0;
+    }
+
+    int[] calcFreeBlockCounts()
+    {
+        return new int[0];
+    }
+
     long freeCapacity()
     {
         return freeCapacity.longValue();
     }
-
-    abstract long blockSize();
-    abstract void close();
-
-    abstract long getFreeListSpins();
-    abstract int[] calcFreeBlockCounts();
-
-    abstract DataManagement getDataManagement();
-
 }

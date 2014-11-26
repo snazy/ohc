@@ -125,13 +125,6 @@ final class Uns
         unsafe.putLongVolatile(null, address, value);
     }
 
-    static void putLongVolatile(Object obj, long offset, long value)
-    {
-        if (obj == null)
-            throw new NullPointerException();
-        unsafe.putLongVolatile(obj, offset, value);
-    }
-
     static long getLongFromByteArray(byte[] array, int offset)
     {
         if (array == null)
@@ -211,13 +204,6 @@ final class Uns
         return unsafe.compareAndSwapLong(null, address, expected, value);
     }
 
-    static boolean compareAndSwap(Object obj, long offset, long expected, long value)
-    {
-        if (obj == null)
-            throw new NullPointerException();
-        return unsafe.compareAndSwapLong(obj, offset, expected, value);
-    }
-
     static void copyMemory(byte[] arr, int off, long address, long len)
     {
         if (arr == null)
@@ -241,18 +227,6 @@ final class Uns
         if (address == 0L)
             throw new NullPointerException();
         unsafe.setMemory(address, len, val);
-    }
-
-    static long fieldOffset(Class<?> clazz, String field)
-    {
-        try
-        {
-            return unsafe.objectFieldOffset(clazz.getDeclaredField(field));
-        }
-        catch (NoSuchFieldException e)
-        {
-            throw new RuntimeException(e);
-        }
     }
 
     static void park(long nanos)
@@ -374,17 +348,14 @@ final class Uns
         if (address == 0L)
             throw new NullPointerException();
 
-        long s, m; //WNode h;
+        long s, m;
         for (; ; )
         {
             if (((s = getLongVolatile(address)) & SBITS) != (stamp & SBITS) ||
                 (stamp & ABITS) == 0L || (m = s & ABITS) == 0L || m == WBIT)
                 throw new IllegalMonitorStateException();
-            if (m < RFULL)
-            {
-                if (compareAndSwap(address, s, s - RUNIT))
-                    break;
-            }
+            if (m < RFULL && compareAndSwap(address, s, s - RUNIT))
+                break;
         }
     }
 
