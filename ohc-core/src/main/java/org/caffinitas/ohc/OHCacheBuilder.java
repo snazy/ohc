@@ -15,8 +15,6 @@
  */
 package org.caffinitas.ohc;
 
-import java.util.concurrent.TimeUnit;
-
 public class OHCacheBuilder<K, V>
 {
     private int blockSize = 2048;
@@ -25,9 +23,9 @@ public class OHCacheBuilder<K, V>
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
     private int lruListLenTrigger = 100;
-    private double cleanUpTrigger = .25d;
-    private long cleanupCheckInterval = 1000;
+    private double cleanUpTriggerMinFree = -1d;
     private boolean statisticsEnabled;
+    private DataManagement dataManagement = DataManagement.FLOATING;
 
     private OHCacheBuilder()
     {
@@ -109,25 +107,14 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public double getCleanUpTrigger()
+    public double getCleanUpTriggerMinFree()
     {
-        return cleanUpTrigger;
+        return cleanUpTriggerMinFree;
     }
 
-    public OHCacheBuilder<K, V> cleanUpTrigger(double cleanUpTrigger)
+    public OHCacheBuilder<K, V> cleanUpTriggerMinFree(double cleanUpTrigger)
     {
-        this.cleanUpTrigger = cleanUpTrigger;
-        return this;
-    }
-
-    public long getCleanupCheckInterval()
-    {
-        return cleanupCheckInterval;
-    }
-
-    public OHCacheBuilder<K, V> cleanupCheckInterval(long cleanupCheckInterval, TimeUnit timeUnit)
-    {
-        this.cleanupCheckInterval = timeUnit.toMillis(cleanupCheckInterval);
+        this.cleanUpTriggerMinFree = cleanUpTrigger;
         return this;
     }
 
@@ -139,6 +126,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> statisticsEnabled(boolean statisticsEnable)
     {
         this.statisticsEnabled = statisticsEnable;
+        return this;
+    }
+
+    public DataManagement getDataManagement()
+    {
+        return dataManagement;
+    }
+
+    public OHCacheBuilder<K, V> dataManagement(DataManagement dataManagement)
+    {
+        this.dataManagement = dataManagement;
         return this;
     }
 }

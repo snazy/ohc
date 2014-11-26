@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 import com.google.common.base.Charsets;
 import com.google.common.cache.Cache;
@@ -32,6 +31,7 @@ import com.google.common.collect.Lists;
 import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
 
+import org.caffinitas.ohc.DataManagement;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.benchmark.TestRunnables.CacheGetTest;
@@ -118,7 +118,7 @@ public class BenchmarkOHC
                                   .hashTableSize(hashTableSize)
                                   .blockSize(blockSize)
                                   .capacity(size)
-                                  .cleanupCheckInterval(500, TimeUnit.MILLISECONDS)
+                                  .dataManagement(DataManagement.FLOATING)
                                   .build();
             printMessage("Intializing OHC cache...");
         }
@@ -215,14 +215,16 @@ public class BenchmarkOHC
                          cache.size());
             Iterator<String> iterator = ((OHCache<String, String>) cache).hotN(5);
             printMessage("5 Hot entries are...");
-            while (iterator.hasNext())
+            for (int i = 0; i < 20 && iterator.hasNext(); i++)
                 System.out.print(iterator.next() + ", ");
+            if (iterator.hasNext())
+                System.out.print(", ...");
             printMessage("");
         }
         printMessage("VM total:%s", FileUtils.byteCountToDisplaySize(Runtime.getRuntime().totalMemory()));
         printMessage("VM free:%s", FileUtils.byteCountToDisplaySize(Runtime.getRuntime().freeMemory()));
         if (cache instanceof OHCache)
-            printMessage("Cache stats:%s", ((OHCache)cache).extendedStats());
+            printMessage("Cache stats:%s", ((OHCache) cache).extendedStats());
         else
             printMessage("Cache stats:%s", cache.stats());
     }

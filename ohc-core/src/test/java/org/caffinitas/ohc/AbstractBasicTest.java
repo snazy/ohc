@@ -22,73 +22,83 @@ import java.util.concurrent.TimeUnit;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-public class BasicTest
+public abstract class AbstractBasicTest extends AbstractTest
 {
-    @Test(expectedExceptions = OutOfMemoryError.class)
+    @Test(expectedExceptions = OutOfOffHeapMemoryException.class)
     public void tooBig() throws IOException
     {
+        System.err.println("DO NOT BOTHER ABOUT SOMETHING LIKE 'java(10093,0x103960000) malloc: *** mach_vm_map(size=9223372036854775808) failed (error code=3)' !!!");
         // Note: this test may produce something like this on stderr:
         //
         // java(10093,0x103960000) malloc: *** mach_vm_map(size=9223372036854775808) failed (error code=3)
         // *** error: can't allocate region
         // *** set a breakpoint in malloc_error_break to debug
 
-        OHCacheBuilder.newBuilder()
-                      .capacity(Long.MAX_VALUE)
-                      .build();
+        newBuilder()
+        .capacity(Long.MAX_VALUE)
+        .build();
     }
 
     @Test
     public void rehashTest() throws IOException
     {
-        try (OHCache cache = OHCacheBuilder.newBuilder()
-                                           .capacity(1024 * 1024 * 64)
-                                           .blockSize(128)
-                                           .hashTableSize(32)
-                                           .cleanupCheckInterval(0, TimeUnit.MILLISECONDS)
-                                           .lruListLenTrigger(4)
-                                           .build())
+        try (OHCache cache = newBuilder()
+                             .capacity(1024 * 1024 * 64)
+                             .blockSize(128)
+                             .hashTableSize(32)
+                             .lruListLenTrigger(4)
+                             .build())
         {
             for (int i = 0; i < 4 * 32; i++)
-                Assert.assertSame(cache.put(i, new BytesSource.StringSource(Integer.toString(i)), new BytesSource.StringSource(Integer.toString(i))), PutResult.ADD);
+            {
+                String s = Integer.toString(i);
+                Assert.assertSame(cache.put(i, new BytesSource.StringSource(Integer.toString(i)), new BytesSource.StringSource(Integer.toString(i))), PutResult.ADD, s);
+            }
 
             for (int i = 0; i < 4 * 32; i++)
             {
+                String s = Integer.toString(i);
                 BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
-                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), valueSink));
-                Assert.assertEquals(valueSink.toString(), Integer.toString(i));
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(s), valueSink), s);
+                Assert.assertEquals(valueSink.toString(), s, s);
             }
 
             Assert.assertEquals(cache.getHashTableSize(), 32);
-            Assert.assertTrue(cache.rehash());
+            Assert.assertTrue(((OHCacheImpl)cache).rehash());
             Assert.assertEquals(cache.getHashTableSize(), 64);
 
             for (int i = 0; i < 4 * 32; i++)
             {
+                String s = Integer.toString(i);
                 BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
-                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), valueSink));
-                Assert.assertEquals(valueSink.toString(), Integer.toString(i));
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(s), valueSink), s);
+                Assert.assertEquals(valueSink.toString(), s, s);
             }
 
             for (int i = 4 * 32; i < 4 * 128; i++)
-                Assert.assertSame(cache.put(i, new BytesSource.StringSource(Integer.toString(i)), new BytesSource.StringSource(Integer.toString(i))), PutResult.ADD);
+            {
+                String s = Integer.toString(i);
+                Assert.assertSame(cache.put(i, new BytesSource.StringSource(s), new BytesSource.StringSource(s)), PutResult.ADD, s);
+            }
 
             for (int i = 0; i < 4 * 128; i++)
             {
+                String s = Integer.toString(i);
                 BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
-                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), valueSink));
-                Assert.assertEquals(valueSink.toString(), Integer.toString(i));
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(s), valueSink), s);
+                Assert.assertEquals(valueSink.toString(), s, s);
             }
 
             Assert.assertEquals(cache.getHashTableSize(), 64);
-            Assert.assertTrue(cache.rehash());
+            Assert.assertTrue(((OHCacheImpl)cache).rehash());
             Assert.assertEquals(cache.getHashTableSize(), 128);
 
             for (int i = 0; i < 4 * 128; i++)
             {
+                String s = Integer.toString(i);
                 BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
-                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(Integer.toString(i)), valueSink));
-                Assert.assertEquals(valueSink.toString(), Integer.toString(i));
+                Assert.assertTrue(cache.get(i, new BytesSource.StringSource(s), valueSink), s);
+                Assert.assertEquals(valueSink.toString(), s, s);
             }
         }
     }
@@ -98,13 +108,13 @@ public class BasicTest
     {
         try (OHCache cache = nonEvicting())
         {
-            int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
-            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
 
             String k = "123";
             cache.put(k.hashCode(), new BytesSource.StringSource(k), new BytesSource.StringSource("hello world"));
 
-            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount - 1);
+            if (cache.getDataManagement() == DataManagement.FIXED_BLOCKS)
+                Assert.assertEquals(cache.freeCapacity(), cache.getCapacity() - cache.getBlockSize());
 
             BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
             cache.get(k.hashCode(), new BytesSource.StringSource(k), valueSink);
@@ -113,7 +123,7 @@ public class BasicTest
 
             cache.remove(k.hashCode(), new BytesSource.StringSource(k));
 
-            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
         }
     }
 
@@ -125,13 +135,13 @@ public class BasicTest
                                                            .valueSerializer(CacheSerializers.stringSerializer)
                                                            .build())
         {
-            int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
-            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
 
             String k = "123";
             cache.put(k, "hello world \u00e4\u00f6\u00fc\u00df");
 
-            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount - 1);
+            if (cache.getDataManagement() == DataManagement.FIXED_BLOCKS)
+                Assert.assertEquals(cache.freeCapacity(), cache.getCapacity() - cache.getBlockSize());
 
             String v = cache.getIfPresent(k);
             Assert.assertEquals(v, "hello world \u00e4\u00f6\u00fc\u00df");
@@ -143,7 +153,12 @@ public class BasicTest
 
             cache.invalidate(k);
 
-            Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
+
+            for (int i = 0; i < 100000; i++)
+                cache.put("key-" + i, "" + i);
+            for (int i = 0; i < 100000; i++)
+                cache.invalidate("key-" + i);
         }
     }
 
@@ -307,14 +322,6 @@ public class BasicTest
         return new BytesSource.StringSource(s);
     }
 
-    private OHCache<Object, Object> nonEvicting()
-    {
-        return OHCacheBuilder.newBuilder()
-                             .cleanUpTrigger(0d)
-                             .cleanupCheckInterval(0, TimeUnit.MILLISECONDS)
-                             .build();
-    }
-
     private String bigFor(int prefix, int v)
     {
         StringBuilder sb = new StringBuilder(prefix + 6);
@@ -326,8 +333,7 @@ public class BasicTest
 
     private void withKeyAndValLen(OHCache cache, final int keyLen, final int valLen, boolean array)
     {
-        int dataBlockCount = (int) cache.getCapacity() / cache.getBlockSize();
-        Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+        Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
 
         BytesSource key = array
                           ? new ThirteenBytesSource(keyLen)
@@ -358,12 +364,13 @@ public class BasicTest
         for (; len > 0; blk++)
             len -= cache.getBlockSize() - 8; // HashPartitionAccess.OFF_DATA_IN_NEXT
 
-        Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount - blk);
+        if (cache.getDataManagement() == DataManagement.FIXED_BLOCKS)
+            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity() - cache.getBlockSize() * blk);
 
         Assert.assertTrue(cache.get(hash, key, valSink));
 
         cache.remove(hash, key);
 
-        Assert.assertEquals(cache.calcFreeBlockCount(), dataBlockCount);
+        Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
     }
 }

@@ -30,9 +30,7 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
 
     long getMemUsed();
 
-    int calcFreeBlockCount();
-
-    double getFreeSpacePercentage();
+    long freeCapacity();
 
     PutResult put(int hash, BytesSource keySource, BytesSource valueSource);
 
@@ -46,5 +44,5 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
 
     OHCacheStats extendedStats();
 
-    boolean rehash();
+    DataManagement getDataManagement();
 }

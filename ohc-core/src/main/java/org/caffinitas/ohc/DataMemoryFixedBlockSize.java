@@ -16,11 +16,10 @@
 package org.caffinitas.ohc;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
-final class FreeBlocks
+final class DataMemoryFixedBlockSize extends DataMemory
 {
-
     private static final long freeListLockOffset = Uns.fieldOffset(FreeList.class, "freeListLock");
 
     final class FreeList
@@ -53,10 +52,10 @@ final class FreeBlocks
             long root = adr;
             for (int cnt = 1; ; cnt++)
             {
-                long next = uns.getAddress(adr);
+                long next = Uns.getLongVolatile(adr);
                 if (next == 0L)
                 {
-                    uns.putAddress(adr, freeBlockHead);
+                    Uns.putLongVolatile(adr, freeBlockHead);
                     freeBlockHead = root;
                     return cnt;
                 }
@@ -66,7 +65,7 @@ final class FreeBlocks
 
         void push(long adr)
         {
-            uns.putAddress(adr, freeBlockHead);
+            Uns.putLongVolatile(adr, freeBlockHead);
             freeBlockHead = adr;
         }
 
@@ -76,7 +75,7 @@ final class FreeBlocks
             if (adr == 0L)
                 return 0L;
 
-            freeBlockHead = uns.getAddress(adr);
+            freeBlockHead = Uns.getLongVolatile(adr);
 
             return adr;
         }
@@ -84,7 +83,7 @@ final class FreeBlocks
         int calcFreeBlockCount()
         {
             int free = 0;
-            for (long adr = freeBlockHead; adr != 0L; adr = uns.getAddress(adr))
+            for (long adr = freeBlockHead; adr != 0L; adr = Uns.getLongVolatile(adr))
                 free++;
             return free;
         }
@@ -104,25 +103,63 @@ final class FreeBlocks
 
     private final Uns uns;
     private final AtomicInteger freeListPtr = new AtomicInteger();
-    private final AtomicLong freeBlockSpins = new AtomicLong();
+    private final LongAdder freeBlockSpins = new LongAdder();
+    private final long firstBlockDataSpace;
+    private final long nextBlockDataSpace;
+    private final long blockSize;
 
-    FreeBlocks(Uns uns, long capacity, int blockSize)
+    DataMemoryFixedBlockSize(long capacity, int blockSize, long cleanUpTriggerMinFree)
     {
-        this.uns = uns;
+        super(capacity, cleanUpTriggerMinFree);
+        this.uns = new Uns(capacity);
+        this.blockSize = blockSize;
+        this.firstBlockDataSpace = blockSize - 64;
+        this.nextBlockDataSpace = blockSize - 8;
+
         int fli = 0;
         for (long adr = uns.address; adr < uns.address + capacity; adr += blockSize)
         {
-            uns.putLongVolatile(adr, 0L);
+            Uns.putLongVolatile(adr, 0L);
 
             freeLists[fli & MASK].push(adr);
             fli++;
         }
     }
 
-    long allocateChain(int requiredBlocks)
+    DataManagement getDataManagement()
     {
-        if (requiredBlocks <= 0)
-            return 0L;
+        return DataManagement.FIXED_BLOCKS;
+    }
+
+    long blockSize()
+    {
+        return blockSize;
+    }
+
+    void close()
+    {
+        uns.free();
+    }
+
+    private int calcRequiredNumberOfBlocks(long bytes)
+    {
+        bytes -= firstBlockDataSpace;
+        if (bytes <= 0L)
+            return 1;
+
+        int blk = (int) (1L + bytes / nextBlockDataSpace);
+
+        return (bytes % nextBlockDataSpace) != 0
+               ? blk + 1
+               : blk;
+    }
+
+    long allocate(long bytes)
+    {
+        int requiredBlocks = calcRequiredNumberOfBlocks(bytes);
+        if (requiredBlocks < 1)
+            throw new InternalError();
+        long blockBytes = blockSize * requiredBlocks;
 
         int fli = freeListPtr.getAndIncrement();
         long lastAlloc = 0L;
@@ -145,10 +182,14 @@ final class FreeBlocks
                             long adr = fl.pull();
                             if (adr != 0L)
                             {
-                                uns.putAddress(adr, lastAlloc);
+                                Uns.putLongVolatile(adr, lastAlloc);
                                 lastAlloc = adr;
                                 if (--requiredBlocks == 0)
+                                {
+                                    freeCapacity.add(-blockBytes);
+
                                     return lastAlloc;
+                                }
                             }
                             else
                                 break;
@@ -162,7 +203,7 @@ final class FreeBlocks
             if (none)
             {
                 if (lastAlloc != 0L)
-                    freeChain(lastAlloc);
+                    freeInternal(lastAlloc);
                 return 0L;
             }
 
@@ -170,10 +211,17 @@ final class FreeBlocks
         }
     }
 
-    int freeChain(long adr)
+    long free(long adr)
+    {
+        long bytes = freeInternal(adr);
+        freeCapacity.add(bytes);
+        return bytes;
+    }
+
+    private long freeInternal(long adr)
     {
         if (adr == 0L)
-            return 0;
+            return 0L;
 
         int fli = freeListPtr.getAndIncrement();
         for (int spin = 0; ; spin++)
@@ -185,7 +233,8 @@ final class FreeBlocks
                 if (fl.tryLock())
                     try
                     {
-                        return fl.pushChain(adr);
+                        int blocks = fl.pushChain(adr);
+                        return blockSize * blocks;
                     }
                     finally
                     {
@@ -193,29 +242,9 @@ final class FreeBlocks
                     }
             }
 
-            freeBlockSpins.incrementAndGet();
+            freeBlockSpins.increment();
             Uns.park(((spin & 3) + 1) * 5000);
         }
-    }
-
-    int calcFreeBlockCount()
-    {
-        int free = 0;
-        for (FreeList freeList : freeLists)
-        {
-            for (int spin = 0; !freeList.tryLock(); spin++)
-                Uns.park(((spin & 3) + 1) * 5000);
-
-            try
-            {
-                free += freeList.calcFreeBlockCount();
-            }
-            finally
-            {
-                freeList.unlock();
-            }
-        }
-        return free;
     }
 
     int[] calcFreeBlockCounts()
@@ -239,8 +268,8 @@ final class FreeBlocks
         return free;
     }
 
-    long getFreeBlockSpins()
+    long getFreeListSpins()
     {
-        return freeBlockSpins.get();
+        return freeBlockSpins.longValue();
     }
 }

@@ -27,12 +27,6 @@
             <email>robert@caffinitas.org</email>
         </developer>
     </developers>
-    <contributors>
-        <contributor>
-            <name>Michal Budzyn</name>
-            <email>michalbudzyn@gmx.de</email>
-        </contributor>
-    </contributors>
 
     <licenses>
         <license>
@@ -71,6 +65,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
+        <version.com.google.guava>16.0</version.com.google.guava>
         <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m2</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
         <version.org.apache.maven.plugins.maven-compiler-plugin>3.1</version.org.apache.maven.plugins.maven-compiler-plugin>
         <version.org.apache.maven.plugins.maven-gpg-plugin>1.5</version.org.apache.maven.plugins.maven-gpg-plugin>
@@ -128,7 +123,7 @@
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
-                <version>16.0</version>
+                <version>${version.com.google.guava}</version>
             </dependency>
 
             <dependency>
@@ -168,7 +163,7 @@
                     <version>${version.org.apache.maven.plugins.maven-compiler-plugin}</version>
                     <configuration>
                         <source>1.7</source>
-                        <target>1.7</target>
+                        <target>1.8</target>
                     </configuration>
                 </plugin>
 

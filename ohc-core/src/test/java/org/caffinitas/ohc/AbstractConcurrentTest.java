@@ -22,7 +22,7 @@ import org.testng.annotations.AfterTest;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
-public class ConcurrentTest
+public abstract class AbstractConcurrentTest extends AbstractTest
 {
     private OHCache cache;
 
@@ -31,15 +31,14 @@ public class ConcurrentTest
     @BeforeTest
     public void setup()
     {
-        cache = OHCacheBuilder.newBuilder()
-                              .hashTableSize(1024)
-                              .build();
+        cache = newBuilder()
+                .hashTableSize(1024)
+                .build();
     }
 
     @AfterTest
     public void cleanup() throws IOException
     {
-        System.out.println("lock-partition-spins: " + ((OHCacheImpl) cache).getLockPartitionSpins());
         System.out.println("free-block-spins:     " + ((OHCacheImpl) cache).getFreeBlockSpins());
         cache.close();
     }
@@ -95,7 +94,7 @@ public class ConcurrentTest
                 switch (cache.put(i, key, val))
                 {
                     case ADD:
-                        Assert.assertTrue(cache.remove(i, key));
+                        cache.remove(i, key);
                         break;
                     case REPLACE:
                         break;

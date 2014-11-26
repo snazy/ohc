@@ -41,7 +41,6 @@ public class BigConcurrentTest
     @AfterTest
     public void cleanup() throws IOException
     {
-        System.out.println("lock-partition-spins: " + ((OHCacheImpl) cache).getLockPartitionSpins());
         System.out.println("free-block-spins:     " + ((OHCacheImpl) cache).getFreeBlockSpins());
         cache.close();
     }
@@ -97,7 +96,7 @@ public class BigConcurrentTest
                 switch (cache.put(i, key, val))
                 {
                     case ADD:
-                        Assert.assertTrue(cache.remove(i, key));
+                        cache.remove(i, key);
                         break;
                     case REPLACE:
                         break;

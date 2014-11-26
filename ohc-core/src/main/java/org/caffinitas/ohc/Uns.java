@@ -46,6 +46,8 @@ final class Uns
             Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
             field.setAccessible(true);
             unsafe = (sun.misc.Unsafe) field.get(null);
+            if (unsafe.addressSize() > 8)
+                throw new RuntimeException("Address size " + unsafe.addressSize() + " not supported yet (max 8 bytes)");
         }
         catch (Exception e)
         {
@@ -54,20 +56,19 @@ final class Uns
     }
 
     final long address;
-    private final long last;
-    private final int blockSize;
 
-    Uns(long size, int blockSize)
+    Uns(long size)
     {
-        this.address = unsafe.allocateMemory(size);
-        this.last = address + size;
-        this.blockSize = blockSize;
-    }
-
-    void validate(long address, int len)
-    {
-        if (address < this.address || address + len > last)
-            throw new ArrayIndexOutOfBoundsException("Address " + address + "+" + len + " outside allowed range " + address + ".." + last);
+        if (size <= 0)
+            throw new IllegalArgumentException();
+        try
+        {
+            this.address = unsafe.allocateMemory(size);
+        }
+        catch (OutOfMemoryError oom)
+        {
+            throw new OutOfOffHeapMemoryException(size);
+        }
     }
 
     void free()
@@ -75,89 +76,93 @@ final class Uns
         unsafe.freeMemory(address);
     }
 
-    void putLongVolatile(long address, long value)
+    static void putLongVolatile(long address, long value)
     {
-        validate(address, 8);
-        unsafe.putLongVolatile(null, address, value);
-    }
-
-    void putAddress(long address, long value)
-    {
-        validate(address, 8);
-        if (value != 0L)
-            validate(value, blockSize);
+        if (address == 0L)
+            throw new NullPointerException();
         unsafe.putLongVolatile(null, address, value);
     }
 
     static void putLongVolatile(Object obj, long offset, long value)
     {
+        if (obj == null)
+            throw new NullPointerException();
         unsafe.putLongVolatile(obj, offset, value);
     }
 
-    long getLongFromByteArray(byte[] array, int offset)
+    static long getLongFromByteArray(byte[] array, int offset)
     {
+        if (array == null)
+            throw new NullPointerException();
+        if (offset < 0 || offset > array.length - 8)
+            throw new ArrayIndexOutOfBoundsException();
         return unsafe.getLong(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
     }
 
-    long getLong(long address)
+    static long getLong(long address)
     {
-        validate(address, 8);
+        if (address == 0L)
+            throw new NullPointerException();
         return unsafe.getLong(null, address);
     }
 
-    long getLongVolatile(long address)
+    static long getLongVolatile(long address)
     {
-        validate(address, 8);
+        if (address == 0L)
+            throw new NullPointerException();
         return unsafe.getLongVolatile(null, address);
     }
 
-    long getAddress(long address)
+    static void putByte(long address, byte value)
     {
-        validate(address, 8);
-        long r = unsafe.getLongVolatile(null, address);
-        if (r != 0L)
-            validate(r, blockSize);
-        return r;
-    }
-
-    void putByte(long address, byte value)
-    {
-        validate(address, 1);
+        if (address == 0L)
+            throw new NullPointerException();
         unsafe.putByte(null, address, value);
     }
 
-    byte getByte(long address)
+    static byte getByte(long address)
     {
-        validate(address, 1);
+        if (address == 0L)
+            throw new NullPointerException();
         return unsafe.getByte(null, address);
     }
 
-    boolean compareAndSwap(long address, long expected, long value)
+    static boolean compareAndSwap(long address, long expected, long value)
     {
-        validate(address, 8);
+        if (address == 0L)
+            throw new NullPointerException();
         return unsafe.compareAndSwapLong(null, address, expected, value);
     }
 
     static boolean compareAndSwap(Object obj, long offset, long expected, long value)
     {
+        if (obj == null)
+            throw new NullPointerException();
         return unsafe.compareAndSwapLong(obj, offset, expected, value);
     }
 
-    void copyMemory(byte[] arr, int off, long address, int len)
+    static void copyMemory(byte[] arr, int off, long address, long len)
     {
-        validate(address, len);
+        if (arr == null)
+            throw new NullPointerException();
+        if (address == 0L)
+            throw new NullPointerException();
         unsafe.copyMemory(arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, null, address, len);
     }
 
-    void copyMemory(long address, byte[] arr, int off, int len)
+    static void copyMemory(long address, byte[] arr, int off, long len)
     {
-        validate(address, len);
+        if (arr == null)
+            throw new NullPointerException();
+        if (address == 0L)
+            throw new NullPointerException();
         unsafe.copyMemory(null, address, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len);
     }
 
-    void setMemory(long address, int len, byte val)
+    static void setMemory(long address, int len, byte val)
     {
-        validate(address, len);
+        if (address == 0L)
+            throw new NullPointerException();
         unsafe.setMemory(address, len, val);
     }
 
@@ -178,20 +183,191 @@ final class Uns
         unsafe.park(false, nanos);
     }
 
-    int lock(long address)
+    static void initLock(long address)
     {
-        long tid = Thread.currentThread().getId();
-        for (int spin = 0; ; spin++)
-        {
-            if (compareAndSwap(address, 0L, tid))
-                return spin;
+        initStamped(address);
 
-            park(((spin & 3) + 1) * 5000);
+//        Uns.putLongVolatile(address, 0L);
+    }
+
+    static long lock(long address, LockMode lockMode)
+    {
+        switch (lockMode)
+        {
+            case READ:
+                return lockStampedRead(address);
+            case WRITE:
+                return lockStampedWrite(address);
+            case REHASH:
+                return lockStampedRehash(address);
+        }
+        throw new Error();
+//        long tid = Thread.currentThread().getId();
+//        for (int spin = 0; ; spin++)
+//        {
+//            if (compareAndSwap(address, 0L, tid))
+//                return spin;
+//
+//            park(((spin & 3) + 1) * 5000);
+//        }
+    }
+
+    static void unlock(long address, long stamp, LockMode lockMode)
+    {
+        switch (lockMode)
+        {
+            case READ:
+                unlockStampedRead(address, stamp);
+                return;
+            case WRITE:
+                unlockStampedWrite(address, stamp);
+                return;
+            case REHASH:
+                unlockStampedRehash(address, stamp);
+                return;
+        }
+        throw new Error();
+
+//        putLongVolatile(address, 0L);
+    }
+
+    static long allocate(long bytes)
+    {
+        try
+        {
+            return unsafe.allocateMemory(bytes);
+        }
+        catch (OutOfMemoryError oom)
+        {
+            throw new OutOfOffHeapMemoryException(bytes);
         }
     }
 
-    void unlock(long address)
+    static void free(long address)
     {
-        putLongVolatile(address, 0L);
+        if (address == 0L)
+            throw new NullPointerException();
+        unsafe.freeMemory(address);
+    }
+
+    //
+    private static final int LG_READERS = 7;
+
+    private static final long RUNIT = 1L;
+    private static final long RHBIT  = 2L << LG_READERS;
+    private static final long WBIT  = 1L << LG_READERS;
+    private static final long RBITS = WBIT - 1L;
+    private static final long RFULL = RBITS - 1L;
+    private static final long ABITS = RBITS | WBIT | RHBIT;
+    private static final long SBITS = ~RBITS; // note overlap with ABITS
+    private static final long ORIGIN = RHBIT << 1;
+
+    static void initStamped(long address)
+    {
+        putLongVolatile(address, ORIGIN);
+    }
+
+    static long lockStampedRead(long address)
+    {
+        if (address == 0L)
+            throw new NullPointerException();
+
+        for (int spin=spinSeed();;spin++) {
+            long s, m, next;
+            if ((m = (s = getLongVolatile(address)) & ABITS) == WBIT)
+            {
+                // write lock present
+            }
+            else if (m < RFULL)
+            {
+                if (compareAndSwap(address, s, next = s + RUNIT))
+                    return next;
+            }
+
+            spinLock(spin, inRehash(s));
+        }
+    }
+
+    static long lockStampedWrite(long address)
+    {
+        if (address == 0L)
+            throw new NullPointerException();
+
+        for (int spin=spinSeed();;spin++) {
+            long s, next;
+            if (((s = getLongVolatile(address)) & ABITS) == 0L &&
+                compareAndSwap(address, s, next = s + WBIT))
+                return next;
+
+            spinLock(spin, inRehash(s));
+        }
+    }
+
+    static long lockStampedRehash(long address)
+    {
+        if (address == 0L)
+            throw new NullPointerException();
+
+        for (int spin=spinSeed();;spin++) {
+            long s, next;
+            if (((s = getLongVolatile(address)) & ABITS) == 0L &&
+                compareAndSwap(address, s, next = s + RHBIT))
+                return next;
+
+            spinLock(spin, inRehash(s));
+        }
+    }
+
+    private static boolean inRehash(long s)
+    {
+        return (s & RHBIT)!=0;
+    }
+
+    private static int spinSeed()
+    {
+        return (int)Thread.currentThread().getId();
+    }
+
+    private static void spinLock(int spin, boolean inRehash)
+    {
+        // spin in 50ms units during rehash and 5us else
+        park(((spin & 3) + 1) * (inRehash ? 50000000 : 5000));
+    }
+
+    static void unlockStampedRead(long address, long stamp)
+    {
+        if (address == 0L)
+            throw new NullPointerException();
+
+        long s, m; //WNode h;
+        for (;;) {
+            if (((s = getLongVolatile(address)) & SBITS) != (stamp & SBITS) ||
+                (stamp & ABITS) == 0L || (m = s & ABITS) == 0L || m == WBIT)
+                throw new IllegalMonitorStateException();
+            if (m < RFULL) {
+                if (compareAndSwap(address, s, s - RUNIT))
+                    break;
+            }
+        }
+    }
+
+    static void unlockStampedWrite(long address, long stamp)
+    {
+        if (address == 0L)
+            throw new NullPointerException();
+
+        if (getLongVolatile(address) != stamp || (stamp & WBIT) == 0L)
+            throw new IllegalMonitorStateException();
+        putLongVolatile(address,ORIGIN);
+    }
+
+    static void unlockStampedRehash(long address, long stamp)
+    {
+        if (address == 0L)
+            throw new NullPointerException();
+
+        if (getLongVolatile(address) != stamp || (stamp & RHBIT) == 0L)
+            throw new IllegalMonitorStateException();
+        putLongVolatile(address,ORIGIN);
     }
 }

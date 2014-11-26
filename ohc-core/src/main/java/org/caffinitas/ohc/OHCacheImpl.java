@@ -29,8 +29,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 import com.google.common.cache.CacheStats;
 import com.google.common.collect.AbstractIterator;
@@ -62,17 +62,16 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     public static final int MAX_BLOCK_SIZE = 262144;
     public static final int MIN_BLOCK_SIZE = 128;
     private static final int MAXIMUM_INT = 1 << 30;
+    public static final int ONE_GIGABYTE = 1024 * 1024 * 1024;
 
     private final int blockSize;
     private final long capacity;
-    private final double cleanUpTrigger;
     private final CacheSerializer<K> keySerializer;
     private final CacheSerializer<V> valueSerializer;
 
-    private final Uns uns;
-    private final FreeBlocks freeBlocks;
+    private final DataMemory dataMemory;
     private final HashEntryAccess hashEntryAccess;
-    private final HashPartitionAccess hashPartitionAccess;
+    private final HashPartitions hashPartitions;
     private final int lruListLenTrigger;
 
     private volatile boolean closed;
@@ -81,15 +80,17 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     private volatile boolean statisticsEnabled;
 
-    private final AtomicLong hitCount = new AtomicLong();
-    private final AtomicLong missCount = new AtomicLong();
-    private final AtomicLong loadSuccessCount = new AtomicLong();
-    private final AtomicLong loadExceptionCount = new AtomicLong();
-    private final AtomicLong totalLoadTime = new AtomicLong();
-    private final AtomicLong evictionCount = new AtomicLong();
-    private final AtomicInteger rehashCount = new AtomicInteger();
+    private final LongAdder hitCount = new LongAdder();
+    private final LongAdder missCount = new LongAdder();
+    private final LongAdder loadSuccessCount = new LongAdder();
+    private final LongAdder loadExceptionCount = new LongAdder();
+    private final LongAdder totalLoadTime = new LongAdder();
+    private final LongAdder evictionCount = new LongAdder();
+    private final LongAdder rehashCount = new LongAdder();
 
     private final AtomicBoolean globalLock = new AtomicBoolean();
+
+    private final Signals signals = new Signals();
 
     OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
@@ -134,50 +135,81 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             lruListLenTrigger = 1;
         this.lruListLenTrigger = lruListLenTrigger;
 
-        this.uns = new Uns(capacity, blockSize);
+        this.keySerializer = builder.getKeySerializer();
+        this.valueSerializer = builder.getValueSerializer();
+
+        double cut = builder.getCleanUpTriggerMinFree();
+        long cleanUpTriggerMinFree;
+        if (cut < 0d)
+        {
+            // auto-sizing
+
+            // 25% if capacity less than 8GB
+            // 20% if capacity less than 16 GB
+            // 10% if capacity is higher than 16GB
+            if (capacity < 8L * ONE_GIGABYTE)
+                cleanUpTriggerMinFree = (long) (.25d * capacity);
+            else if (capacity < 16L * ONE_GIGABYTE)
+                cleanUpTriggerMinFree = (long) (.20d * capacity);
+            else
+                cleanUpTriggerMinFree = (long) (.10d * capacity);
+        }
+        else
+        {
+            if (cut >= 1d)
+                throw new IllegalArgumentException("Invalid clean-up percentage trigger value " + String.format("%.2f", cut));
+            cut *= capacity;
+            cleanUpTriggerMinFree = (long) cut;
+        }
+
+        this.statisticsEnabled = builder.isStatisticsEnabled();
+
+        DataMemory dm;
+        switch (builder.getDataManagement())
+        {
+            case FIXED_BLOCKS:
+                dm = new DataMemoryFixedBlockSize(capacity, blockSize, cleanUpTriggerMinFree);
+                break;
+            case FLOATING:
+                dm = new DataMemoryFloating(capacity, cleanUpTriggerMinFree);
+                break;
+            case VARIABLE_BLOCKS:
+                throw new UnsupportedOperationException();
+            default:
+                throw new IllegalArgumentException();
+        }
+        this.dataMemory = dm;
+
         try
         {
-            this.hashPartitionAccess = new HashPartitionAccess(hts);
-            this.freeBlocks = new FreeBlocks(uns, capacity, blockSize);
-            this.hashEntryAccess = new HashEntryAccess(uns, blockSize, freeBlocks, hashPartitionAccess, lruListLenTrigger);
+            this.hashPartitions = new HashPartitions(hts);
+            this.hashEntryAccess = new HashEntryAccess(dataMemory, hashPartitions, lruListLenTrigger, signals);
 
-            this.keySerializer = builder.getKeySerializer();
-            this.valueSerializer = builder.getValueSerializer();
-
-            double cut = builder.getCleanUpTrigger();
-            if (cut < 0d || cut > 1d)
-                throw new IllegalArgumentException("Invalid clean-up percentage trigger value " + String.format("%.2f", cut));
-            this.cleanUpTrigger = cut;
-
-            long cleanupCheckInterval = builder.getCleanupCheckInterval();
-
-            if (cut <= 0d && cleanupCheckInterval > 0L)
-                throw new IllegalArgumentException("Incompatible settings - cleanup-check-interval " +
-                                                   cleanupCheckInterval + " vs cleanup-trigger " + String.format("%.2f", cut));
-
-
-            this.statisticsEnabled = builder.isStatisticsEnabled();
-
-            ScheduledExecutorService es = null;
-            if (cleanupCheckInterval > 0)
-            {
-                es = Executors.newScheduledThreadPool(1);
-                es.scheduleWithFixedDelay(new Runnable()
+            // TODO replace with a single java.lang.Thread
+            executorService = Executors.newScheduledThreadPool(1);
+            executorService.scheduleWithFixedDelay(new Runnable()
                 {
                     public void run()
                     {
-                        cleanUp();
+                        if (!signals.waitFor())
+                            return;
+
+                        if (closed)
+                            return;
+
+                        if (signals.cleanupTrigger.compareAndSet(true, false))
+                            cleanUp();
+                        if (signals.rehashTrigger.compareAndSet(true, false))
+                            rehash();
                     }
-                }, cleanupCheckInterval, cleanupCheckInterval, TimeUnit.MILLISECONDS);
-            }
-            executorService = es;
+                }, 10, 10, TimeUnit.MILLISECONDS);
 
             if (LOGGER.isDebugEnabled())
                 LOGGER.debug("Initialized OHC with capacity={}, hash-table-size={}, block-size={}", cap, hts, bs);
         }
         catch (Throwable t)
         {
-            uns.free();
+            dataMemory.close();
             if (t instanceof RuntimeException)
                 throw (RuntimeException) t;
             if (t instanceof Error)
@@ -186,11 +218,16 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
-    private static int roundUpToPowerOf2(int number)
+    static int roundUpToPowerOf2(int number)
     {
         return number >= MAXIMUM_INT
                ? MAXIMUM_INT
                : (number > 1) ? Integer.highestOneBit((number - 1) << 1) : 1;
+    }
+
+    public DataManagement getDataManagement()
+    {
+        return dataMemory.getDataManagement();
     }
 
     public void close()
@@ -203,47 +240,56 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("Closing OHC instance");
 
-        if (executorService != null)
+        try
         {
-            executorService.shutdown();
-            try
+
+            if (executorService != null)
             {
-                executorService.awaitTermination(60, TimeUnit.SECONDS);
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
+                signals.signalHousekeeping();
+
+                executorService.shutdown();
+                try
+                {
+                    if (!executorService.awaitTermination(60, TimeUnit.SECONDS))
+                        throw new RuntimeException("Background OHC scheduler did not terminate normally. This usually indicates a bug.");
+                }
+                catch (InterruptedException e)
+                {
+                    Thread.currentThread().interrupt();
+                }
             }
         }
+        finally
+        {
+            // releasing memory immediately is dangerous since other threads may still access the data
+            // Need to orderly clear the cache before releasing (this involves hash-partition and hash-entry locks,
+            // which ensure that no other thread is accessing OHC)
+            removeAllInt();
 
-        // releasing memory immediately is dangerous since other threads may still access the data
-        // Need to orderly clear the cache before releasing (this involves hash-partition and hash-entry locks,
-        // which ensure that no other thread is accessing OHC)
-        removeAllInt();
-
-        uns.free();
+            dataMemory.close();
+        }
     }
 
     private void removeAllInt()
     {
-        for (int h = 0; h < getHashTableSize(); h++)
+        for (int partNo = 0; partNo < getHashTableSize(); partNo++)
         {
             long lruHead;
-            long partitionAdr = hashPartitionAccess.lockPartitionForHash(h);
+            long lock = hashPartitions.lockPartition(partNo, true);
             try
             {
-                lruHead = hashPartitionAccess.getLRUHead(partitionAdr);
-                hashPartitionAccess.setLRUHead(partitionAdr, 0L);
+                lruHead = hashPartitions.getLRUHead(partNo);
+                hashPartitions.setLRUHead(partNo, 0L);
             }
             finally
             {
-                hashPartitionAccess.unlockPartition(partitionAdr);
+                hashPartitions.unlockPartition(lock, partNo, true);
             }
 
             for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
             {
-                hashEntryAccess.lockEntry(hashEntryAdr);
-                freeBlocks.freeChain(hashEntryAdr);
+                hashEntryAccess.lockEntry(hashEntryAdr, true);
+                dataMemory.free(hashEntryAdr);
                 // do NOT unlock - data block might be used elsewhere
             }
         }
@@ -252,19 +298,19 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     int[] calcLruListLengths()
     {
         int[] ll = new int[getHashTableSize()];
-        for (int h = 0; h < ll.length; h++)
+        for (int partNo = 0; partNo < ll.length; partNo++)
         {
-            long partitionAdr = hashPartitionAccess.lockPartitionForHash(h);
+            long lock = hashPartitions.lockPartition(partNo, true);
             try
             {
                 int l = 0;
-                for (long hashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr); hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
+                for (long hashEntryAdr = hashPartitions.getLRUHead(partNo); hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
                     l++;
-                ll[h] = l;
+                ll[partNo] = l;
             }
             finally
             {
-                hashPartitionAccess.unlockPartition(partitionAdr);
+                hashPartitions.unlockPartition(lock, partNo, true);
             }
         }
         return ll;
@@ -298,19 +344,12 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public int getHashTableSize()
     {
-        return hashPartitionAccess.getHashTableSize();
-    }
-
-    public int calcFreeBlockCount()
-    {
-        assertNotClosed();
-
-        return freeBlocks.calcFreeBlockCount();
+        return hashPartitions.getHashTableSize();
     }
 
     public long getMemUsed()
     {
-        return capacity - calcFreeBlockCount() * blockSize;
+        return capacity - freeCapacity();
     }
 
     public PutResult put(int hash, BytesSource keySource, BytesSource valueSource)
@@ -347,28 +386,30 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         long oldHashEntryAdr;
 
+        maybeTriggerCleanup();
+
         // find + lock hash partition
-        long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
+        long lock = hashPartitions.lockPartition(hash, true);
         try
         {
             // find existing entry
-            oldHashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
+            oldHashEntryAdr = hashEntryAccess.findHashEntry(hash, keySource);
 
             // remove existing entry
             if (oldHashEntryAdr != 0L)
-                hashEntryAccess.removeFromPartitionLRU(partitionAdr, oldHashEntryAdr);
+                hashEntryAccess.removeFromPartitionLRU(hash, oldHashEntryAdr);
 
             // add new entry
-            hashEntryAccess.addAsPartitionLRUHead(partitionAdr, newHashEntryAdr);
+            hashEntryAccess.addAsPartitionLRUHead(hash, newHashEntryAdr);
 
             // We have to lock the old entry before we can actually free the allocated blocks.
             // There's no need for a corresponding unlock because we use CAS on a field for locking.
-            hashEntryAccess.lockEntry(oldHashEntryAdr);
+            hashEntryAccess.lockEntry(oldHashEntryAdr, true);
         }
         finally
         {
             // release hash partition
-            hashPartitionAccess.unlockPartition(partitionAdr);
+            hashPartitions.unlockPartition(lock, hash, true);
         }
 
         // No old entry - just return.
@@ -384,7 +425,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         finally
         {
             // release old value
-            freeBlocks.freeChain(oldHashEntryAdr);
+            dataMemory.free(oldHashEntryAdr);
         }
 
         return PutResult.REPLACE;
@@ -401,7 +442,30 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (keySource.size() <= 0)
             throw new ArrayIndexOutOfBoundsException();
 
-        long hashEntryAdr = getInternal(hash, keySource);
+        // find + lock hash partition
+        long lock = hashPartitions.lockPartition(hash, false);
+        long hashEntryAdr;
+        long entryLock = 0L;
+        try
+        {
+            // find hash entry
+            hashEntryAdr = hashEntryAccess.findHashEntry(hash, keySource);
+            if (hashEntryAdr != 0L)
+            {
+                hashEntryAccess.updatePartitionLRU(hash, hashEntryAdr);
+
+                // to keep the hash-partition lock short, lock the entry here
+                entryLock = hashEntryAccess.lockEntry(hashEntryAdr, false);
+            }
+        }
+        finally
+        {
+            // release hash partition
+            hashPartitions.unlockPartition(lock, hash, false);
+        }
+
+        if (statisticsEnabled)
+            (hashEntryAdr == 0L ? missCount : hitCount).increment();
 
         if (hashEntryAdr == 0L)
             return false;
@@ -413,39 +477,10 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            hashEntryAccess.unlockEntry(hashEntryAdr);
+            hashEntryAccess.unlockEntry(hashEntryAdr, entryLock, false);
         }
 
         return true;
-    }
-
-    private long getInternal(int hash, BytesSource keySource)
-    {
-        // find + lock hash partition
-        long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
-        long hashEntryAdr;
-        try
-        {
-            // find hash entry
-            hashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
-            if (hashEntryAdr != 0L)
-            {
-                hashEntryAccess.updatePartitionLRU(partitionAdr, hashEntryAdr);
-
-                // to keep the hash-partition lock short, lock the entry here
-                hashEntryAccess.lockEntry(hashEntryAdr);
-            }
-        }
-        finally
-        {
-            // release hash partition
-            hashPartitionAccess.unlockPartition(partitionAdr);
-        }
-
-        if (statisticsEnabled)
-            (hashEntryAdr == 0L ? missCount : hitCount).incrementAndGet();
-
-        return hashEntryAdr;
     }
 
     public boolean remove(int hash, BytesSource keySource)
@@ -459,28 +494,28 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         // find + lock hash partition
         long hashEntryAdr;
-        long partitionAdr = hashPartitionAccess.lockPartitionForHash(hash);
+        long lock = hashPartitions.lockPartition(hash, true);
         try
         {
             // find hash entry
-            hashEntryAdr = hashEntryAccess.findHashEntry(partitionAdr, hash, keySource);
+            hashEntryAdr = hashEntryAccess.findHashEntry(hash, keySource);
             if (hashEntryAdr == 0L)
                 return false;
 
-            hashEntryAccess.removeFromPartitionLRU(partitionAdr, hashEntryAdr);
+            hashEntryAccess.removeFromPartitionLRU(hash, hashEntryAdr);
 
             // We have to lock the old entry before we can actually free the allocated blocks.
             // There's no need for a corresponding unlock because we use CAS on a field for locking.
-            hashEntryAccess.lockEntry(hashEntryAdr);
+            hashEntryAccess.lockEntry(hashEntryAdr, true);
         }
         finally
         {
             // release hash partition
-            hashPartitionAccess.unlockPartition(partitionAdr);
+            hashPartitions.unlockPartition(lock, hash, true);
         }
 
         // free chain
-        freeBlocks.freeChain(hashEntryAdr);
+        dataMemory.free(hashEntryAdr);
         // do NOT unlock - data block might be used elsewhere
 
         return true;
@@ -488,12 +523,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public long getFreeBlockSpins()
     {
-        return freeBlocks.getFreeBlockSpins();
-    }
-
-    public long getLockPartitionSpins()
-    {
-        return hashPartitionAccess.getLockPartitionSpins();
+        return dataMemory.getFreeListSpins();
     }
 
     public void invalidate(Object o)
@@ -511,8 +541,33 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             throw new NullPointerException("no valueSerializer configured");
 
         BytesSource.ByteArraySource ks = keySource((K) o);
+        int hash = ks.hashCode();
 
-        long hashEntryAdr = getInternal(ks.hashCode(), ks);
+        // find + lock hash partition
+        long lock = hashPartitions.lockPartition(hash, false);
+        long hashEntryAdr;
+        long entryLock = 0L;
+        try
+        {
+            // find hash entry
+            hashEntryAdr = hashEntryAccess.findHashEntry(hash, ks);
+            if (hashEntryAdr != 0L)
+            {
+                hashEntryAccess.updatePartitionLRU(hash, hashEntryAdr);
+
+                // to keep the hash-partition lock short, lock the entry here
+                entryLock = hashEntryAccess.lockEntry(hashEntryAdr, false);
+            }
+        }
+        finally
+        {
+            // release hash partition
+            hashPartitions.unlockPartition(lock, hash, false);
+        }
+
+        if (statisticsEnabled)
+            (hashEntryAdr == 0L ? missCount : hitCount).increment();
+
         if (hashEntryAdr == 0L)
             return null;
 
@@ -526,7 +581,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            hashEntryAccess.unlockEntry(hashEntryAdr);
+            hashEntryAccess.unlockEntry(hashEntryAdr, entryLock, true);
         }
     }
 
@@ -578,14 +633,14 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         catch (IOException e)
         {
-            freeBlocks.freeChain(newHashEntryAdr);
+            dataMemory.free(newHashEntryAdr);
             throw new IOError(e);
         }
 
         putInternal(hash, ks, null, newHashEntryAdr);
     }
 
-    public boolean rehash()
+    boolean rehash()
     {
         assertNotClosed();
 
@@ -596,12 +651,12 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
             boolean rehashRequired = false;
 
-            for (int h = 0; h < getHashTableSize() && !rehashRequired; h++)
+            for (int partNo = 0; partNo < getHashTableSize() && !rehashRequired; partNo++)
             {
-                long partAdr = hashPartitionAccess.lockPartitionForHash(h);
+                long lock = hashPartitions.lockPartition(partNo, true);
                 try
                 {
-                    long lruHead = hashPartitionAccess.getLRUHead(partAdr);
+                    long lruHead = hashPartitions.getLRUHead(partNo);
                     int listLen = 0;
                     for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
                         listLen++;
@@ -611,7 +666,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 finally
                 {
-                    hashPartitionAccess.unlockPartition(partAdr);
+                    hashPartitions.unlockPartition(lock, partNo, true);
                 }
             }
 
@@ -634,45 +689,40 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             return;
         try
         {
-            int totalBlockCount = (int) (capacity / blockSize);
-            int freeBlockCount = calcFreeBlockCount();
-            double fsPerc = ((double) freeBlockCount) / totalBlockCount;
-
-            if (fsPerc > cleanUpTrigger)
+            long freeCapacity = dataMemory.freeCapacity();
+            if (freeCapacity > dataMemory.cleanUpTriggerMinFree)
                 return;
 
             long entries = size();
 
-            double blocksPerEntry = totalBlockCount - freeBlockCount;
-            blocksPerEntry /= entries;
+            long perEntryMemory = (capacity - freeCapacity) / entries;
 
-            int expectedFreeBlockCount = (int) (cleanUpTrigger * totalBlockCount);
-            int entriesToRemove = (int) ((expectedFreeBlockCount - freeBlockCount) * blocksPerEntry);
-            int entriesToRemovePerPartition = (int) ((expectedFreeBlockCount - freeBlockCount) * blocksPerEntry / getHashTableSize());
+            int entriesToRemove = (int) ((dataMemory.cleanUpTriggerMinFree - freeCapacity) * perEntryMemory);
+            int entriesToRemovePerPartition = (int) ((dataMemory.cleanUpTriggerMinFree - freeCapacity) * perEntryMemory / getHashTableSize());
             if (entriesToRemovePerPartition < 1)
                 entriesToRemovePerPartition = 1;
             if (LOGGER.isDebugEnabled())
-                LOGGER.debug("Cleanup starts with free-space percentage {}, entries={}, blocks-per-entry={}, entries-to-remove={}",
-                             String.format("%.2f", fsPerc),
+                LOGGER.debug("Cleanup starts with free-space {}, entries={}, memory-per-entry={}, entries-to-remove={}",
+                             freeCapacity,
                              entries,
-                             String.format("%.2f", blocksPerEntry),
+                             perEntryMemory,
                              entriesToRemove
                 );
 
-            int blocksFreed = 0;
+            long capacityFreed = 0;
             int entriesRemoved = 0;
 
             boolean rehashRequired = false;
 
-            for (int h = 0; h < getHashTableSize(); h++)
+            for (int partNo = 0; partNo < getHashTableSize(); partNo++)
             {
                 long startAt = 0L;
 
-                long partAdr = hashPartitionAccess.lockPartitionForHash(h);
+                long lock = hashPartitions.lockPartition(partNo, true);
                 try
                 {
                     long lastHashEntryAdr = 0L;
-                    long lruHead = hashPartitionAccess.getLRUHead(partAdr);
+                    long lruHead = hashPartitions.getLRUHead(partNo);
                     int listLen = 0;
                     for (long hashEntryAdr = lruHead; ; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr), listLen++)
                     {
@@ -703,7 +753,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     if (firstBefore == 0L)
                     {
                         startAt = lruHead;
-                        hashPartitionAccess.setLRUHead(partAdr, 0L);
+                        hashPartitions.setLRUHead(partNo, 0L);
                     }
                     else
                     {
@@ -716,7 +766,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 finally
                 {
-                    hashPartitionAccess.unlockPartition(partAdr);
+                    hashPartitions.unlockPartition(lock, partNo, true);
                 }
 
                 // remove entries
@@ -727,16 +777,16 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
                     entriesRemoved++;
 
-                    hashEntryAccess.lockEntry(hashEntryAdr);
-                    blocksFreed += freeBlocks.freeChain(hashEntryAdr);
-                    // do NOT unlock - data block might be used elsewhere
+                    hashEntryAccess.lockEntry(hashEntryAdr, true);
+                    capacityFreed += dataMemory.free(hashEntryAdr);
+                    // do NOT unlock - data memory is gone and might be already used elsewhere
                 }
             }
 
-            evictionCount.addAndGet(entriesRemoved);
+            evictionCount.add(entriesRemoved);
 
             if (LOGGER.isDebugEnabled())
-                LOGGER.debug("Cleanup statistics: removed entries={} blocks recycled={}", entriesRemoved, blocksFreed);
+                LOGGER.debug("Cleanup statistics: removed entries={} bytes recycled={}", entriesRemoved, capacityFreed);
 
             if (rehashRequired)
                 rehashInt();
@@ -744,20 +794,21 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         finally
         {
             globalLock.set(false);
+
+            signals.cleanupTrigger.set(false);
+            maybeTriggerCleanup();
         }
     }
 
-    public double getFreeSpacePercentage()
+    public long freeCapacity()
     {
-        long totalBlockCount = capacity / blockSize;
-        int freeBlockCount = calcFreeBlockCount();
-        return ((double) freeBlockCount) / totalBlockCount;
+        return dataMemory.freeCapacity();
     }
 
     public OHCacheStats extendedStats()
     {
-        return new OHCacheStats(stats(), freeBlocks.calcFreeBlockCounts(), calcLruListLengths(),
-                                size(), blockSize, capacity, rehashCount.get());
+        return new OHCacheStats(stats(), dataMemory.calcFreeBlockCounts(), calcLruListLengths(),
+                                size(), blockSize, capacity, rehashCount.longValue());
     }
 
     public CacheStats stats()
@@ -765,12 +816,12 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         assertNotClosed();
 
         return new CacheStats(
-                             hitCount.get(),
-                             missCount.get(),
-                             loadSuccessCount.get(),
-                             loadExceptionCount.get(),
-                             totalLoadTime.get(),
-                             evictionCount.get()
+                             hitCount.longValue(),
+                             missCount.longValue(),
+                             loadSuccessCount.longValue(),
+                             loadExceptionCount.longValue(),
+                             totalLoadTime.longValue(),
+                             evictionCount.longValue()
         );
     }
 
@@ -779,18 +830,18 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         assertNotClosed();
 
         long sz = 0L;
-        for (int p = 0; p < getHashTableSize(); p++)
+        for (int partNo = 0; partNo < getHashTableSize(); partNo++)
         {
 
-            long partitionAdr = hashPartitionAccess.lockPartitionForHash(p);
+            long lock = hashPartitions.lockPartition(partNo, false);
             try
             {
-                for (long hashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr); hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
+                for (long hashEntryAdr = hashPartitions.getLRUHead(partNo); hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
                     sz++;
             }
             finally
             {
-                hashPartitionAccess.unlockPartition(partitionAdr);
+                hashPartitions.unlockPartition(lock, partNo, false);
             }
         }
         return sz;
@@ -838,16 +889,16 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             try
             {
                 v = callable.call();
-                loadSuccessCount.incrementAndGet();
+                loadSuccessCount.increment();
             }
             catch (Exception e)
             {
-                loadExceptionCount.incrementAndGet();
+                loadExceptionCount.increment();
                 throw new ExecutionException(e);
             }
             finally
             {
-                totalLoadTime.addAndGet(System.currentTimeMillis() - t0);
+                totalLoadTime.add(System.currentTimeMillis() - t0);
             }
             put(k, v);
         }
@@ -879,7 +930,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     }
                 }
             };
-            private int h;
+            private int partNo;
             private final List<K> keys = new ArrayList<>();
             private Iterator<K> subIter;
 
@@ -887,7 +938,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             {
                 while (true)
                 {
-                    if (h == getHashTableSize())
+                    if (partNo == getHashTableSize())
                         return endOfData();
 
                     if (subIter != null && subIter.hasNext())
@@ -896,7 +947,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
                     assertNotClosed();
 
-                    hashEntryAccess.hotN(h++, cb, keysPerPartition);
+                    hashEntryAccess.hotN(partNo++, cb, keysPerPartition);
                     subIter = keys.iterator();
                 }
             }
@@ -915,18 +966,21 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (newHashTableSize == MAXIMUM_INT)
             return;
 
-        hashPartitionAccess.prepareRehash(newHashTableSize);
+        LOGGER.info("OHC hash table resize from {} to {} starts", hashTableSize, newHashTableSize);
 
-        for (int i = 0; i < hashTableSize; i++)
+        hashPartitions.prepareRehash(newHashTableSize);
+        long[] rehashLocks = hashPartitions.lockForRehash(newHashTableSize);
+
+        for (int partNo = 0; partNo < hashTableSize; partNo++)
         {
             long curr0 = 0L;
             long curr1 = 0L;
 
-            long partitionAdr = hashPartitionAccess.lockPartitionForHash(i);
+            long lock = hashPartitions.lockPartition(partNo, true);
             try
             {
                 long next;
-                for (long hashEntryAdr = hashPartitionAccess.getLRUHead(partitionAdr); hashEntryAdr != 0L; hashEntryAdr = next)
+                for (long hashEntryAdr = hashPartitions.getLRUHead(partNo); hashEntryAdr != 0L; hashEntryAdr = next)
                 {
                     next = hashEntryAccess.getLRUNext(hashEntryAdr);
 
@@ -935,7 +989,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     {
                         hashEntryAccess.setLRUPrevious(hashEntryAdr, curr1);
                         if (curr1 == 0L)
-                            hashPartitionAccess.setLRUHeadAlt(hashPartitionAccess.rehashPartitionForHash(hash), hashEntryAdr);
+                            hashPartitions.setLRUHeadAlt(partNo | hashTableSize, hashEntryAdr);
                         else
                             hashEntryAccess.setLRUNext(curr1, hashEntryAdr);
                         curr1 = hashEntryAdr;
@@ -944,7 +998,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     {
                         hashEntryAccess.setLRUPrevious(hashEntryAdr, curr0);
                         if (curr0 == 0L)
-                            hashPartitionAccess.setLRUHeadAlt(hashPartitionAccess.rehashPartitionForHash(hash), hashEntryAdr);
+                            hashPartitions.setLRUHeadAlt(partNo, hashEntryAdr);
                         else
                             hashEntryAccess.setLRUNext(curr0, hashEntryAdr);
                         curr0 = hashEntryAdr;
@@ -952,19 +1006,30 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 if (curr0 != 0L)
                     hashEntryAccess.setLRUNext(curr0, 0L);
+                else
+                    hashPartitions.setLRUHeadAlt(partNo, 0L);
                 if (curr1 != 0L)
                     hashEntryAccess.setLRUNext(curr1, 0L);
-
-                hashPartitionAccess.rehashProgress(i);
+                else
+                    hashPartitions.setLRUHeadAlt(partNo | hashTableSize, 0L);
             }
             finally
             {
-                hashPartitionAccess.unlockPartition(partitionAdr);
+                hashPartitions.rehashProgress(lock, partNo, rehashLocks);
             }
         }
 
-        hashPartitionAccess.finishRehash();
+        hashPartitions.finishRehash();
 
-        rehashCount.incrementAndGet();
+        rehashCount.increment();
+        signals.rehashTrigger.set(false);
+
+        LOGGER.info("OHC hash table resized from {} to {}", hashTableSize, newHashTableSize);
+    }
+
+    void maybeTriggerCleanup()
+    {
+        if (dataMemory.freeCapacity() < dataMemory.cleanUpTriggerMinFree)
+            signals.triggerCleanup();
     }
 }

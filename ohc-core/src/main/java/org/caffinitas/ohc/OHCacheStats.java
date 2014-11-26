@@ -27,9 +27,9 @@ public final class OHCacheStats
     private final int blockSize;
     private final long capacity;
     private final long size;
-    private final int rehashCount;
+    private final long rehashCount;
 
-    public OHCacheStats(CacheStats cacheStats, int[] freeListLengths, int[] hashPartitionLengths, long size, int blockSize, long capacity, int rehashCount)
+    public OHCacheStats(CacheStats cacheStats, int[] freeListLengths, int[] hashPartitionLengths, long size, int blockSize, long capacity, long rehashCount)
     {
         this.cacheStats = cacheStats;
         this.freeListLengths = freeListLengths;
@@ -46,7 +46,7 @@ public final class OHCacheStats
         this.rehashCount = rehashCount;
     }
 
-    public int getRehashCount()
+    public long getRehashCount()
     {
         return rehashCount;
     }
