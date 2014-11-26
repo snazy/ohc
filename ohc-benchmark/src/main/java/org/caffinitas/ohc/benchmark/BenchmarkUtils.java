@@ -21,26 +21,40 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.Future;
 
-import com.google.common.base.Charsets;
-
 import org.caffinitas.ohc.CacheSerializer;
 
 public class BenchmarkUtils {
-    public static CacheSerializer<String> serializer = new CacheSerializer<String>() {
-        public void serialize(String t, DataOutput stream) throws IOException {
-            byte[] bytes = t.getBytes(Charsets.UTF_8);
+    public static CacheSerializer<byte[]> serializer = new CacheSerializer<byte[]>() {
+        public void serialize(byte[] bytes, DataOutput stream) throws IOException {
             stream.writeInt(bytes.length);
             stream.write(bytes);
         }
 
-        public String deserialize(DataInput stream) throws IOException {
+        public byte[] deserialize(DataInput stream) throws IOException {
             byte[] bytes = new byte[stream.readInt()];
             stream.readFully(bytes);
-            return new String(bytes, Charsets.UTF_8);
+            return bytes;
         }
 
-        public long serializedSize(String t) {
-            return t.getBytes(Charsets.UTF_8).length + 4;
+        public long serializedSize(byte[] t) {
+            return t.length + 4;
+        }
+    };
+    public static CacheSerializer<Long> longSerializer = new CacheSerializer<Long>()
+    {
+        public void serialize(Long val, DataOutput out) throws IOException
+        {
+            out.writeLong(val);
+        }
+
+        public Long deserialize(DataInput in) throws IOException
+        {
+            return in.readLong();
+        }
+
+        public long serializedSize(Long aLong)
+        {
+            return 8;
         }
     };
 

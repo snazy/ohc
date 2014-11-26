@@ -99,7 +99,7 @@ abstract class AbstractDataOutput implements DataOutput
     {
         int strlen = str.length();
         int utflen = 0;
-        int c, count = 0;
+        int c;
 
         /* use charAt instead of copying String to char array */
         for (int i = 0; i < strlen; i++) {

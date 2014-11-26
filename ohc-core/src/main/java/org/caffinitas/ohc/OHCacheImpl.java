@@ -78,8 +78,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     private final ScheduledExecutorService executorService;
 
-    private volatile boolean statisticsEnabled;
+    private boolean statisticsEnabled;
 
+    private final LongAdder size = new LongAdder();
     private final LongAdder hitCount = new LongAdder();
     private final LongAdder missCount = new LongAdder();
     private final LongAdder loadSuccessCount = new LongAdder();
@@ -188,21 +189,28 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             // TODO replace with a single java.lang.Thread
             executorService = Executors.newScheduledThreadPool(1);
             executorService.scheduleWithFixedDelay(new Runnable()
+            {
+                public void run()
                 {
-                    public void run()
+                    if (!signals.waitFor())
+                        return;
+
+                    if (closed)
+                        return;
+
+                    try
                     {
-                        if (!signals.waitFor())
-                            return;
-
-                        if (closed)
-                            return;
-
                         if (signals.cleanupTrigger.compareAndSet(true, false))
                             cleanUp();
                         if (signals.rehashTrigger.compareAndSet(true, false))
                             rehash();
                     }
-                }, 10, 10, TimeUnit.MILLISECONDS);
+                    catch (Throwable t)
+                    {
+                        LOGGER.error("Failure during triggered cleanup or rehash", t);
+                    }
+                }
+            }, 10, 10, TimeUnit.MILLISECONDS);
 
             if (LOGGER.isDebugEnabled())
                 LOGGER.debug("Initialized OHC with capacity={}, hash-table-size={}, block-size={}", cap, hts, bs);
@@ -278,19 +286,19 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             long lock = hashPartitions.lockPartition(partNo, true);
             try
             {
-                lruHead = hashPartitions.getLRUHead(partNo);
-                hashPartitions.setLRUHead(partNo, 0L);
+                lruHead = hashPartitions.getPartitionHead(partNo);
+                hashPartitions.setPartitionHead(partNo, 0L);
             }
             finally
             {
                 hashPartitions.unlockPartition(lock, partNo, true);
             }
 
-            for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
+            for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr))
             {
-                hashEntryAccess.lockEntry(hashEntryAdr, true);
+                // need to lock the entry since another thread might still read from it
+                hashEntryAccess.lockEntryWrite(hashEntryAdr);
                 dataMemory.free(hashEntryAdr);
-                // do NOT unlock - data block might be used elsewhere
             }
         }
     }
@@ -304,7 +312,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             try
             {
                 int l = 0;
-                for (long hashEntryAdr = hashPartitions.getLRUHead(partNo); hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
+                for (long hashEntryAdr = hashPartitions.getPartitionHead(partNo); hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr))
                     l++;
                 ll[partNo] = l;
             }
@@ -397,14 +405,14 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
             // remove existing entry
             if (oldHashEntryAdr != 0L)
-                hashEntryAccess.removeFromPartitionLRU(hash, oldHashEntryAdr);
+                hashEntryAccess.removeFromPartitionLinkedList(hash, oldHashEntryAdr);
 
             // add new entry
-            hashEntryAccess.addAsPartitionLRUHead(hash, newHashEntryAdr);
+            hashEntryAccess.addAsPartitionHead(hash, newHashEntryAdr);
 
             // We have to lock the old entry before we can actually free the allocated blocks.
             // There's no need for a corresponding unlock because we use CAS on a field for locking.
-            hashEntryAccess.lockEntry(oldHashEntryAdr, true);
+            hashEntryAccess.lockEntryWrite(oldHashEntryAdr);
         }
         finally
         {
@@ -414,7 +422,10 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         // No old entry - just return.
         if (oldHashEntryAdr == 0L)
+        {
+            size.add(1);
             return PutResult.ADD;
+        }
 
         try
         {
@@ -456,7 +467,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 //hashEntryAccess.updatePartitionLRU(hash, hashEntryAdr);
 
                 // to keep the hash-partition lock short, lock the entry here
-                entryLock = hashEntryAccess.lockEntry(hashEntryAdr, false);
+                entryLock = hashEntryAccess.lockEntryRead(hashEntryAdr);
             }
         }
         finally
@@ -478,7 +489,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            hashEntryAccess.unlockEntry(hashEntryAdr, entryLock, false);
+            hashEntryAccess.unlockEntryRead(hashEntryAdr, entryLock);
         }
 
         return true;
@@ -503,11 +514,11 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             if (hashEntryAdr == 0L)
                 return false;
 
-            hashEntryAccess.removeFromPartitionLRU(hash, hashEntryAdr);
+            hashEntryAccess.removeFromPartitionLinkedList(hash, hashEntryAdr);
 
             // We have to lock the old entry before we can actually free the allocated blocks.
             // There's no need for a corresponding unlock because we use CAS on a field for locking.
-            hashEntryAccess.lockEntry(hashEntryAdr, true);
+            hashEntryAccess.lockEntryWrite(hashEntryAdr);
         }
         finally
         {
@@ -518,6 +529,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         // free chain
         dataMemory.free(hashEntryAdr);
         // do NOT unlock - data block might be used elsewhere
+
+        size.add(-1);
 
         return true;
     }
@@ -554,10 +567,11 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             hashEntryAdr = hashEntryAccess.findHashEntry(hash, ks);
             if (hashEntryAdr != 0L)
             {
-                hashEntryAccess.updatePartitionLRU(hash, hashEntryAdr);
+                // don't modify partition LRU with only read-lock acquired on partition
+                //hashEntryAccess.updatePartitionLRU(hash, hashEntryAdr);
 
                 // to keep the hash-partition lock short, lock the entry here
-                entryLock = hashEntryAccess.lockEntry(hashEntryAdr, false);
+                entryLock = hashEntryAccess.lockEntryRead(hashEntryAdr);
             }
         }
         finally
@@ -582,7 +596,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            hashEntryAccess.unlockEntry(hashEntryAdr, entryLock, true);
+            hashEntryAccess.unlockEntryRead(hashEntryAdr, entryLock);
         }
     }
 
@@ -657,9 +671,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 long lock = hashPartitions.lockPartition(partNo, true);
                 try
                 {
-                    long lruHead = hashPartitions.getLRUHead(partNo);
+                    long lruHead = hashPartitions.getPartitionHead(partNo);
                     int listLen = 0;
-                    for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
+                    for (long hashEntryAdr = lruHead; hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr))
                         listLen++;
 
                     if (listLen >= lruListLenTrigger)
@@ -698,8 +712,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
             long perEntryMemory = (capacity - freeCapacity) / entries;
 
-            int entriesToRemove = (int) ((dataMemory.cleanUpTriggerMinFree - freeCapacity) * perEntryMemory);
-            int entriesToRemovePerPartition = (int) ((dataMemory.cleanUpTriggerMinFree - freeCapacity) * perEntryMemory / getHashTableSize());
+            int entriesToRemove = (int) ((dataMemory.cleanUpTriggerMinFree - freeCapacity) / perEntryMemory);
+            int entriesToRemovePerPartition = entriesToRemove / getHashTableSize();
             if (entriesToRemovePerPartition < 1)
                 entriesToRemovePerPartition = 1;
             if (LOGGER.isDebugEnabled())
@@ -723,9 +737,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 try
                 {
                     long lastHashEntryAdr = 0L;
-                    long lruHead = hashPartitions.getLRUHead(partNo);
+                    long lruHead = hashPartitions.getPartitionHead(partNo);
                     int listLen = 0;
-                    for (long hashEntryAdr = lruHead; ; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr), listLen++)
+                    for (long hashEntryAdr = lruHead; ; hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr), listLen++)
                     {
                         // at LRU tail
                         if (hashEntryAdr == 0L)
@@ -742,7 +756,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
                     long firstBefore = 0L;
                     int i = 0;
-                    for (long hashEntryAdr = hashEntryAccess.getLRUPrevious(lastHashEntryAdr); i++ < entriesToRemovePerPartition; hashEntryAdr = hashEntryAccess.getLRUPrevious(hashEntryAdr))
+                    for (long hashEntryAdr = hashEntryAccess.getPreviousEntry(lastHashEntryAdr); i++ < entriesToRemovePerPartition; hashEntryAdr = hashEntryAccess.getPreviousEntry(hashEntryAdr))
                     {
                         // at LRU head
                         if (hashEntryAdr == 0L)
@@ -754,13 +768,13 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     if (firstBefore == 0L)
                     {
                         startAt = lruHead;
-                        hashPartitions.setLRUHead(partNo, 0L);
+                        hashPartitions.setPartitionHead(partNo, 0L);
                     }
                     else
                     {
-                        startAt = hashEntryAccess.getLRUNext(firstBefore);
-                        hashEntryAccess.setLRUNext(firstBefore, 0L);
-                        hashEntryAccess.setLRUPrevious(startAt, 0L);
+                        startAt = hashEntryAccess.getNextEntry(firstBefore);
+                        hashEntryAccess.setNextEntry(firstBefore, 0L);
+                        hashEntryAccess.setPreviousEntry(startAt, 0L);
                     }
 
                     // first hash-entry-address to remove in 'startAt' and unlinked from LRU list - can unlock the partition
@@ -774,13 +788,13 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 long next;
                 for (long hashEntryAdr = startAt; hashEntryAdr != 0L; hashEntryAdr = next)
                 {
-                    next = hashEntryAccess.getLRUNext(hashEntryAdr);
+                    next = hashEntryAccess.getNextEntry(hashEntryAdr);
 
                     entriesRemoved++;
 
-                    hashEntryAccess.lockEntry(hashEntryAdr, true);
+                    // need to lock the entry since another thread might still read from it
+                    hashEntryAccess.lockEntryWrite(hashEntryAdr);
                     capacityFreed += dataMemory.free(hashEntryAdr);
-                    // do NOT unlock - data memory is gone and might be already used elsewhere
                 }
             }
 
@@ -830,22 +844,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         assertNotClosed();
 
-        long sz = 0L;
-        for (int partNo = 0; partNo < getHashTableSize(); partNo++)
-        {
-
-            long lock = hashPartitions.lockPartition(partNo, false);
-            try
-            {
-                for (long hashEntryAdr = hashPartitions.getLRUHead(partNo); hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getLRUNext(hashEntryAdr))
-                    sz++;
-            }
-            finally
-            {
-                hashPartitions.unlockPartition(lock, partNo, false);
-            }
-        }
-        return sz;
+        return size.longValue();
     }
 
     public void invalidateAll()
@@ -967,10 +966,12 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (newHashTableSize == MAXIMUM_INT)
             return;
 
-        LOGGER.info("OHC hash table resize from {} to {} starts", hashTableSize, newHashTableSize);
+        LOGGER.info("OHC hash table resize from {} to {} starts...", hashTableSize, newHashTableSize);
 
         hashPartitions.prepareRehash(newHashTableSize);
         long[] rehashLocks = hashPartitions.lockForRehash(newHashTableSize);
+
+        int entries = 0;
 
         for (int partNo = 0; partNo < hashTableSize; partNo++)
         {
@@ -981,38 +982,40 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             try
             {
                 long next;
-                for (long hashEntryAdr = hashPartitions.getLRUHead(partNo); hashEntryAdr != 0L; hashEntryAdr = next)
+                for (long hashEntryAdr = hashPartitions.getPartitionHead(partNo); hashEntryAdr != 0L; hashEntryAdr = next)
                 {
-                    next = hashEntryAccess.getLRUNext(hashEntryAdr);
+                    next = hashEntryAccess.getNextEntry(hashEntryAdr);
+
+                    entries++;
 
                     int hash = hashEntryAccess.getEntryHash(hashEntryAdr);
                     if ((hash & hashTableSize) == hashTableSize)
                     {
-                        hashEntryAccess.setLRUPrevious(hashEntryAdr, curr1);
+                        hashEntryAccess.setPreviousEntry(hashEntryAdr, curr1);
                         if (curr1 == 0L)
-                            hashPartitions.setLRUHeadAlt(partNo | hashTableSize, hashEntryAdr);
+                            hashPartitions.setPartitionHeadAlt(partNo | hashTableSize, hashEntryAdr);
                         else
-                            hashEntryAccess.setLRUNext(curr1, hashEntryAdr);
+                            hashEntryAccess.setNextEntry(curr1, hashEntryAdr);
                         curr1 = hashEntryAdr;
                     }
                     else
                     {
-                        hashEntryAccess.setLRUPrevious(hashEntryAdr, curr0);
+                        hashEntryAccess.setPreviousEntry(hashEntryAdr, curr0);
                         if (curr0 == 0L)
-                            hashPartitions.setLRUHeadAlt(partNo, hashEntryAdr);
+                            hashPartitions.setPartitionHeadAlt(partNo, hashEntryAdr);
                         else
-                            hashEntryAccess.setLRUNext(curr0, hashEntryAdr);
+                            hashEntryAccess.setNextEntry(curr0, hashEntryAdr);
                         curr0 = hashEntryAdr;
                     }
                 }
                 if (curr0 != 0L)
-                    hashEntryAccess.setLRUNext(curr0, 0L);
+                    hashEntryAccess.setNextEntry(curr0, 0L);
                 else
-                    hashPartitions.setLRUHeadAlt(partNo, 0L);
+                    hashPartitions.setPartitionHeadAlt(partNo, 0L);
                 if (curr1 != 0L)
-                    hashEntryAccess.setLRUNext(curr1, 0L);
+                    hashEntryAccess.setNextEntry(curr1, 0L);
                 else
-                    hashPartitions.setLRUHeadAlt(partNo | hashTableSize, 0L);
+                    hashPartitions.setPartitionHeadAlt(partNo | hashTableSize, 0L);
             }
             finally
             {
@@ -1025,7 +1028,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         rehashCount.increment();
         signals.rehashTrigger.set(false);
 
-        LOGGER.info("OHC hash table resized from {} to {}", hashTableSize, newHashTableSize);
+        LOGGER.info("OHC hash table resized from {} to {} ({} entries)", hashTableSize, newHashTableSize, entries);
     }
 
     void maybeTriggerCleanup()

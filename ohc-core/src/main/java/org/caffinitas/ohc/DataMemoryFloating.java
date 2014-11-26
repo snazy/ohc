@@ -42,7 +42,7 @@ final class DataMemoryFloating extends DataMemory implements Constants
 
     long allocate(long bytes)
     {
-        bytes += OFF_DATA_IN_FIRST;
+        bytes += ENTRY_OFF_DATA_IN_FIRST;
 
         freeCapacity.add(-bytes);
         long newFree = freeCapacity.longValue();
@@ -53,13 +53,14 @@ final class DataMemoryFloating extends DataMemory implements Constants
         }
 
         long adr = Uns.allocate(bytes);
-        Uns.putLongVolatile(adr + OFF_DATA_LENGTH, bytes);
+        if (adr != 0L)
+            Uns.putLongVolatile(adr + ENTRY_OFF_DATA_LENGTH, bytes);
         return adr;
     }
 
     long free(long address)
     {
-        long bytes = Uns.getLongVolatile(address + OFF_DATA_LENGTH);
+        long bytes = Uns.getLongVolatile(address + ENTRY_OFF_DATA_LENGTH);
         Uns.free(address);
         freeCapacity.add(bytes);
         return bytes;

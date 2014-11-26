@@ -24,10 +24,10 @@ final class HashPartitions implements Constants
 {
 
     private volatile int hashPartitionMask;
-    private volatile Uns unsMain;
+    private volatile long address;
 
     private volatile int hashPartitionMaskAlt;
-    private volatile Uns unsAlt;
+    private volatile long addressAlt;
 
     // all hash partitions ins 'unsMain' smaller than this value must be looked up in 'unsAlt'
     private final AtomicInteger rehashSplit = new AtomicInteger(-1);
@@ -48,31 +48,31 @@ final class HashPartitions implements Constants
         return hashPartitionMask + 1;
     }
 
-    long getLRUHead(int hash)
+    long getPartitionHead(int hash)
     {
-        return Uns.getLongVolatile(partitionAdrForHash(hash) + PART_OFF_LRU_HEAD);
+        return Uns.getLongVolatile(partitionAdrForHash(hash) + PART_OFF_PARTITION_HEAD);
     }
 
-    void setLRUHead(int hash, long hashEntryAdr)
+    void setPartitionHead(int hash, long hashEntryAdr)
     {
-        Uns.putLongVolatile(partitionAdrForHash(hash) + PART_OFF_LRU_HEAD, hashEntryAdr);
+        Uns.putLongVolatile(partitionAdrForHash(hash) + PART_OFF_PARTITION_HEAD, hashEntryAdr);
     }
 
-    void setLRUHeadAlt(int hash, long hashEntryAdr)
+    void setPartitionHeadAlt(int hash, long hashEntryAdr)
     {
-        Uns.putLongVolatile(unsAlt.address + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_LRU_HEAD, hashEntryAdr);
+        Uns.putLongVolatile(address + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_PARTITION_HEAD, hashEntryAdr);
     }
 
     void prepareRehash(int newHashTableSize)
     {
-        this.unsAlt = new Uns((long) newHashTableSize * PARTITION_ENTRY_LEN);
+        this.addressAlt = Uns.allocate((long) newHashTableSize * PARTITION_ENTRY_LEN);
         hashPartitionMaskAlt = newHashTableSize - 1;
         // it's important to initialize the hash partition memory!
         // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
-        Uns.setMemory(unsAlt.address, sizeForEntries(newHashTableSize), (byte) 0);
+        Uns.setMemory(addressAlt, sizeForEntries(newHashTableSize), (byte) 0);
 
         for (int partNo = 0; partNo < newHashTableSize; partNo++)
-            Uns.initLock(unsAlt.address + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK);
+            Uns.initStamped(addressAlt + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK);
     }
 
     long[] lockForRehash(int newHashTableSize)
@@ -85,7 +85,7 @@ final class HashPartitions implements Constants
 
     void finishRehash()
     {
-        unsMain = unsAlt;
+        address = addressAlt;
         hashPartitionMask = hashPartitionMaskAlt;
         rehashSplit.set(-1);
     }
@@ -94,49 +94,66 @@ final class HashPartitions implements Constants
     {
         int partition = partitionForHash(hash);
         if (inMain(partition))
-            return unsMain.address + partition * PARTITION_ENTRY_LEN;
+            return address + partition * PARTITION_ENTRY_LEN;
 
         // partition already rehashed - look it up in alternate location
         partition = hash & hashPartitionMaskAlt;
-        return unsAlt.address + partition * PARTITION_ENTRY_LEN;
+        return addressAlt + partition * PARTITION_ENTRY_LEN;
     }
 
     long lockPartition(int hash, boolean write)
     {
-        int partition = partitionForHash(hash);
-        if (inMain(hash))
-            return Uns.lock(unsMain.address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK, write ? LockMode.WRITE : LockMode.READ);
-        else
-            return Uns.lock(unsAlt.address + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, write ? LockMode.WRITE : LockMode.READ);
+        for (int i = 0; i < 256; i++)
+        {
+            int partition = partitionForHash(hash);
+            long partLockAdr = inMain(hash)
+                           ? address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK
+                           : addressAlt + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_LOCK;
+            long stamp = write
+                         ? Uns.lockStampedWrite(partLockAdr)
+                         : Uns.lockStampedRead(partLockAdr);
+            if (stamp != Uns.INVALID_LOCK)
+                return stamp;
+        }
+        // execution path might get here if too many consecutive rehashes occur (and the lock code reaches the
+        // old hash partition)
+        throw new IllegalStateException("Got INVALID_LOCK too often - this is very likely an internal error (race condition)");
     }
 
     long lockPartitionForLongRun(boolean alt, int partNo)
     {
-        return Uns.lock((alt ? unsAlt : unsMain).address + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK, LockMode.LONG_RUN);
+        return Uns.lockStampedLongRun((alt ? addressAlt : address) + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK);
     }
 
     void unlockPartition(long lock, int hash, boolean write)
     {
         int partition = partitionForHash(hash);
-        if (inMain(hash))
-            Uns.unlock(unsMain.address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock, write ? LockMode.WRITE : LockMode.READ);
+        long partLockAdr = inMain(hash)
+                           ? address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK
+                           : addressAlt + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_LOCK;
+        if (write)
+            Uns.unlockStampedWrite(partLockAdr, lock);
         else
-            Uns.unlock(unsAlt.address + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock, write ? LockMode.WRITE : LockMode.READ);
+            Uns.unlockStampedRead(partLockAdr, lock);
     }
 
     void unlockPartitionForLongRun(boolean alt, long lock, int partNo)
     {
-        Uns.unlock((alt ? unsAlt : unsMain).address + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock, LockMode.LONG_RUN);
+        Uns.unlockStampedLongRun((alt ? addressAlt : address) + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock);
     }
 
     public void rehashProgress(long lock, int partition, long[] rehashLocks)
     {
+        // move rehash split pointer first to let new
         rehashSplit.set(partition);
-        Uns.unlock(unsMain.address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock, LockMode.LONG_RUN);
+
+        // mark the old lock as invalid to let waiters fail immediately
+        Uns.unlockForFail(address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock);
+
         int partNew = partition * 2;
-        Uns.unlock(unsAlt.address + (partition * 2) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew], LockMode.LONG_RUN);
+        Uns.unlockStampedLongRun(addressAlt + (partition * 2) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew]);
         partNew++;
-        Uns.unlock(unsAlt.address + (partition * 2 + 1) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew], LockMode.LONG_RUN);
+        Uns.unlockStampedLongRun(addressAlt + (partition * 2 + 1) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew]);
     }
 
     private boolean inMain(int hash)

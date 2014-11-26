@@ -44,8 +44,8 @@ final class HashEntryAccess implements Constants
         this.lruListLenTrigger = lruListLenTrigger;
         this.signals = signals;
 
-        firstBlockDataSpace = dataMemory.blockSize() - OFF_DATA_IN_FIRST;
-        nextBlockDataSpace = dataMemory.blockSize() - OFF_DATA_IN_NEXT;
+        firstBlockDataSpace = dataMemory.blockSize() - ENTRY_OFF_DATA_IN_FIRST;
+        nextBlockDataSpace = dataMemory.blockSize() - ENTRY_OFF_DATA_IN_NEXT;
     }
 
     long createNewEntryChain(int hash, BytesSource keySource, BytesSource valueSource, long valueLen)
@@ -68,7 +68,7 @@ final class HashEntryAccess implements Constants
 
         // write key + value to data
         long blkAdr = hashEntryAdr;
-        long blkOff = OFF_DATA_IN_FIRST;
+        long blkOff = ENTRY_OFF_DATA_IN_FIRST;
 
         // write key to data
         long len = keySource.size();
@@ -87,7 +87,7 @@ final class HashEntryAccess implements Constants
                     Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
                     arrIdx += blkRemain;
                     blkAdr = getNextBlock(blkAdr);
-                    blkOff = OFF_DATA_IN_NEXT;
+                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
                 }
                 else
                 {
@@ -96,7 +96,7 @@ final class HashEntryAccess implements Constants
                     if (blkOff == dataMemory.blockSize())
                     {
                         blkAdr = getNextBlock(blkAdr);
-                        blkOff = OFF_DATA_IN_NEXT;
+                        blkOff = ENTRY_OFF_DATA_IN_NEXT;
                     }
                     break;
                 }
@@ -112,7 +112,7 @@ final class HashEntryAccess implements Constants
                 if (blkOff == dataMemory.blockSize())
                 {
                     blkAdr = getNextBlock(blkAdr);
-                    blkOff = OFF_DATA_IN_NEXT;
+                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
                 }
             }
         }
@@ -122,7 +122,7 @@ final class HashEntryAccess implements Constants
         if (blkOff >= dataMemory.blockSize())
         {
             blkAdr = getNextBlock(blkAdr);
-            blkOff = OFF_DATA_IN_NEXT;
+            blkOff = ENTRY_OFF_DATA_IN_NEXT;
         }
 
         if (valueSource != null)
@@ -148,7 +148,7 @@ final class HashEntryAccess implements Constants
                         Uns.copyMemory(arr, arrIdx + arrOff, blkAdr + blkOff, blkRemain);
                         arrIdx += blkRemain;
                         blkAdr = getNextBlock(blkAdr);
-                        blkOff = OFF_DATA_IN_NEXT;
+                        blkOff = ENTRY_OFF_DATA_IN_NEXT;
                     }
                     else
                     {
@@ -167,7 +167,7 @@ final class HashEntryAccess implements Constants
                     if (blkOff == dataMemory.blockSize())
                     {
                         blkAdr = getNextBlock(blkAdr);
-                        blkOff = OFF_DATA_IN_NEXT;
+                        blkOff = ENTRY_OFF_DATA_IN_NEXT;
                     }
                 }
             }
@@ -183,23 +183,23 @@ final class HashEntryAccess implements Constants
 
     void initHashEntry(int hash, long keyLen, long valueLen, long hashEntryAdr)
     {
-        Uns.putLongVolatile(hashEntryAdr + OFF_HASH, hash);
-        setLRUPrevious(hashEntryAdr, 0L);
-        setLRUNext(hashEntryAdr, 0L);
-        Uns.initLock(hashEntryAdr + OFF_ENTRY_LOCK);
-        Uns.putLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH, keyLen);
-        Uns.putLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH, valueLen);
+        Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_HASH, hash);
+        setPreviousEntry(hashEntryAdr, 0L);
+        setNextEntry(hashEntryAdr, 0L);
+        Uns.initStamped(hashEntryAdr + ENTRY_OFF_LOCK);
+        Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_KEY_LENGTH, keyLen);
+        Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_VALUE_LENGTH, valueLen);
     }
 
     long findHashEntry(int hash, BytesSource keySource)
     {
-        long firstHashEntryAdr = hashPartitions.getLRUHead(hash);
+        long firstHashEntryAdr = hashPartitions.getPartitionHead(hash);
         boolean first = true;
         int loops = 0;
-        for (long hashEntryAdr = firstHashEntryAdr; hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr), loops++)
+        for (long hashEntryAdr = firstHashEntryAdr; hashEntryAdr != 0L; hashEntryAdr = getNextEntry(hashEntryAdr), loops++)
         {
             if (!first && firstHashEntryAdr == hashEntryAdr)
-                throw new InternalError("endless loop");
+                throw new InternalError("endless loop for hash " + hash);
             first = false;
 
             int hashEntryHash = getEntryHash(hashEntryAdr);
@@ -228,8 +228,8 @@ final class HashEntryAccess implements Constants
     private void lruListLongWarn(int loops)
     {
         if (signals.triggerRehash())
-            LOGGER.warn("Degraded OHC performance! LRU list very long - check OHC hash table size " +
-                        "({} LRU links required to find hash entry) " +
+            LOGGER.warn("Degraded OHC performance! Partition linked list very long - check OHC hash table size " +
+                        "({} links required to find hash entry) " +
                         "(this message will reappear in 10 seconds if the problem persists)",
                         loops);
     }
@@ -239,7 +239,7 @@ final class HashEntryAccess implements Constants
         if (hashEntryAdr == 0L)
             return false;
 
-        long blkOff = OFF_DATA_IN_FIRST;
+        long blkOff = ENTRY_OFF_DATA_IN_FIRST;
         long blkAdr = hashEntryAdr;
 
         // array optimized version
@@ -270,7 +270,7 @@ final class HashEntryAccess implements Constants
                 if (blkOff == dataMemory.blockSize())
                 {
                     blkAdr = getNextBlock(blkAdr);
-                    blkOff = OFF_DATA_IN_NEXT;
+                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
                 }
             }
 
@@ -292,7 +292,7 @@ final class HashEntryAccess implements Constants
             if (blkOff == dataMemory.blockSize())
             {
                 blkAdr = getNextBlock(blkAdr);
-                blkOff = OFF_DATA_IN_NEXT;
+                blkOff = ENTRY_OFF_DATA_IN_NEXT;
             }
         }
 
@@ -307,7 +307,7 @@ final class HashEntryAccess implements Constants
         long serKeyLen = getHashKeyLen(hashEntryAdr);
         if (serKeyLen < 0L)
             throw new InternalError();
-        long valueLen = Uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
+        long valueLen = Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_VALUE_LENGTH);
         if (valueLen < 0L)
             throw new InternalError();
         long blkAdr = hashEntryAdr;
@@ -327,10 +327,10 @@ final class HashEntryAccess implements Constants
                 blkAdr = getNextBlock(blkAdr);
             }
 
-            blkOff = OFF_DATA_IN_NEXT + serKeyLen;
+            blkOff = ENTRY_OFF_DATA_IN_NEXT + serKeyLen;
         }
         else
-            blkOff = OFF_DATA_IN_FIRST + serKeyLen;
+            blkOff = ENTRY_OFF_DATA_IN_FIRST + serKeyLen;
 
         if (valueLen > Integer.MAX_VALUE)
             throw new IllegalStateException("integer overflow");
@@ -351,7 +351,7 @@ final class HashEntryAccess implements Constants
                     Uns.copyMemory(blkAdr + blkOff, arr, arrIdx + arrOff, blkRemain);
                     arrIdx += blkRemain;
                     blkAdr = getNextBlock(blkAdr);
-                    blkOff = OFF_DATA_IN_NEXT;
+                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
                 }
                 else
                 {
@@ -369,7 +369,7 @@ final class HashEntryAccess implements Constants
                 if (blkOff == dataMemory.blockSize())
                 {
                     blkAdr = getNextBlock(blkAdr);
-                    blkOff = OFF_DATA_IN_NEXT;
+                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
                 }
                 valueSink.putByte(p, b);
             }
@@ -389,81 +389,94 @@ final class HashEntryAccess implements Constants
         if (hashEntryAdr == 0L)
             return;
 
-        long lruHead = hashPartitions.getLRUHead(hash);
+        long lruHead = hashPartitions.getPartitionHead(hash);
         if (lruHead != hashEntryAdr)
         {
-            removeFromPartitionLRU(hash, hashEntryAdr, lruHead);
-            addAsPartitionLRUHead(hash, hashEntryAdr, lruHead);
+            removeFromPartitionLinkedList(hash, hashEntryAdr, lruHead);
+            addAsPartitionHead(hash, hashEntryAdr, lruHead);
         }
     }
 
-    void addAsPartitionLRUHead(int hash, long hashEntryAdr)
+    void addAsPartitionHead(int hash, long hashEntryAdr)
     {
-        long lruHead = hashPartitions.getLRUHead(hash);
-        addAsPartitionLRUHead(hash, hashEntryAdr, lruHead);
+        long lruHead = hashPartitions.getPartitionHead(hash);
+        addAsPartitionHead(hash, hashEntryAdr, lruHead);
     }
 
-    void addAsPartitionLRUHead(int hash, long hashEntryAdr, long lruHead)
+    void addAsPartitionHead(int hash, long hashEntryAdr, long lruHead)
     {
         if (hashEntryAdr == 0L)
             return;
 
         if (lruHead != 0L)
         {
-            setLRUNext(hashEntryAdr, lruHead);
-            setLRUPrevious(lruHead, hashEntryAdr);
+            setNextEntry(hashEntryAdr, lruHead);
+            setPreviousEntry(lruHead, hashEntryAdr);
         }
         else
-            setLRUNext(hashEntryAdr, 0L);
-        setLRUPrevious(hashEntryAdr, 0L);
+            setNextEntry(hashEntryAdr, 0L);
+        setPreviousEntry(hashEntryAdr, 0L);
 
-        hashPartitions.setLRUHead(hash, hashEntryAdr);
+        hashPartitions.setPartitionHead(hash, hashEntryAdr);
     }
 
-    void removeFromPartitionLRU(int hash, long hashEntryAdr)
+    void removeFromPartitionLinkedList(int hash, long hashEntryAdr)
     {
-        long lruHead = hashPartitions.getLRUHead(hash);
-        removeFromPartitionLRU(hash, hashEntryAdr, lruHead);
+        long lruHead = hashPartitions.getPartitionHead(hash);
+        removeFromPartitionLinkedList(hash, hashEntryAdr, lruHead);
     }
 
-    void removeFromPartitionLRU(int hash, long hashEntryAdr, long lruHead)
+    void removeFromPartitionLinkedList(int hash, long hashEntryAdr, long lruHead)
     {
         if (hashEntryAdr == 0L)
             return;
 
-        long entryPrev = getLRUPrevious(hashEntryAdr);
-        long entryNext = getLRUNext(hashEntryAdr);
+        long entryPrev = getPreviousEntry(hashEntryAdr);
+        long entryNext = getNextEntry(hashEntryAdr);
 
         if (entryNext != 0L)
-            setLRUPrevious(entryNext, entryPrev);
+            setPreviousEntry(entryNext, entryPrev);
 
         if (entryPrev != 0L)
-            setLRUNext(entryPrev, entryNext);
+            setNextEntry(entryPrev, entryNext);
 
         if (lruHead == hashEntryAdr)
-            hashPartitions.setLRUHead(hash, entryNext);
+            hashPartitions.setPartitionHead(hash, entryNext);
 
         // we can leave the LRU next+previous pointers in hashEntryAdr alone
     }
 
-    long lockEntry(long hashEntryAdr, boolean write)
+    long lockEntryRead(long hashEntryAdr)
     {
         if (hashEntryAdr == 0L)
             return 0L;
-        return Uns.lock(hashEntryAdr + OFF_ENTRY_LOCK, write ? LockMode.WRITE : LockMode.READ);
+        return Uns.lockStampedRead(hashEntryAdr + ENTRY_OFF_LOCK);
     }
 
-    void unlockEntry(long hashEntryAdr, long stamp, boolean write)
+    long lockEntryWrite(long hashEntryAdr)
+    {
+        if (hashEntryAdr == 0L)
+            return 0L;
+        return Uns.lockStampedWrite(hashEntryAdr + ENTRY_OFF_LOCK);
+    }
+
+    void unlockEntryRead(long hashEntryAdr, long stamp)
     {
         if (hashEntryAdr != 0L)
-            Uns.unlock(hashEntryAdr + OFF_ENTRY_LOCK, stamp, write ? LockMode.WRITE : LockMode.READ);
+            Uns.unlockStampedRead(hashEntryAdr + ENTRY_OFF_LOCK, stamp);
+    }
+
+    void unlockEntryWrite(long hashEntryAdr, long stamp)
+    {
+        if (hashEntryAdr != 0L)
+            Uns.unlockStampedWrite(hashEntryAdr + ENTRY_OFF_LOCK, stamp);
     }
 
     private long getNextBlock(long blockAdr)
     {
         if (blockAdr == 0L)
             return 0L;
-        blockAdr = Uns.getLongVolatile(blockAdr + OFF_NEXT_BLOCK);
+        blockAdr = Uns.getLongVolatile(blockAdr + ENTRY_OFF_NEXT_BLOCK);
         if (blockAdr == 0L)
             throw new NullPointerException();
         return blockAdr;
@@ -471,43 +484,43 @@ final class HashEntryAccess implements Constants
 
     int getEntryHash(long hashEntryAdr)
     {
-        return (int) Uns.getLongVolatile(hashEntryAdr + OFF_HASH);
+        return (int) Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_HASH);
     }
 
-    long getLRUNext(long hashEntryAdr)
+    long getNextEntry(long hashEntryAdr)
     {
-        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + OFF_LRU_NEXT) : 0L;
+        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_NEXT) : 0L;
     }
 
-    long getLRUPrevious(long hashEntryAdr)
-    {
-        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS) : 0L;
-    }
-
-    void setLRUPrevious(long hashEntryAdr, long previousAdr)
-    {
-        if (hashEntryAdr == previousAdr)
-            throw new IllegalArgumentException();
-        if (hashEntryAdr != 0L)
-            Uns.putLongVolatile(hashEntryAdr + OFF_LRU_PREVIOUS, previousAdr);
-    }
-
-    void setLRUNext(long hashEntryAdr, long nextAdr)
+    void setNextEntry(long hashEntryAdr, long nextAdr)
     {
         if (hashEntryAdr == nextAdr)
             throw new IllegalArgumentException();
         if (hashEntryAdr != 0L)
-            Uns.putLongVolatile(hashEntryAdr + OFF_LRU_NEXT, nextAdr);
+            Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_NEXT, nextAdr);
+    }
+
+    long getPreviousEntry(long hashEntryAdr)
+    {
+        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_PREVIOUS) : 0L;
+    }
+
+    void setPreviousEntry(long hashEntryAdr, long previousAdr)
+    {
+        if (hashEntryAdr == previousAdr)
+            throw new IllegalArgumentException();
+        if (hashEntryAdr != 0L)
+            Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_PREVIOUS, previousAdr);
     }
 
     long getHashKeyLen(long hashEntryAdr)
     {
-        return Uns.getLongVolatile(hashEntryAdr + OFF_HASH_KEY_LENGTH);
+        return Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_KEY_LENGTH);
     }
 
     long getValueLen(long hashEntryAdr)
     {
-        return Uns.getLongVolatile(hashEntryAdr + OFF_VALUE_LENGTH);
+        return Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_VALUE_LENGTH);
     }
 
     DataInput readKeyFrom(long hashEntryAdr)
@@ -531,7 +544,7 @@ final class HashEntryAccess implements Constants
         long lock = hashPartitions.lockPartition(hash, false);
         try
         {
-            for (long hashEntryAdr = hashPartitions.getLRUHead(hash); numKeys-- > 0 && hashEntryAdr != 0L; hashEntryAdr = getLRUNext(hashEntryAdr))
+            for (long hashEntryAdr = hashPartitions.getPartitionHead(hash); numKeys-- > 0 && hashEntryAdr != 0L; hashEntryAdr = getNextEntry(hashEntryAdr))
                 heCb.hashEntry(hashEntryAdr);
         }
         finally
@@ -568,10 +581,10 @@ final class HashEntryAccess implements Constants
                     blkAdr = getNextBlock(blkAdr);
                 }
 
-                blkOff = OFF_DATA_IN_NEXT + keyLen;
+                blkOff = ENTRY_OFF_DATA_IN_NEXT + keyLen;
             }
             else
-                blkOff = OFF_DATA_IN_FIRST + keyLen;
+                blkOff = ENTRY_OFF_DATA_IN_FIRST + keyLen;
 
             if (valueLen > Integer.MAX_VALUE)
                 throw new IllegalStateException("integer overflow");
@@ -610,7 +623,7 @@ final class HashEntryAccess implements Constants
                 if (blkOff == dataMemory.blockSize())
                 {
                     blkAdr = getNextBlock(blkAdr);
-                    blkOff = OFF_DATA_IN_NEXT;
+                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
                 }
             }
         }
@@ -626,8 +639,116 @@ final class HashEntryAccess implements Constants
             if (blkOff == dataMemory.blockSize())
             {
                 blkAdr = getNextBlock(blkAdr);
-                blkOff = OFF_DATA_IN_NEXT;
+                blkOff = ENTRY_OFF_DATA_IN_NEXT;
             }
+        }
+
+        public void writeShort(int v) throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+            {
+                // block-oriented needs respect to blocks
+                super.writeShort(v);
+                return;
+            }
+
+            if (available < 2)
+                throw new EOFException();
+
+            available -= 2;
+
+            Uns.putShort(blkAdr + blkOff, (short) v);
+            blkOff += 2;
+        }
+
+        public void writeChar(int v) throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+            {
+                // block-oriented needs respect to blocks
+                super.writeChar(v);
+                return;
+            }
+
+            if (available < 2)
+                throw new EOFException();
+
+            available -= 2;
+
+            Uns.putChar(blkAdr + blkOff, (char) v);
+            blkOff += 2;
+        }
+
+        public void writeInt(int v) throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+            {
+                // block-oriented needs respect to blocks
+                super.writeInt(v);
+                return;
+            }
+
+            if (available < 4)
+                throw new EOFException();
+
+            available -= 4;
+
+            Uns.putInt(blkAdr + blkOff, v);
+            blkOff += 4;
+        }
+
+        public void writeLong(long v) throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+            {
+                // block-oriented needs respect to blocks
+                super.writeLong(v);
+                return;
+            }
+
+            if (available < 8)
+                throw new EOFException();
+
+            available -= 8;
+
+            Uns.putLong(blkAdr + blkOff, v);
+            blkOff += 8;
+        }
+
+        public void writeFloat(float v) throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+            {
+                // block-oriented needs respect to blocks
+                super.writeFloat(v);
+                return;
+            }
+
+            if (available < 4)
+                throw new EOFException();
+
+            available -= 4;
+
+            Uns.putFloat(blkAdr + blkOff, v);
+            blkOff += 4;
+        }
+
+        public void writeDouble(double v) throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+            {
+                // block-oriented needs respect to blocks
+                super.writeDouble(v);
+                return;
+            }
+
+            if (available < 8)
+                throw new EOFException();
+
+            available -= 8;
+
+            Uns.putDouble(blkAdr + blkOff, v);
+            blkOff += 8;
         }
     }
 
@@ -668,13 +789,13 @@ final class HashEntryAccess implements Constants
                         blkAdr = getNextBlock(blkAdr);
                     }
 
-                    blkOff = OFF_DATA_IN_NEXT + serKeyLen;
+                    blkOff = ENTRY_OFF_DATA_IN_NEXT + serKeyLen;
                 }
                 else
-                    blkOff = OFF_DATA_IN_FIRST + serKeyLen;
+                    blkOff = ENTRY_OFF_DATA_IN_FIRST + serKeyLen;
             }
             else
-                blkOff = OFF_DATA_IN_FIRST;
+                blkOff = ENTRY_OFF_DATA_IN_FIRST;
 
             if (valueLen > Integer.MAX_VALUE)
                 throw new IllegalStateException("integer overflow");
@@ -716,7 +837,7 @@ final class HashEntryAccess implements Constants
                 if (blkOff == dataMemory.blockSize())
                 {
                     blkAdr = getNextBlock(blkAdr);
-                    blkOff = OFF_DATA_IN_NEXT;
+                    blkOff = ENTRY_OFF_DATA_IN_NEXT;
                 }
             }
         }
@@ -732,10 +853,115 @@ final class HashEntryAccess implements Constants
             if (blkOff == dataMemory.blockSize())
             {
                 blkAdr = getNextBlock(blkAdr);
-                blkOff = OFF_DATA_IN_NEXT;
+                blkOff = ENTRY_OFF_DATA_IN_NEXT;
             }
 
             return b;
+        }
+
+        public int readUnsignedShort() throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+                // block-oriented needs respect to blocks
+                return super.readUnsignedShort();
+
+            if (available < 2)
+                throw new EOFException();
+
+            available -= 2;
+            int r = Uns.getShort(blkAdr + blkOff) & 0xffff;
+            blkOff += 2;
+            return r;
+        }
+
+        public short readShort() throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+                // block-oriented needs respect to blocks
+                return super.readShort();
+
+            if (available < 2)
+                throw new EOFException();
+
+            available -= 2;
+            short r = Uns.getShort(blkAdr + blkOff);
+            blkOff += 2;
+            return r;
+        }
+
+        public char readChar() throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+                // block-oriented needs respect to blocks
+                return super.readChar();
+
+            if (available < 2)
+                throw new EOFException();
+
+            available -= 2;
+            char r = Uns.getChar(blkAdr + blkOff);
+            blkOff += 2;
+            return r;
+        }
+
+        public int readInt() throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+                // block-oriented needs respect to blocks
+                return super.readUnsignedShort();
+
+            if (available < 4)
+                throw new EOFException();
+
+            available -= 4;
+            int r = Uns.getInt(blkAdr + blkOff);
+            blkOff += 4;
+            return r;
+        }
+
+        public long readLong() throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+                // block-oriented needs respect to blocks
+                return super.readUnsignedShort();
+
+            if (available < 8)
+                throw new EOFException();
+
+            available -= 8;
+            long r = Uns.getLong(blkAdr + blkOff);
+            blkOff += 8;
+            return r;
+        }
+
+        public float readFloat() throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+                // block-oriented needs respect to blocks
+                return super.readUnsignedShort();
+
+            if (available < 4)
+                throw new EOFException();
+
+            available -= 4;
+            float r = Uns.getFloat(blkAdr + blkOff);
+            blkOff += 4;
+            return r;
+        }
+
+        public double readDouble() throws IOException
+        {
+            if (dataMemory.getDataManagement() != DataManagement.FLOATING)
+                // block-oriented needs respect to blocks
+                return super.readUnsignedShort();
+
+            if (available < 8)
+                throw new EOFException();
+
+            available -= 8;
+            double r = Uns.getDouble(blkAdr + blkOff);
+            blkOff += 8;
+            return r;
         }
     }
 

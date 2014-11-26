@@ -17,12 +17,11 @@ package org.caffinitas.ohc;
 
 import java.io.IOException;
 import java.util.Iterator;
-import java.util.concurrent.TimeUnit;
 
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-public abstract class AbstractBasicTest extends AbstractTest
+public abstract class AbstractBasicTest extends AbstractTest implements Constants
 {
     @Test(expectedExceptions = OutOfOffHeapMemoryException.class)
     public void tooBig() throws IOException
@@ -278,14 +277,14 @@ public abstract class AbstractBasicTest extends AbstractTest
         {
             // on first block boundary
             withKeyAndValLen(cache,
-                             cache.getBlockSize() - 64, // HashPartitionAccess.OFF_DATA_IN_FIRST
+                             cache.getBlockSize() - ENTRY_OFF_DATA_IN_FIRST,
                              987654,
                              false);
 
             // on second block boundary
             withKeyAndValLen(cache,
-                             cache.getBlockSize() - 64 + // HashPartitionAccess.OFF_DATA_IN_FIRST
-                             cache.getBlockSize() - 8, // HashPartitionAccess.OFF_DATA_IN_NEXT
+                             cache.getBlockSize() - ENTRY_OFF_DATA_IN_FIRST +
+                             cache.getBlockSize() - ENTRY_OFF_DATA_IN_NEXT,
                              987654,
                              false);
         }
@@ -303,14 +302,14 @@ public abstract class AbstractBasicTest extends AbstractTest
 
             // on first block boundary
             withKeyAndValLen(cache,
-                             cache.getBlockSize() - 64, // HashPartitionAccess.OFF_DATA_IN_FIRST
+                             cache.getBlockSize() - ENTRY_OFF_DATA_IN_FIRST,
                              987654,
                              true);
 
             // on second block boundary
             withKeyAndValLen(cache,
-                             cache.getBlockSize() - 64 + // HashPartitionAccess.OFF_DATA_IN_FIRST
-                             cache.getBlockSize() - 8, // HashPartitionAccess.OFF_DATA_IN_NEXT
+                             cache.getBlockSize() - ENTRY_OFF_DATA_IN_FIRST +
+                             cache.getBlockSize() - ENTRY_OFF_DATA_IN_NEXT,
                              987654,
                              true);
         }
@@ -360,9 +359,9 @@ public abstract class AbstractBasicTest extends AbstractTest
 
         int len = keyLen + valLen;
         int blk = 1;
-        len -= cache.getBlockSize() - 64; // HashPartitionAccess.OFF_DATA_IN_FIRST
+        len -= cache.getBlockSize() - ENTRY_OFF_DATA_IN_FIRST;
         for (; len > 0; blk++)
-            len -= cache.getBlockSize() - 8; // HashPartitionAccess.OFF_DATA_IN_NEXT
+            len -= cache.getBlockSize() - ENTRY_OFF_DATA_IN_NEXT;
 
         if (cache.getDataManagement() == DataManagement.FIXED_BLOCKS)
             Assert.assertEquals(cache.freeCapacity(), cache.getCapacity() - cache.getBlockSize() * blk);

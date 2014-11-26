@@ -101,7 +101,7 @@ final class DataMemoryFixedBlockSize extends DataMemory
                                                        new FreeList()
     };
 
-    private final Uns uns;
+    private final long address;
     private final AtomicInteger freeListPtr = new AtomicInteger();
     private final LongAdder freeBlockSpins = new LongAdder();
     private final long firstBlockDataSpace;
@@ -111,13 +111,13 @@ final class DataMemoryFixedBlockSize extends DataMemory
     DataMemoryFixedBlockSize(long capacity, int blockSize, long cleanUpTriggerMinFree)
     {
         super(capacity, cleanUpTriggerMinFree);
-        this.uns = new Uns(capacity);
+        this.address = Uns.allocate(capacity);
         this.blockSize = blockSize;
         this.firstBlockDataSpace = blockSize - 64;
         this.nextBlockDataSpace = blockSize - 8;
 
         int fli = 0;
-        for (long adr = uns.address; adr < uns.address + capacity; adr += blockSize)
+        for (long adr = address; adr < address + capacity; adr += blockSize)
         {
             Uns.putLongVolatile(adr, 0L);
 
@@ -138,7 +138,7 @@ final class DataMemoryFixedBlockSize extends DataMemory
 
     void close()
     {
-        uns.free();
+        free(address);
     }
 
     private int calcRequiredNumberOfBlocks(long bytes)

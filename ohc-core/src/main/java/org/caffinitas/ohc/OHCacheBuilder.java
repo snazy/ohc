@@ -22,7 +22,7 @@ public class OHCacheBuilder<K, V>
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
-    private int lruListLenTrigger = 100;
+    private int lruListLenTrigger = 10;
     private double cleanUpTriggerMinFree = -1d;
     private boolean statisticsEnabled;
     private DataManagement dataManagement = DataManagement.FLOATING;

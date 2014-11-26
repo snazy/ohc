@@ -21,34 +21,35 @@ public interface Constants
 // Hash entries
 
     // offset of next block address in a "next block"
-    static final int OFF_NEXT_BLOCK = 0;
+    static final int ENTRY_OFF_NEXT_BLOCK = 0;
     // offset of total length
-    static final int OFF_DATA_LENGTH = 8;
+    static final int ENTRY_OFF_DATA_LENGTH = 8;
     // offset of serialized hash value
-    static final int OFF_HASH = 16;
+    static final int ENTRY_OFF_HASH = 16;
     // offset of previous hash entry in LRU list for this hash partition
-    static final int OFF_LRU_PREVIOUS = 24;
+    static final int ENTRY_OFF_PREVIOUS = 24;
     // offset of next hash entry in LRU list for this hash partition
-    static final int OFF_LRU_NEXT = 32;
+    static final int ENTRY_OFF_NEXT = 32;
     // offset of serialized hash key length
-    static final int OFF_HASH_KEY_LENGTH = 40;
+    static final int ENTRY_OFF_KEY_LENGTH = 40;
     // offset of serialized value length
-    static final int OFF_VALUE_LENGTH = 48;
+    static final int ENTRY_OFF_VALUE_LENGTH = 48;
     // offset of entry lock
-    static final int OFF_ENTRY_LOCK = 56;
+    static final int ENTRY_OFF_LOCK = 56;
     // offset of data in first block
-    static final int OFF_DATA_IN_FIRST = 64;
+    static final int ENTRY_OFF_DATA_IN_FIRST = 64;
 
     // offset of data in "next block"
-    static final int OFF_DATA_IN_NEXT = 8;
+    static final int ENTRY_OFF_DATA_IN_NEXT = 8;
 
 // Hash partitions (segments)
 
     // reference to the last-referenced hash entry (for LRU)
-    static final long PART_OFF_LRU_HEAD = 0L;
+    static final long PART_OFF_PARTITION_HEAD = 0L;
     // offset of CAS style lock field
     static final long PART_OFF_LOCK = 8L;
     // total memory required for a hash-partition
+    // TODO it makes sense to change PARTITION_ENTRY_LEN to 64 on big systems but may stay at 16 for systems with just one CPU package
     static final int PARTITION_ENTRY_LEN = 16;
 
 }
