@@ -21,5 +21,7 @@ public enum PutResult
 
     REPLACE,
 
-    NO_MORE_SPACE
+    NO_MORE_FREE_CAPACITY,
+
+    ALLOCATION_FAILED
 }

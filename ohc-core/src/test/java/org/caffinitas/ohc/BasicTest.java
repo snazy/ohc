@@ -21,7 +21,7 @@ import java.util.Iterator;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-public abstract class AbstractBasicTest extends AbstractTest implements Constants
+public class BasicTest extends AbstractTest
 {
     @Test(expectedExceptions = OutOfOffHeapMemoryException.class)
     public void tooBig() throws IOException
@@ -178,7 +178,7 @@ public abstract class AbstractBasicTest extends AbstractTest implements Constant
             Assert.assertSame(cache.put(cnt, src, src), PutResult.ADD, Integer.toString(cnt));
 
             src = new BytesSource.StringSource(Integer.toString(-1));
-            Assert.assertSame(cache.put(-1, src, src), PutResult.NO_MORE_SPACE, Integer.toString(-1));
+            Assert.assertSame(cache.put(-1, src, src), PutResult.NO_MORE_FREE_CAPACITY, Integer.toString(-1));
 
             src = new BytesSource.StringSource(Integer.toString(cnt));
             Assert.assertTrue(cache.remove(cnt, src));
@@ -225,7 +225,7 @@ public abstract class AbstractBasicTest extends AbstractTest implements Constant
             Assert.assertSame(cache.put(cnt, src, src), PutResult.ADD, Integer.toString(cnt));
 
             src = bigSourceFor(garbage, -1);
-            Assert.assertSame(cache.put(-1, src, src), PutResult.NO_MORE_SPACE, Integer.toString(-1));
+            Assert.assertSame(cache.put(-1, src, src), PutResult.NO_MORE_FREE_CAPACITY, Integer.toString(-1));
 
             src = bigSourceFor(garbage, cnt);
             Assert.assertTrue(cache.remove(cnt, src));

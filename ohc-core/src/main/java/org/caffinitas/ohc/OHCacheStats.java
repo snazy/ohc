@@ -21,20 +21,19 @@ import com.google.common.cache.CacheStats;
 public final class OHCacheStats
 {
     private final CacheStats cacheStats;
-    private final int[] freeListLengths;
     private final int[] hashPartitionLengths;
     private final long capacity;
+    private final long free;
     private final long size;
     private final long rehashCount;
 
-    public OHCacheStats(CacheStats cacheStats, int[] freeListLengths, int[] hashPartitionLengths, long size, long capacity, long rehashCount)
+    public OHCacheStats(CacheStats cacheStats, int[] hashPartitionLengths, long size, long capacity, long free, long rehashCount)
     {
         this.cacheStats = cacheStats;
-        this.freeListLengths = freeListLengths;
         this.hashPartitionLengths = hashPartitionLengths;
         this.size = size;
-
         this.capacity = capacity;
+        this.free = free;
         this.rehashCount = rehashCount;
     }
 
@@ -43,19 +42,9 @@ public final class OHCacheStats
         return rehashCount;
     }
 
-    public long getFreeBlockCount()
-    {
-        return sumOf(freeListLengths);
-    }
-
     public CacheStats getCacheStats()
     {
         return cacheStats;
-    }
-
-    public int[] getFreeListLengths()
-    {
-        return freeListLengths;
     }
 
     public int[] getHashPartitionLengths()
@@ -68,29 +57,14 @@ public final class OHCacheStats
         return size;
     }
 
-    public double averageFreeListLength()
-    {
-        return avgOf(freeListLengths);
-    }
-
     public double averageHashPartitionLength()
     {
         return avgOf(hashPartitionLengths);
     }
 
-    public int minFreeListLength()
-    {
-        return minOf(freeListLengths);
-    }
-
     public int minHashPartitionLength()
     {
         return minOf(hashPartitionLengths);
-    }
-
-    public int maxFreeListLength()
-    {
-        return maxOf(freeListLengths);
     }
 
     public int maxHashPartitionLength()
@@ -124,23 +98,15 @@ public final class OHCacheStats
         return r;
     }
 
-    private static long sumOf(int[] arr)
-    {
-        long r = 0;
-        for (int l : arr)
-            r += l;
-        return r;
-    }
-
     public String toString()
     {
         return Objects.toStringHelper(this)
                       .add("cacheStats", cacheStats)
                       .add("size", size)
-                      .add("freeLists(#/min/max/avg)", String.format("%d/%d/%d/%.2f", freeListLengths.length, minFreeListLength(), maxFreeListLength(), averageFreeListLength()))
-                      .add("hashPartitionLengths(#/min/max/avg)", String.format("%d/%d/%d/%.2f", hashPartitionLengths.length, minHashPartitionLength(), maxHashPartitionLength(), averageHashPartitionLength()))
                       .add("capacity", capacity)
+                      .add("free", free)
                       .add("rehashCount", rehashCount)
+                      .add("hashPartitionLengths(#/min/max/avg)", String.format("%d/%d/%d/%.2f", hashPartitionLengths.length, minHashPartitionLength(), maxHashPartitionLength(), averageHashPartitionLength()))
                       .toString();
     }
 }

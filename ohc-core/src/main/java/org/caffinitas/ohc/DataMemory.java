@@ -31,16 +31,6 @@ final class DataMemory implements Constants
         Uns.free(Uns.allocate(capacity));
     }
 
-    void close()
-    {
-        // nop
-    }
-
-    long blockSize()
-    {
-        return Long.MAX_VALUE;
-    }
-
     long allocate(long bytes)
     {
         bytes += ENTRY_OFF_DATA;
@@ -55,26 +45,24 @@ final class DataMemory implements Constants
 
         long adr = Uns.allocate(bytes);
         if (adr != 0L)
+        {
             Uns.putLongVolatile(adr + ENTRY_OFF_DATA_LENGTH, bytes);
-        return adr;
+            return adr;
+        }
+
+        freeCapacity.add(bytes);
+        return 0L;
     }
 
     long free(long address)
     {
+
+        // TODO queue 'free' requests and execute them async - seems to take very long (at least JEMalloc) !
+
         long bytes = Uns.getLongVolatile(address + ENTRY_OFF_DATA_LENGTH);
         Uns.free(address);
         freeCapacity.add(bytes);
         return bytes;
-    }
-
-    long getFreeListSpins()
-    {
-        return 0;
-    }
-
-    int[] calcFreeBlockCounts()
-    {
-        return new int[0];
     }
 
     long freeCapacity()

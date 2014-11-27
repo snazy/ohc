@@ -33,7 +33,6 @@ public class BigConcurrentTest
     {
         cache = OHCacheBuilder.newBuilder()
                               .hashTableSize(1024)
-//                              .blockSize(65536)
                               .capacity(256 * 1024 * 1024)
                               .build();
     }
@@ -41,7 +40,6 @@ public class BigConcurrentTest
     @AfterTest
     public void cleanup() throws IOException
     {
-        System.out.println("free-block-spins:     " + ((OHCacheImpl) cache).getFreeBlockSpins());
         cache.close();
     }
 
@@ -51,31 +49,31 @@ public class BigConcurrentTest
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 2, invocationCount = 4)
+    @Test(threadPoolSize = 2, invocationCount = 4, dependsOnMethods = "threadCount01")
     public void threadCount02() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 4, invocationCount = 16)
+    @Test(threadPoolSize = 4, invocationCount = 16, dependsOnMethods = "threadCount02")
     public void threadCount04() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 8, invocationCount = 32)
+    @Test(threadPoolSize = 8, invocationCount = 32, dependsOnMethods = "threadCount04")
     public void threadCount08() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 16, invocationCount = 16)
+    @Test(threadPoolSize = 16, invocationCount = 16, dependsOnMethods = "threadCount08", enabled = false)
     public void threadCount16() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 32, invocationCount = 32)
+    @Test(threadPoolSize = 32, invocationCount = 32, dependsOnMethods = "threadCount16", enabled = false)
     public void threadCount32() throws IOException
     {
         withPieceOfData();
@@ -100,9 +98,12 @@ public class BigConcurrentTest
                         break;
                     case REPLACE:
                         break;
-                    case NO_MORE_SPACE:
+                    case NO_MORE_FREE_CAPACITY:
                         Assert.fail();
                         break;
+                    case ALLOCATION_FAILED:
+                        Assert.fail(cache.extendedStats().toString());
+                        System.exit(1);
                 }
             }
     }

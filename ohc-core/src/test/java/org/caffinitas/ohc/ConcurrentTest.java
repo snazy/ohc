@@ -22,7 +22,7 @@ import org.testng.annotations.AfterTest;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
-public abstract class AbstractConcurrentTest extends AbstractTest
+public class ConcurrentTest extends AbstractTest
 {
     private OHCache cache;
 
@@ -39,7 +39,6 @@ public abstract class AbstractConcurrentTest extends AbstractTest
     @AfterTest
     public void cleanup() throws IOException
     {
-        System.out.println("free-block-spins:     " + ((OHCacheImpl) cache).getFreeBlockSpins());
         cache.close();
     }
 
@@ -49,31 +48,31 @@ public abstract class AbstractConcurrentTest extends AbstractTest
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 2, invocationCount = 4)
+    @Test(threadPoolSize = 2, invocationCount = 4, dependsOnMethods = "threadCount01")
     public void threadCount02() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 4, invocationCount = 16)
+    @Test(threadPoolSize = 4, invocationCount = 16, dependsOnMethods = "threadCount02")
     public void threadCount04() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 8, invocationCount = 32)
+    @Test(threadPoolSize = 8, invocationCount = 32, dependsOnMethods = "threadCount04")
     public void threadCount08() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 16, invocationCount = 16)
+    @Test(threadPoolSize = 16, invocationCount = 16, dependsOnMethods = "threadCount08")
     public void threadCount16() throws IOException
     {
         withPieceOfData();
     }
 
-    @Test(threadPoolSize = 32, invocationCount = 32)
+    @Test(threadPoolSize = 32, invocationCount = 32, dependsOnMethods = "threadCount16", enabled = false)
     public void threadCount32() throws IOException
     {
         withPieceOfData();
@@ -94,13 +93,17 @@ public abstract class AbstractConcurrentTest extends AbstractTest
                 switch (cache.put(i, key, val))
                 {
                     case ADD:
+                        Assert.assertTrue(cache.get(i, key, null));
                         cache.remove(i, key);
                         break;
                     case REPLACE:
                         break;
-                    case NO_MORE_SPACE:
-                        Assert.fail();
+                    case NO_MORE_FREE_CAPACITY:
+                        Assert.fail(cache.extendedStats().toString());
                         break;
+                    case ALLOCATION_FAILED:
+                        Assert.fail(cache.extendedStats().toString());
+                        System.exit(1);
                 }
             }
     }

@@ -72,13 +72,14 @@ final class HashEntryAccess implements Constants
             byte[] arr = keySource.array();
             int arrOff = keySource.arrayOffset();
             Uns.copyMemory(arr, arrOff, hashEntryAdr + blkOff, len);
+            blkOff += len;
         }
         else
         {
             // keySource has no array
-            for (int p = 0; p < len; p++)
+            for (int p = 0; p < len; )
             {
-                byte b = keySource.getByte(p);
+                byte b = keySource.getByte(p++);
                 Uns.putByte(hashEntryAdr + blkOff++, b);
             }
         }

@@ -25,9 +25,6 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
@@ -73,7 +70,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     private volatile boolean closed;
 
-    private final ScheduledExecutorService executorService;
+    private final Thread scheduler;
 
     private boolean statisticsEnabled;
 
@@ -157,38 +154,38 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             this.hashPartitions = new HashPartitions(hts);
             this.hashEntryAccess = new HashEntryAccess(dataMemory, hashPartitions, lruListLenTrigger, signals);
 
-            // TODO replace with a single java.lang.Thread
-            executorService = Executors.newScheduledThreadPool(1);
-            executorService.scheduleWithFixedDelay(new Runnable()
+            scheduler = new Thread(new Runnable()
             {
                 public void run()
                 {
-                    if (!signals.waitFor())
-                        return;
-
-                    if (closed)
-                        return;
-
-                    try
+                    while (true)
                     {
-                        if (signals.cleanupTrigger.compareAndSet(true, false))
-                            cleanUp();
-                        if (signals.rehashTrigger.compareAndSet(true, false))
-                            rehash();
-                    }
-                    catch (Throwable t)
-                    {
-                        LOGGER.error("Failure during triggered cleanup or rehash", t);
+                        if (!signals.waitFor())
+                            return;
+
+                        if (closed)
+                            return;
+
+                        try
+                        {
+                            if (signals.cleanupTrigger.compareAndSet(true, false))
+                                cleanUp();
+                            if (signals.rehashTrigger.compareAndSet(true, false))
+                                rehash();
+                        }
+                        catch (Throwable t)
+                        {
+                            LOGGER.error("Failure during triggered cleanup or rehash", t);
+                        }
                     }
                 }
-            }, 10, 10, TimeUnit.MILLISECONDS);
+            });
 
             if (LOGGER.isDebugEnabled())
                 LOGGER.debug("Initialized OHC with capacity={}, hash-table-size={}", cap, hts);
         }
         catch (Throwable t)
         {
-            dataMemory.close();
             if (t instanceof RuntimeException)
                 throw (RuntimeException) t;
             throw (Error) t;
@@ -215,14 +212,15 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         try
         {
 
-            if (executorService != null)
+            if (scheduler != null)
             {
                 signals.signalHousekeeping();
 
-                executorService.shutdown();
                 try
                 {
-                    if (!executorService.awaitTermination(60, TimeUnit.SECONDS))
+                    scheduler.join(60000);
+                    scheduler.interrupt();
+                    if (scheduler.isAlive())
                         throw new RuntimeException("Background OHC scheduler did not terminate normally. This usually indicates a bug.");
                 }
                 catch (InterruptedException e)
@@ -237,8 +235,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             // Need to orderly clear the cache before releasing (this involves hash-partition and hash-entry locks,
             // which ensure that no other thread is accessing OHC)
             removeAllInt();
-
-            dataMemory.close();
         }
     }
 
@@ -269,7 +265,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
-    int[] calcLruListLengths(boolean longestOnly)
+    int[] calcListLengths(boolean longestOnly)
     {
         int[] ll = new int[longestOnly ? 1 : getHashTableSize()];
         for (int partNo = 0; partNo < ll.length; partNo++)
@@ -351,7 +347,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (newHashEntryAdr == 0L)
         {
             remove(hash, keySource);
-            return PutResult.NO_MORE_SPACE;
+            return PutResult.NO_MORE_FREE_CAPACITY;
         }
 
         return putInternal(hash, keySource, oldValueSink, newHashEntryAdr);
@@ -415,8 +411,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         if (keySource == null)
             throw new NullPointerException();
-        if (valueSink == null)
-            throw new NullPointerException();
         if (keySource.size() <= 0)
             throw new ArrayIndexOutOfBoundsException();
 
@@ -430,6 +424,12 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             hashEntryAdr = hashEntryAccess.findHashEntry(hash, keySource);
             if (hashEntryAdr != 0L)
             {
+                if (valueSink == null)
+                {
+                    hitCount.increment();
+                    return true;
+                }
+
                 // to keep the hash-partition lock short, lock the entry here
                 entryLock = hashEntryAccess.lockEntryRead(hashEntryAdr);
             }
@@ -499,11 +499,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         size.add(-1);
 
         return true;
-    }
-
-    public long getFreeBlockSpins()
-    {
-        return dataMemory.getFreeListSpins();
     }
 
     public void invalidate(Object o)
@@ -629,7 +624,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         try
         {
             // check if we need to rehash
-            if (calcLruListLengths(true)[0] >= lruListLenTrigger)
+            if (calcListLengths(true)[0] >= lruListLenTrigger)
                 return false;
 
             rehashInt();
@@ -768,8 +763,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public OHCacheStats extendedStats()
     {
-        return new OHCacheStats(stats(), dataMemory.calcFreeBlockCounts(), calcLruListLengths(false),
-                                size(), capacity, rehashCount.longValue());
+        return new OHCacheStats(stats(), calcListLengths(false), size(),
+                                capacity, dataMemory.freeCapacity(), rehashCount.longValue());
     }
 
     public CacheStats stats()
