@@ -40,7 +40,7 @@ final class Signals
         try
         {
             if (!cleanupTrigger.get() && !rehashTrigger.get())
-                condition.await(1, TimeUnit.SECONDS);
+                condition.await(100, TimeUnit.MILLISECONDS);
             return true;
         }
         catch (InterruptedException e)

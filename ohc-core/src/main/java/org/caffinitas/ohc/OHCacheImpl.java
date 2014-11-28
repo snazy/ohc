@@ -178,7 +178,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
                         try
                         {
-                            Uns.processFreeQueue(false);
+                            Uns.processOutstandingFree(false);
 
                             if (signals.cleanupTrigger.compareAndSet(true, false))
                                 cleanUp();
@@ -242,7 +242,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     Thread.currentThread().interrupt();
                 }
 
-                Uns.processFreeQueue(true);
+                Uns.processOutstandingFree(true);
             }
         }
         finally
@@ -279,7 +279,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 next = hashEntryAccess.getNextEntry(hashEntryAdr);
                 // need to lock the entry since another thread might still read from it
                 hashEntryAccess.lockEntryWrite(hashEntryAdr);
-                dataMemory.free(hashEntryAdr);
+                dataMemory.free(hashEntryAdr, false);
             }
             unlinkCount.add(cnt);
             size.add(-cnt);
@@ -444,7 +444,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         finally
         {
             // release old entry
-            dataMemory.free(oldHashEntryAdr);
+            dataMemory.free(oldHashEntryAdr, true);
         }
 
         if (statisticsEnabled)
@@ -542,7 +542,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
 
         // free memory
-        dataMemory.free(hashEntryAdr);
+        dataMemory.free(hashEntryAdr, true);
 
         size.add(-1);
 
@@ -658,7 +658,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         catch (IOException e)
         {
-            dataMemory.free(newHashEntryAdr);
+            dataMemory.free(newHashEntryAdr, true);
             throw new IOError(e);
         }
 
@@ -865,7 +865,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                         if (recycleAdr != 0L)
                         {
 
-                            result[0] += dataMemory.free(recycleAdr);
+                            result[0] += dataMemory.free(recycleAdr, false);
                             recycleAdrs[i] = 0L;
                         }
                     }

@@ -31,8 +31,10 @@
 package org.caffinitas.ohc;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -270,6 +272,29 @@ final class Uns
         allocator.free(address);
     }
 
+    static final long[] asyncFree = new long[1024];
+    static final AtomicInteger asyncFreeIndex = new AtomicInteger();
+
+    static void asyncFree(long address)
+    {
+        if (address == 0L)
+            throw new NullPointerException();
+
+        // If the async-free-list has room (and is not locked), just add the address to free().
+        // Otherwise fall through to immediate free().
+        if (asyncFreeIndex.get() < asyncFree.length - 1)
+        {
+            int idx = asyncFreeIndex.getAndIncrement();
+            if (idx < asyncFree.length)
+            {
+                asyncFree[idx] = address;
+                return;
+            }
+        }
+
+        allocator.free(address);
+    }
+
     /**
      * Free the given address ("old" hash partition table) later to allow concurrent access to complete "normally"
      * since access to the hash table itself is not not locked.
@@ -282,10 +307,26 @@ final class Uns
         freeQueue.add(new Free(address, System.currentTimeMillis() + 60000L));
     }
 
-    static void processFreeQueue(boolean now)
+    static void processOutstandingFree(boolean now)
     {
         while (true)
         {
+            // This is basically a locked copy of the array containing the addresses to free()
+            asyncFreeIndex.set(asyncFree.length);
+            long[] lst = asyncFree.clone();
+            Arrays.fill(asyncFree, 0L);
+            asyncFreeIndex.set(0);
+
+            for (int i = 0; i < lst.length; i++)
+            {
+                long adr = asyncFree[i];
+                if (adr != 0L)
+                {
+                    free(adr);
+                    asyncFree[i] = 0L;
+                }
+            }
+
             Free f = freeQueue.peek();
             if (f == null)
                 break;

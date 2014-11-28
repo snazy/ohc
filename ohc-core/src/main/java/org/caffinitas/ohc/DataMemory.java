@@ -55,17 +55,18 @@ final class DataMemory implements Constants
         return 0L;
     }
 
-    long free(long address)
+    long free(long address, boolean async)
     {
         if (address == 0L)
             throw new NullPointerException();
 
-        // TODO queue 'free' requests and execute them async - seems to take very long (at least JEMalloc) !
-
         long bytes = Uns.getLongVolatile(address + ENTRY_OFF_DATA_LENGTH);
         if (bytes == 0L)
             throw new IllegalStateException();
-        Uns.free(address);
+        if (async)
+            Uns.asyncFree(address);
+        else
+            Uns.free(address);
         freeCapacity.add(bytes);
         return bytes;
     }
