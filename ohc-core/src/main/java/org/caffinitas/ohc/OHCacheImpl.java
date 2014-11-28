@@ -592,11 +592,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (hashEntryAdr == 0L)
             return null;
 
-        return deserializeValue(hashEntryAdr, entryLock);
-    }
-
-    private V deserializeValue(long hashEntryAdr, long entryLock)
-    {
         hashEntryAccess.touchEntry(hashEntryAdr);
 
         try

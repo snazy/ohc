@@ -94,46 +94,81 @@ final class Uns
     {
     }
 
-    static void putChar(long address, char value)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        unsafe.putChar(null, address, value);
-    }
-
-    static void putShort(long address, short value)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        unsafe.putShort(null, address, value);
-    }
-
-    static void putInt(long address, int value)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        unsafe.putInt(null, address, value);
-    }
+//    static void putChar(long address, char value)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        unsafe.putChar(null, address, value);
+//    }
+//
+//    static void putShort(long address, short value)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        unsafe.putShort(null, address, value);
+//    }
+//
+//    static void putInt(long address, int value)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        unsafe.putInt(null, address, value);
+//    }
+//
+//    static void putFloat(long address, float value)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        unsafe.putFloat(null, address, value);
+//    }
+//
+//    static void putDouble(long address, double value)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        unsafe.putDouble(null, address, value);
+//    }
+//
+//    static char getChar(long address)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        return unsafe.getChar(null, address);
+//    }
+//
+//    static short getShort(long address)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        return unsafe.getShort(null, address);
+//    }
+//
+//    static int getInt(long address)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        return unsafe.getInt(null, address);
+//    }
+//
+//    static float getFloat(long address)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        return unsafe.getFloat(null, address);
+//    }
+//
+//    static double getDouble(long address)
+//    {
+//        if (address == 0L)
+//            throw new NullPointerException();
+//        return unsafe.getDouble(null, address);
+//    }
 
     static void putLong(long address, long value)
     {
         if (address == 0L)
             throw new NullPointerException();
         unsafe.putLong(null, address, value);
-    }
-
-    static void putFloat(long address, float value)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        unsafe.putFloat(null, address, value);
-    }
-
-    static void putDouble(long address, double value)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        unsafe.putDouble(null, address, value);
     }
 
     static void putLongVolatile(long address, long value)
@@ -152,46 +187,11 @@ final class Uns
         return unsafe.getLong(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
     }
 
-    static char getChar(long address)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        return unsafe.getChar(null, address);
-    }
-
-    static short getShort(long address)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        return unsafe.getShort(null, address);
-    }
-
-    static int getInt(long address)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        return unsafe.getInt(null, address);
-    }
-
     static long getLong(long address)
     {
         if (address == 0L)
             throw new NullPointerException();
         return unsafe.getLong(null, address);
-    }
-
-    static float getFloat(long address)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        return unsafe.getFloat(null, address);
-    }
-
-    static double getDouble(long address)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        return unsafe.getDouble(null, address);
     }
 
     static long getLongVolatile(long address)
