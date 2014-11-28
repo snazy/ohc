@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import java.nio.charset.Charset;
+
 import com.google.common.hash.Hashing;
 
 public interface BytesSource
@@ -65,7 +67,7 @@ public interface BytesSource
     {
         public StringSource(String s)
         {
-            super(s.getBytes());
+            super(s.getBytes(Charset.forName("UTF-8")));
         }
     }
 

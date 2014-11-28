@@ -17,12 +17,22 @@ package org.caffinitas.ohc.benchmark;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
+import java.util.Date;
+import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.LongAdder;
+import javax.management.MBeanServer;
+import javax.management.Notification;
+import javax.management.NotificationListener;
+import javax.management.ObjectInstance;
+import javax.management.ObjectName;
+import javax.management.openmbean.CompositeDataSupport;
 
 import com.google.common.cache.Cache;
 import org.apache.commons.cli.CommandLine;
@@ -39,7 +49,6 @@ import com.yammer.metrics.stats.Snapshot;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.benchmark.distribution.Distribution;
-import org.caffinitas.ohc.benchmark.distribution.DistributionFactory;
 import org.caffinitas.ohc.benchmark.distribution.FasterRandom;
 import org.caffinitas.ohc.benchmark.distribution.OptionDistribution;
 
@@ -51,7 +60,6 @@ public class BenchmarkOHC
     public static final String SIZE = "s";
     public static final String DURATION = "d";
     public static final String HASH_TABLE_SIZE = "z";
-    public static final String BLOCK_SIZE = "b";
     public static final String WARM_UP = "wu";
     public static final String READ_WRITE_RATIO = "r";
     public static final String READ_KEY_DIST = "rkd";
@@ -66,11 +74,45 @@ public class BenchmarkOHC
     static final Timer readTimer = Metrics.newTimer(ReadTask.class, "reads");
     static final Timer writeTimer = Metrics.newTimer(WriteTask.class, "writes");
 
+    static final class GCStats
+    {
+        final LongAdder count = new LongAdder();
+        final LongAdder duration = new LongAdder();
+        int cores;
+    }
+
+    static final ConcurrentHashMap<String, GCStats> gcStats = new ConcurrentHashMap<>();
+
     public static void main(String[] args) throws Exception
     {
         try
         {
             threadMXBean = ManagementFactory.getPlatformMXBean(ThreadMXBean.class);
+            MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
+            NotificationListener gcListener = new NotificationListener()
+            {
+                public void handleNotification(Notification notification, Object handback)
+                {
+                    CompositeDataSupport userData = (CompositeDataSupport) notification.getUserData();
+                    String gcName = (String) userData.get("gcName");
+                    CompositeDataSupport gcInfo = (CompositeDataSupport) userData.get("gcInfo");
+                    Long duration = (Long) gcInfo.get("duration");
+                    GCStats stats = gcStats.get(gcName);
+                    if (stats == null)
+                    {
+                        GCStats ex = gcStats.putIfAbsent(gcName, stats = new GCStats());
+                        if (ex != null)
+                            stats = ex;
+                    }
+                    stats.count.increment();
+                    stats.duration.add(duration);
+                    Number gcThreadCount = (Number) gcInfo.get("GcThreadCount");
+                    if (gcThreadCount != null && gcThreadCount.intValue() > stats.cores)
+                        stats.cores = gcThreadCount.intValue();
+                }
+            };
+            for (ObjectInstance inst : mbeanServer.queryMBeans(ObjectName.getInstance("java.lang:type=GarbageCollector,name=*"), null))
+                mbeanServer.addNotificationListener(inst.getObjectName(), gcListener, null, null);
 
             CommandLine cmd = parseArguments(args);
 
@@ -79,23 +121,36 @@ public class BenchmarkOHC
             int coldSleepSecs = Integer.parseInt(warmUp[1]);
 
             int duration = Integer.parseInt(cmd.getOptionValue(DURATION, "60"));
-            int threads = Integer.parseInt(cmd.getOptionValue(THREADS, "10"));
+            int cores = Runtime.getRuntime().availableProcessors();
+            if (cores >= 8)
+                cores -= 2;
+            else if (cores > 2)
+                cores--;
+            int threads = Integer.parseInt(cmd.getOptionValue(THREADS, Integer.toString(cores)));
             long size = Long.parseLong(cmd.getOptionValue(SIZE, "" + (1024 * 1024 * 1024)));
             int hashTableSize = Integer.parseInt(cmd.getOptionValue(HASH_TABLE_SIZE, "64"));
-            int blockSize = Integer.parseInt(cmd.getOptionValue(BLOCK_SIZE, "1024"));
 
             double readWriteRatio = Double.parseDouble(cmd.getOptionValue(READ_WRITE_RATIO, ".5"));
             Distribution readKeyDist = parseDistribution(cmd.getOptionValue(READ_KEY_DIST, DEFAULT_KEY_DIST));
             Distribution writeKeyDist = parseDistribution(cmd.getOptionValue(WRITE_KEY_DIST, DEFAULT_KEY_DIST));
             Distribution valueSizeDist = parseDistribution(cmd.getOptionValue(VALUE_SIZE_DIST, DEFAULT_VALUE_SIZE_DIST));
 
+            printMessage("Starting benchmark with%n" +
+                         "   threads     : %d%n" +
+                         "   runtime-secs: %d%n" +
+                         "   warm-up-secs: %d%n" +
+                         "   idle-secs   : %d%n",
+                         threads,
+                         duration,
+                         warmUpSecs, coldSleepSecs);
+
             printMessage("Initializing OHC cache...");
             cache = OHCacheBuilder.<Long, byte[]>newBuilder()
                                   .keySerializer(BenchmarkUtils.longSerializer)
                                   .valueSerializer(BenchmarkUtils.serializer)
                                   .hashTableSize(hashTableSize)
-                                  .blockSize(blockSize)
                                   .capacity(size)
+                                  .statisticsEnabled(true)
                                   .build();
 
             printMessage("Cache configuration: hash-table-size: %d%n" +
@@ -103,7 +158,7 @@ public class BenchmarkOHC
                          cache.getHashTableSize(),
                          cache.getCapacity());
 
-            LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>(10000);
+            LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>(50000);
             ThreadPoolExecutor exec = new ThreadPoolExecutor(threads, threads,
                                                              0L, TimeUnit.MILLISECONDS,
                                                              queue);
@@ -111,15 +166,21 @@ public class BenchmarkOHC
 
             // warm up
 
-            printMessage("Start warm-up...");
-            runFor(exec, warmUpSecs, readWriteRatio, readKeyDist, writeKeyDist, valueSizeDist);
-            printMessage("");
-            logMemoryUse(cache);
+            if (warmUpSecs > 0)
+            {
+                printMessage("Start warm-up...");
+                runFor(exec, warmUpSecs, readWriteRatio, readKeyDist, writeKeyDist, valueSizeDist);
+                printMessage("");
+                logMemoryUse(cache);
+            }
 
             // cold sleep
 
-            printMessage("Warm up complete, sleep for %d seconds...", coldSleepSecs);
-            Thread.sleep(coldSleepSecs * 1000L);
+            if (coldSleepSecs > 0)
+            {
+                printMessage("Warm up complete, sleep for %d seconds...", coldSleepSecs);
+                Thread.sleep(coldSleepSecs * 1000L);
+            }
 
             // benchmark
 
@@ -145,8 +206,8 @@ public class BenchmarkOHC
 
     static long ntime()
     {
-        return threadMXBean.getCurrentThreadCpuTime();
-//        return System.nanoTime();
+//        return threadMXBean.getCurrentThreadCpuTime();
+        return System.nanoTime();
     }
 
     private static void runFor(ThreadPoolExecutor exec, int duration,
@@ -162,8 +223,11 @@ public class BenchmarkOHC
 
         long writeTrigger = (long) (readWriteRatio * Long.MAX_VALUE);
 
+        // clear all statistics, timers, etc
         readTimer.clear();
         writeTimer.clear();
+        gcStats.clear();
+        cache.resetStatistics();
 
         long endAt = System.currentTimeMillis() + duration * 1000L;
         long statsInterval = 10000L;
@@ -171,6 +235,8 @@ public class BenchmarkOHC
 
         while (System.currentTimeMillis() < endAt)
         {
+            // TODO also add a rate-limited version instead of "full speed" for both
+
             boolean read = rnd.nextLong() >>> 1 <= writeTrigger;
 
             if (read)
@@ -186,26 +252,41 @@ public class BenchmarkOHC
 
             if (nextStats <= System.currentTimeMillis())
             {
-                dumpStats(readTimer, "Reads");
-                dumpStats(writeTimer, "Writes");
+                printStats("At " + new Date());
                 nextStats += statsInterval;
             }
         }
 
-        printMessage("Time over ... waiting for tasks to complete...");
+        printMessage("Time over ... waiting for %d tasks to complete...", exec.getActiveCount());
         while (exec.getActiveCount() > 0)
-        {
             Thread.sleep(10);
+        printStats("Final");
+    }
+
+    private static void printStats(String title)
+    {
+        printMessage("%s%n     %s entries, %d/%d free, table-size:%d", title, cache.size(), cache.freeCapacity(), cache.getCapacity(), cache.getHashTableSize());
+        for (Map.Entry<String, GCStats> gcStat : gcStats.entrySet())
+        {
+            GCStats gs = gcStat.getValue();
+            long count = gs.count.longValue();
+            long duration = gs.duration.longValue();
+            double runtimeAvg = ((double)duration)/count;
+            printMessage("     GC  %-15s : count: %8d    duration: %8dms (avg:%6.2fms)    cores: %d",
+                         gcStat.getKey(),
+                         count, duration, runtimeAvg, gs.cores);
         }
+        dumpStats(readTimer, "Reads");
+        dumpStats(writeTimer, "Writes");
     }
 
     private static void dumpStats(Timer timer, String header)
     {
         Snapshot snap = timer.getSnapshot();
-        System.out.printf("%-10s: one/five/fifteen/mean:  %.0f/%.0f/%.0f/%.0f%n" +
-                          "            count:                  %10d %n" +
-                          "            min/max/mean/stddev:    %8.5f/%8.5f/%8.5f/%8.5f [%s]%n" +
-                          "            75/95/98/99/999/median: %8.5f/%8.5f/%8.5f/%8.5f/%8.5f/%8.5f [%s]%n",
+        System.out.printf("     %-10s: one/five/fifteen/mean:  %.0f/%.0f/%.0f/%.0f%n" +
+                          "                 count:                  %10d %n" +
+                          "                 min/max/mean/stddev:    %8.5f/%8.5f/%8.5f/%8.5f [%s]%n" +
+                          "                 75/95/98/99/999/median: %8.5f/%8.5f/%8.5f/%8.5f/%8.5f/%8.5f [%s]%n",
                           header,
                           //
                           timer.oneMinuteRate(),
@@ -245,8 +326,7 @@ public class BenchmarkOHC
 
     private static Distribution parseDistribution(String optionValue)
     {
-        DistributionFactory df = OptionDistribution.get(optionValue);
-        return df.get();
+        return OptionDistribution.get(optionValue).get();
     }
 
     private static CommandLine parseArguments(String[] args) throws ParseException
@@ -263,7 +343,6 @@ public class BenchmarkOHC
         options.addOption(SIZE, true, "size of the cache");
 
         options.addOption(HASH_TABLE_SIZE, true, "hash table size");
-        options.addOption(BLOCK_SIZE, true, "data block size");
 
         options.addOption(VALUE_SIZE_DIST, true, "value sizes - default: " + DEFAULT_VALUE_SIZE_DIST);
         options.addOption(READ_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);

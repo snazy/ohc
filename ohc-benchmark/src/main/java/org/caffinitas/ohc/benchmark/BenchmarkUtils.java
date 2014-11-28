@@ -24,7 +24,7 @@ import java.util.concurrent.Future;
 import org.caffinitas.ohc.CacheSerializer;
 
 public class BenchmarkUtils {
-    public static CacheSerializer<byte[]> serializer = new CacheSerializer<byte[]>() {
+    public static final CacheSerializer<byte[]> serializer = new CacheSerializer<byte[]>() {
         public void serialize(byte[] bytes, DataOutput stream) throws IOException {
             stream.writeInt(bytes.length);
             stream.write(bytes);
@@ -40,7 +40,7 @@ public class BenchmarkUtils {
             return t.length + 4;
         }
     };
-    public static CacheSerializer<Long> longSerializer = new CacheSerializer<Long>()
+    public static final CacheSerializer<Long> longSerializer = new CacheSerializer<Long>()
     {
         public void serialize(Long val, DataOutput out) throws IOException
         {

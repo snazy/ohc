@@ -22,6 +22,15 @@ import com.google.common.cache.Cache;
 
 public interface OHCache<K, V> extends Cache<K, V>, Closeable
 {
+    boolean isStatisticsEnabled();
+
+    /**
+     * Enables or disables statistics in performance critical sections.
+     */
+    void setStatisticsEnabled(boolean statisticsEnabled);
+
+    void resetStatistics();
+
     int getHashTableSize();
 
     long getCapacity();

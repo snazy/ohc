@@ -15,7 +15,7 @@
  */
 package org.caffinitas.ohc;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Encapsulates access to hash partitions.
@@ -23,151 +23,151 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class HashPartitions implements Constants
 {
 
-    private volatile int hashPartitionMask;
-    private volatile long address;
-
-    private volatile int hashPartitionMaskAlt;
-    private volatile long addressAlt;
-
-    // all hash partitions ins 'unsMain' smaller than this value must be looked up in 'unsAlt'
-    private final AtomicInteger rehashSplit = new AtomicInteger(-1);
-
-    static int sizeForEntries(int hashTableSize)
-    {
-        return PARTITION_ENTRY_LEN * hashTableSize;
-    }
+    // AtomicReference needed to make table-switch after rehash an atomic operation (thus no need for a lock)
+    private final AtomicReference<Table> table = new AtomicReference<>();
 
     HashPartitions(int hashTableSize)
     {
-        prepareRehash(hashTableSize);
-        finishRehash();
+        prepareHashTable(hashTableSize, false);
     }
 
-    int getHashTableSize()
+    void release()
     {
-        return hashPartitionMask + 1;
+        table.get().release();
+    }
+
+    int hashTableSize()
+    {
+        return table.get().hashPartitionMask + 1;
     }
 
     long getPartitionHead(int hash)
     {
-        return Uns.getLongVolatile(partitionAdrForHash(hash) + PART_OFF_PARTITION_HEAD);
+        return Uns.getLongVolatile(partitionAddressHead(hash));
     }
 
     void setPartitionHead(int hash, long hashEntryAdr)
     {
-        Uns.putLongVolatile(partitionAdrForHash(hash) + PART_OFF_PARTITION_HEAD, hashEntryAdr);
+        Uns.putLongVolatile(partitionAddressHead(hash) + PART_OFF_PARTITION_HEAD, hashEntryAdr);
     }
 
-    void setPartitionHeadAlt(int hash, long hashEntryAdr)
+    Table prepareHashTable(int newHashTableSize, boolean forRehash)
     {
-        Uns.putLongVolatile(address + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_PARTITION_HEAD, hashEntryAdr);
+        // set new new partition table (all partitions are locked exclusively) and remember the
+        // old table for rehash purpose
+        return table.getAndSet(new Table(newHashTableSize, forRehash));
     }
 
-    void prepareRehash(int newHashTableSize)
+    void rehashProgress(int partNo, int partNoNew)
     {
-        this.addressAlt = Uns.allocate((long) newHashTableSize * PARTITION_ENTRY_LEN);
-        hashPartitionMaskAlt = newHashTableSize - 1;
-        // it's important to initialize the hash partition memory!
-        // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
-        Uns.setMemory(addressAlt, sizeForEntries(newHashTableSize), (byte) 0);
-
-        for (int partNo = 0; partNo < newHashTableSize; partNo++)
-            Uns.initStamped(addressAlt + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK);
-    }
-
-    long[] lockForRehash(int newHashTableSize)
-    {
-        long[] rehashLocks = new long[newHashTableSize];
-        for (int partNo = 0; partNo < newHashTableSize; partNo++)
-            rehashLocks[partNo] = lockPartitionForLongRun(true, partNo);
-        return rehashLocks;
-    }
-
-    void finishRehash()
-    {
-        address = addressAlt;
-        hashPartitionMask = hashPartitionMaskAlt;
-        rehashSplit.set(-1);
-    }
-
-    private long partitionAdrForHash(int hash)
-    {
-        int partition = partitionForHash(hash);
-        if (inMain(partition))
-            return address + partition * PARTITION_ENTRY_LEN;
-
-        // partition already rehashed - look it up in alternate location
-        partition = hash & hashPartitionMaskAlt;
-        return addressAlt + partition * PARTITION_ENTRY_LEN;
+        Uns.unlockStampedLongRun(partitionAddressLock(partNo), Uns.longRunStamp());
+        Uns.unlockStampedLongRun(partitionAddressLock(partNoNew), Uns.longRunStamp());
     }
 
     long lockPartition(int hash, boolean write)
     {
-        for (int i = 0; i < 256; i++)
+        for (int i = 0; i < 131072; i++)
         {
-            int partition = partitionForHash(hash);
-            long partLockAdr = inMain(hash)
-                           ? address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK
-                           : addressAlt + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_LOCK;
+            long partLockAdr = partitionAddressLock(hash);
             long stamp = write
                          ? Uns.lockStampedWrite(partLockAdr)
                          : Uns.lockStampedRead(partLockAdr);
             if (stamp != Uns.INVALID_LOCK)
                 return stamp;
+            Uns.park(100000L); // 0.1ms
         }
         // execution path might get here if too many consecutive rehashes occur (and the lock code reaches the
         // old hash partition)
         throw new IllegalStateException("Got INVALID_LOCK too often - this is very likely an internal error (race condition)");
     }
 
-    long lockPartitionForLongRun(boolean alt, int partNo)
+    long lockPartitionForLongRun(int partNo)
     {
-        return Uns.lockStampedLongRun((alt ? addressAlt : address) + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK);
+        // always work against main table
+        return Uns.lockStampedLongRun(table.get().partitionAddressLock(partNo));
     }
 
     void unlockPartition(long lock, int hash, boolean write)
     {
-        int partition = partitionForHash(hash);
-        long partLockAdr = inMain(hash)
-                           ? address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK
-                           : addressAlt + partitionForHashAlt(hash) * PARTITION_ENTRY_LEN + PART_OFF_LOCK;
+        long partLockAdr = partitionAddressLock(hash);
         if (write)
             Uns.unlockStampedWrite(partLockAdr, lock);
         else
             Uns.unlockStampedRead(partLockAdr, lock);
     }
 
-    void unlockPartitionForLongRun(boolean alt, long lock, int partNo)
+    void unlockPartitionForLongRun(long lock, int partNo)
     {
-        Uns.unlockStampedLongRun((alt ? addressAlt : address) + partNo * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock);
+        Uns.unlockStampedLongRun(table.get().partitionAddressLock(partNo), lock);
     }
 
-    public void rehashProgress(long lock, int partition, long[] rehashLocks)
+    static long partOffset(int partNo)
     {
-        // move rehash split pointer first to let new
-        rehashSplit.set(partition);
-
-        // mark the old lock as invalid to let waiters fail immediately
-        Uns.unlockForFail(address + partition * PARTITION_ENTRY_LEN + PART_OFF_LOCK, lock);
-
-        int partNew = partition * 2;
-        Uns.unlockStampedLongRun(addressAlt + (partition * 2) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew]);
-        partNew++;
-        Uns.unlockStampedLongRun(addressAlt + (partition * 2 + 1) * PARTITION_ENTRY_LEN + PART_OFF_LOCK, rehashLocks[partNew]);
+        return ((long)partNo) * PARTITION_ENTRY_LEN;
     }
 
-    private boolean inMain(int hash)
+    int partitionForHash(int hash)
     {
-        return rehashSplit.get() < partitionForHash(hash);
+        return table.get().partitionForHash(hash);
     }
 
-    private int partitionForHash(int hash)
+    private Table table()
     {
-        return hash & hashPartitionMask;
+        return table.get();
     }
 
-    private int partitionForHashAlt(int hash)
+    private long partitionAddressHead(int hash)
     {
-        return hash & hashPartitionMaskAlt;
+        return table().partitionAddressHead(hash);
+    }
+
+    private long partitionAddressLock(int hash)
+    {
+        return table().partitionAddressLock(hash);
+    }
+
+    static final class Table
+    {
+        final int hashPartitionMask;
+        final long address;
+
+        public Table(int hashTableSize, boolean forRehash)
+        {
+            int msz = PARTITION_ENTRY_LEN * hashTableSize;
+            this.address = Uns.allocate(msz);
+            hashPartitionMask = hashTableSize - 1;
+            // it's important to initialize the hash partition memory!
+            // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
+            Uns.setMemory(address, msz, (byte) 0);
+
+            long adr = partitionAddressLock(0);
+            for (int partNo = 0; partNo < hashTableSize; partNo++, adr += PARTITION_ENTRY_LEN)
+                Uns.initStamped(adr, forRehash);
+        }
+
+        int partitionForHash(int hash)
+        {
+            return hash & hashPartitionMask;
+        }
+
+        long partitionAddressLock(int hash)
+        {
+            return partitionAddress(hash) + PART_OFF_LOCK;
+        }
+
+        long partitionAddressHead(int hash)
+        {
+            return partitionAddress(hash) + PART_OFF_PARTITION_HEAD;
+        }
+
+        private long partitionAddress(int hash)
+        {
+            return address + partOffset(partitionForHash(hash));
+        }
+
+        void release()
+        {
+            Uns.freeLater(address);
+        }
     }
 }

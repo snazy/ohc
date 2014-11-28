@@ -25,16 +25,43 @@ public final class OHCacheStats
     private final long capacity;
     private final long free;
     private final long size;
+    private final long cleanupCount;
     private final long rehashCount;
+    private final long putAddCount;
+    private final long putReplaceCount;
+    private final long putFailCount;
+    private final long unlinkCount;
 
-    public OHCacheStats(CacheStats cacheStats, int[] hashPartitionLengths, long size, long capacity, long free, long rehashCount)
+    public OHCacheStats(CacheStats cacheStats, int[] hashPartitionLengths, long size, long capacity, long free,
+                        long cleanupCount, long rehashCount,
+                        long putAddCount, long putReplaceCount, long putFailCount, long unlinkCount)
     {
         this.cacheStats = cacheStats;
         this.hashPartitionLengths = hashPartitionLengths;
         this.size = size;
         this.capacity = capacity;
         this.free = free;
+        this.cleanupCount = cleanupCount;
         this.rehashCount = rehashCount;
+        this.putAddCount = putAddCount;
+        this.putReplaceCount = putReplaceCount;
+        this.putFailCount = putFailCount;
+        this.unlinkCount = unlinkCount;
+    }
+
+    public long getCapacity()
+    {
+        return capacity;
+    }
+
+    public long getFree()
+    {
+        return free;
+    }
+
+    public long getCleanupCount()
+    {
+        return cleanupCount;
     }
 
     public long getRehashCount()
@@ -57,45 +84,39 @@ public final class OHCacheStats
         return size;
     }
 
+    public long getPutAddCount()
+    {
+        return putAddCount;
+    }
+
+    public long getPutReplaceCount()
+    {
+        return putReplaceCount;
+    }
+
+    public long getPutFailCount()
+    {
+        return putFailCount;
+    }
+
+    public long getUnlinkCount()
+    {
+        return unlinkCount;
+    }
+
     public double averageHashPartitionLength()
     {
-        return avgOf(hashPartitionLengths);
+        return Util.avgOf(hashPartitionLengths);
     }
 
     public int minHashPartitionLength()
     {
-        return minOf(hashPartitionLengths);
+        return Util.minOf(hashPartitionLengths);
     }
 
     public int maxHashPartitionLength()
     {
-        return maxOf(hashPartitionLengths);
-    }
-
-    private static double avgOf(int[] arr)
-    {
-        double r = 0d;
-        for (int l : arr)
-            r += l;
-        return r / arr.length;
-    }
-
-    private static int minOf(int[] arr)
-    {
-        int r = Integer.MAX_VALUE;
-        for (int l : arr)
-            if (l < r)
-                r = l;
-        return r;
-    }
-
-    private static int maxOf(int[] arr)
-    {
-        int r = 0;
-        for (int l : arr)
-            if (l > r)
-                r = l;
-        return r;
+        return Util.maxOf(hashPartitionLengths);
     }
 
     public String toString()
@@ -105,7 +126,10 @@ public final class OHCacheStats
                       .add("size", size)
                       .add("capacity", capacity)
                       .add("free", free)
+                      .add("cleanupCount", cleanupCount)
                       .add("rehashCount", rehashCount)
+                      .add("put(add/replace/fail)", Long.toString(putAddCount)+'/'+putReplaceCount+'/'+putFailCount)
+                      .add("unlinkCount", unlinkCount)
                       .add("hashPartitionLengths(#/min/max/avg)", String.format("%d/%d/%d/%.2f", hashPartitionLengths.length, minHashPartitionLength(), maxHashPartitionLength(), averageHashPartitionLength()))
                       .toString();
     }

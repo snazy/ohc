@@ -31,6 +31,8 @@
 package org.caffinitas.ohc;
 
 import java.lang.reflect.Field;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +45,20 @@ final class Uns
 
     static final Unsafe unsafe;
     private static final IAllocator allocator;
+
+    static class Free
+    {
+        final long address;
+        final long time;
+
+        Free(long address, long time)
+        {
+            this.address = address;
+            this.time = time;
+        }
+    }
+
+    private static Queue<Free> freeQueue = new ConcurrentLinkedQueue<>();
 
     static
     {
@@ -64,6 +80,8 @@ final class Uns
                 LOGGER.warn("jemalloc native library not found (" + t + ")");
                 alloc = new NativeAllocator();
             }
+//            allocator = new DebugAllocator(alloc);
+//            allocator = new DebugAllocator(new NativeAllocator());
             allocator = alloc;
         }
         catch (Exception e)
@@ -238,6 +256,9 @@ final class Uns
     {
         if (bytes <= 0)
             throw new IllegalArgumentException();
+
+        // TODO any chance to pin the memory to RAM (never swap to disk) ?
+
         long address = allocator.allocate(bytes);
         return address > 0L ? address : 0L;
     }
@@ -249,27 +270,90 @@ final class Uns
         allocator.free(address);
     }
 
+    /**
+     * Free the given address ("old" hash partition table) later to allow concurrent access to complete "normally"
+     * since access to the hash table itself is not not locked.
+     * <p/>
+     * Although the address block should not be accessed, a rare condition (under very heavy load
+     * with "concurrent" Full-GC might raise such a situation during or shortly after a rehash.
+     */
+    static void freeLater(long address)
+    {
+        freeQueue.add(new Free(address, System.currentTimeMillis() + 60000L));
+    }
+
+    static void processFreeQueue(boolean now)
+    {
+        while (true)
+        {
+            Free f = freeQueue.peek();
+            if (f == null)
+                break;
+            if (!now && f.time > System.currentTimeMillis())
+                break;
+            freeQueue.remove(f);
+            free(f.address);
+        }
+    }
+
     //
 
     private static final int LG_READERS = 7;
 
+    /**
+     * Just one - the increment for read locks.
+     */
     private static final long RUNIT = 1L;
+    /**
+     * Write exclusive lock.
+     */
     private static final long WBIT = 1L << LG_READERS;
+    /**
+     * Long run exclusive lock.
+     */
     private static final long LRBIT = WBIT << 1L;
+    /**
+     * F means fail - "fail bit". If one tries to acquire a lock with this bit set, it
+     * has to fail immediately.
+     */
     private static final long FBIT = LRBIT << 1L;
+    /**
+     * Exclusive lock bits.
+     */
+    private static final long XBIT = WBIT | LRBIT;
+    private static final long FXBIT = FBIT | XBIT;
+    /**
+     * All read lock bits.
+     */
     private static final long RBITS = WBIT - 1L;
+    /**
+     * Maximum value of read locks.
+     */
     private static final long RFULL = RBITS - 1L;
+    /**
+     * All bits for a stamp.
+     */
     private static final long ABITS = RBITS | WBIT | LRBIT | FBIT;
+    /**
+     * A left-over from the original implementation - probably used for queued lock attempts.
+     * Could be used later for own lock-wait queues, if necessary.
+     */
     private static final long SBITS = ~RBITS; // note overlap with ABITS
+    /**
+     * Value to distinguish a 0L (uninitialized) with an initialized stamp.
+     */
     private static final long ORIGIN = FBIT << 1;
 
     public static final long INVALID_LOCK = FBIT;
 
-    static void initStamped(long address)
+    static void initStamped(long address, boolean lockLongRun)
     {
-        putLongVolatile(address, ORIGIN);
+        putLongVolatile(address, lockLongRun ? longRunStamp() : ORIGIN);
     }
 
+    /**
+     * Acquire a read lock.
+     */
     static long lockStampedRead(long address)
     {
         if (address == 0L)
@@ -280,15 +364,20 @@ final class Uns
             long s = getLongVolatile(address);
             long m = s & ABITS;
             long next;
+            if (s == 0L)
+                throw new IllegalMonitorStateException("not a lock field");
             if ((s & FBIT) == FBIT)
                 return INVALID_LOCK;
             if (m < RFULL && compareAndSwap(address, s, next = s + RUNIT))
                 return next;
 
-            spinLock(spin, inRehash(s));
+            spinLock(spin, inLongRun(s));
         }
     }
 
+    /**
+     * Acquire an exclusive write lock for a short running operation.
+     */
     static long lockStampedWrite(long address)
     {
         if (address == 0L)
@@ -298,16 +387,22 @@ final class Uns
         {
             long s = getLongVolatile(address);
             long next;
+            if (s == 0L)
+                throw new IllegalMonitorStateException("not a lock field");
             if ((s & FBIT) == FBIT)
                 return INVALID_LOCK;
             if ((s & ABITS) == 0L &&
                 compareAndSwap(address, s, next = s | WBIT))
                 return next;
 
-            spinLock(spin, inRehash(s));
+            spinLock(spin, inLongRun(s));
         }
     }
 
+    /**
+     * Acquire an exclusive write lock for a long running operation.
+     * Difference to a "normal" write lock is that waiters will use longer spin waits.
+     */
     static long lockStampedLongRun(long address)
     {
         if (address == 0L)
@@ -317,6 +412,8 @@ final class Uns
         {
             long s = getLongVolatile(address);
             long next;
+            if (s == 0L)
+                throw new IllegalMonitorStateException("not a lock field");
             if ((s & FBIT) == FBIT)
                 throw new IllegalMonitorStateException("Lock marked as invalid");
             if ((s & ABITS) == 0L &&
@@ -327,7 +424,7 @@ final class Uns
         }
     }
 
-    private static boolean inRehash(long s)
+    private static boolean inLongRun(long s)
     {
         return (s & LRBIT) != 0;
     }
@@ -340,7 +437,7 @@ final class Uns
     private static void spinLock(int spin, boolean inRehash)
     {
         // spin in 50ms units during rehash and 5us else
-        park(((spin & 3) + 1) * (inRehash ? 50000000 : 5000));
+        park(((spin & 3) + 1) * (inRehash ? 5000000 : 5000));
     }
 
     static void unlockStampedRead(long address, long stamp)
@@ -352,10 +449,13 @@ final class Uns
         for (; ; )
         {
             if (((s = getLongVolatile(address)) & SBITS) != (stamp & SBITS) ||
-                (stamp & ABITS) == 0L || (m = s & ABITS) == 0L || m == WBIT)
+                (stamp & ABITS) == 0L ||
+                (m = s & ABITS) == 0L ||
+                (m & FXBIT) != 0L)
                 throw new IllegalMonitorStateException();
             if (m < RFULL && compareAndSwap(address, s, s - RUNIT))
                 break;
+            Thread.yield();
         }
     }
 
@@ -364,7 +464,7 @@ final class Uns
         if (address == 0L)
             throw new NullPointerException();
 
-        if ((stamp & WBIT) == 0L || !compareAndSwap(address, stamp, ORIGIN))
+        if ((stamp & ABITS) != WBIT || !compareAndSwap(address, stamp, stamp - WBIT))
             throw new IllegalMonitorStateException();
     }
 
@@ -373,16 +473,21 @@ final class Uns
         if (address == 0L)
             throw new NullPointerException();
 
-        if ((stamp & LRBIT) == 0L || !compareAndSwap(address, stamp, ORIGIN))
+        if ((stamp & ABITS) != LRBIT || !compareAndSwap(address, stamp, stamp - LRBIT))
             throw new IllegalMonitorStateException();
     }
 
-    public static void unlockForFail(long address, long stamp)
+    static void unlockForFail(long address, long stamp)
     {
         if (address == 0L)
             throw new NullPointerException();
 
-        if ((stamp & LRBIT) == 0L || !compareAndSwap(address, stamp, FBIT))
+        if ((stamp & XBIT) == 0L || !compareAndSwap(address, stamp, FBIT))
             throw new IllegalMonitorStateException();
+    }
+
+    static long longRunStamp()
+    {
+        return ORIGIN | LRBIT;
     }
 }

@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import java.nio.charset.Charset;
+
 public interface BytesSink
 {
     void setSize(int size);
@@ -81,7 +83,7 @@ public interface BytesSink
 
         public String toString()
         {
-            return array != null ? new String(array) : "";
+            return array != null ? new String(array, Charset.forName("UTF-8")) : "";
         }
     }
 }

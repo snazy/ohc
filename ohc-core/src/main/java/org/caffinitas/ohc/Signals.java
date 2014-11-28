@@ -15,6 +15,7 @@
  */
 package org.caffinitas.ohc;
 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -39,7 +40,7 @@ final class Signals
         try
         {
             if (!cleanupTrigger.get() && !rehashTrigger.get())
-                condition.await();
+                condition.await(1, TimeUnit.SECONDS);
             return true;
         }
         catch (InterruptedException e)

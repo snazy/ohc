@@ -17,12 +17,11 @@ package org.caffinitas.ohc;
 
 public class OHCacheBuilder<K, V>
 {
-    private int blockSize = 2048;
     private int hashTableSize;
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
-    private int lruListLenTrigger = 10;
+    private int entriesPerPartitionTrigger = 10;
     private double cleanUpTriggerMinFree = -1d;
     private boolean statisticsEnabled;
 
@@ -38,17 +37,6 @@ public class OHCacheBuilder<K, V>
     public OHCache<K, V> build()
     {
         return new OHCacheImpl<>(this);
-    }
-
-    public int getBlockSize()
-    {
-        return blockSize;
-    }
-
-    public OHCacheBuilder<K, V> blockSize(int blockSize)
-    {
-        this.blockSize = blockSize;
-        return this;
     }
 
     public int getHashTableSize()
@@ -95,14 +83,14 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public int getLruListLenTrigger()
+    public int getEntriesPerPartitionTrigger()
     {
-        return lruListLenTrigger;
+        return entriesPerPartitionTrigger;
     }
 
-    public OHCacheBuilder<K, V> lruListLenTrigger(int lruListWarnTrigger)
+    public OHCacheBuilder<K, V> entriesPerPartitionTrigger(int entriesPerPartitionTrigger)
     {
-        this.lruListLenTrigger = lruListWarnTrigger;
+        this.entriesPerPartitionTrigger = entriesPerPartitionTrigger;
         return this;
     }
 

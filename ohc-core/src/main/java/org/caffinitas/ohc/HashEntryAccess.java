@@ -43,7 +43,7 @@ final class HashEntryAccess implements Constants
         this.signals = signals;
     }
 
-    long createNewEntryChain(int hash, BytesSource keySource, BytesSource valueSource, long valueLen)
+    long createNewEntry(int hash, BytesSource keySource, BytesSource valueSource, long valueLen)
     {
         long keyLen = keySource.size();
         if (valueSource != null)
@@ -122,7 +122,7 @@ final class HashEntryAccess implements Constants
         Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_HASH, hash);
         setPreviousEntry(hashEntryAdr, 0L);
         setNextEntry(hashEntryAdr, 0L);
-        Uns.initStamped(hashEntryAdr + ENTRY_OFF_LOCK);
+        Uns.initStamped(hashEntryAdr + ENTRY_OFF_LOCK, false);
         Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_KEY_LENGTH, keyLen);
         Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_VALUE_LENGTH, valueLen);
     }
@@ -164,9 +164,8 @@ final class HashEntryAccess implements Constants
     private void entryListLongWarn(int loops)
     {
         if (signals.triggerRehash())
-            LOGGER.warn("Degraded OHC performance! Partition linked list very long - check OHC hash table size " +
-                        "({} links required to find hash entry) " +
-                        "(this message will reappear in 10 seconds if the problem persists)",
+            LOGGER.warn("Degraded OHC performance! Partition linked list very long - rehash triggered " +
+                        "({} links required to find hash entry)",
                         loops);
     }
 
@@ -286,7 +285,7 @@ final class HashEntryAccess implements Constants
         hashPartitions.setPartitionHead(hash, hashEntryAdr);
     }
 
-    void removeFromPartitionLinkedList(int hash, long hashEntryAdr)
+    void unlinkFromPartition(int hash, long hashEntryAdr)
     {
         if (hashEntryAdr == 0L)
             return;
@@ -304,34 +303,59 @@ final class HashEntryAccess implements Constants
 
         if (partHead == hashEntryAdr)
             hashPartitions.setPartitionHead(hash, entryNext);
+    }
 
-        // we can leave the LRU next+previous pointers in hashEntryAdr alone
+    long unlinkFromPartition(long partHead, int hash, long hashEntryAdr)
+    {
+        if (partHead == 0L)
+            throw new NullPointerException();
+        if (hashEntryAdr == 0L)
+            return 0L;
+
+        long entryPrev = getPreviousEntry(hashEntryAdr);
+        long entryNext = getNextEntry(hashEntryAdr);
+
+        if (entryNext != 0L)
+            setPreviousEntry(entryNext, entryPrev);
+
+        if (entryPrev != 0L)
+            setNextEntry(entryPrev, entryNext);
+
+        if (partHead == hashEntryAdr)
+        {
+            hashPartitions.setPartitionHead(hash, entryNext);
+            return entryNext;
+        }
+
+        return partHead;
     }
 
     long lockEntryRead(long hashEntryAdr)
     {
         if (hashEntryAdr == 0L)
             return 0L;
-        return Uns.lockStampedRead(hashEntryAdr + ENTRY_OFF_LOCK);
+
+        long stamp = Uns.lockStampedRead(hashEntryAdr + ENTRY_OFF_LOCK);
+        if (stamp == Uns.INVALID_LOCK)
+            throw new IllegalStateException();
+        return stamp;
     }
 
     long lockEntryWrite(long hashEntryAdr)
     {
         if (hashEntryAdr == 0L)
             return 0L;
-        return Uns.lockStampedWrite(hashEntryAdr + ENTRY_OFF_LOCK);
+
+        long stamp = Uns.lockStampedWrite(hashEntryAdr + ENTRY_OFF_LOCK);
+        if (stamp == Uns.INVALID_LOCK)
+            throw new IllegalStateException();
+        return stamp;
     }
 
     void unlockEntryRead(long hashEntryAdr, long stamp)
     {
         if (hashEntryAdr != 0L)
             Uns.unlockStampedRead(hashEntryAdr + ENTRY_OFF_LOCK, stamp);
-    }
-
-    void unlockEntryWrite(long hashEntryAdr, long stamp)
-    {
-        if (hashEntryAdr != 0L)
-            Uns.unlockStampedWrite(hashEntryAdr + ENTRY_OFF_LOCK, stamp);
     }
 
     long getEntryTimestamp(long hashEntryAdr)
@@ -388,12 +412,12 @@ final class HashEntryAccess implements Constants
 
     DataInput readKeyFrom(long hashEntryAdr)
     {
-        return new HashEntryInput(hashEntryAdr, false);
+        return newHashEntryInput(hashEntryAdr, false);
     }
 
     DataInput readValueFrom(long hashEntryAdr)
     {
-        return new HashEntryInput(hashEntryAdr, true);
+        return newHashEntryInput(hashEntryAdr, true);
     }
 
     <V> void valueToHashEntry(long hashEntryAdr, CacheSerializer<V> valueSerializer, V v, long keyLen, long valueLen) throws IOException
@@ -402,21 +426,7 @@ final class HashEntryAccess implements Constants
         valueSerializer.serialize(v, entryOutput);
     }
 
-    void hotN(int hash, HashEntryCallback heCb, int numKeys)
-    {
-        long lock = hashPartitions.lockPartition(hash, false);
-        try
-        {
-            for (long hashEntryAdr = hashPartitions.getPartitionHead(hash); numKeys-- > 0 && hashEntryAdr != 0L; hashEntryAdr = getNextEntry(hashEntryAdr))
-                heCb.hashEntry(hashEntryAdr);
-        }
-        finally
-        {
-            hashPartitions.unlockPartition(lock, hash, false);
-        }
-    }
-
-    final class HashEntryOutput extends AbstractDataOutput
+    static final class HashEntryOutput extends AbstractDataOutput
     {
         private long blkAdr;
         private long blkOff;
@@ -435,6 +445,17 @@ final class HashEntryAccess implements Constants
             this.blkEnd = this.blkOff + valueLen;
         }
 
+        private void assertAvail(int req) throws IOException
+        {
+            if (avail() < req || req < 0)
+                throw new EOFException();
+        }
+
+        private long avail()
+        {
+            return blkEnd-blkOff;
+        }
+
         public void write(byte[] b, int off, int len) throws IOException
         {
             if (b == null)
@@ -442,24 +463,10 @@ final class HashEntryAccess implements Constants
             if (off < 0 || off + len > b.length || len < 0)
                 throw new ArrayIndexOutOfBoundsException();
 
-            if (len > avail())
-                len = (int) avail();
-            if (len <= 0)
-                throw new EOFException();
+            assertAvail(len);
 
             Uns.copyMemory(b, off, blkAdr + blkOff, len);
             blkOff += len;
-        }
-
-        private void assertAvail(int req) throws IOException
-        {
-            if (avail() < req)
-                throw new EOFException();
-        }
-
-        private long avail()
-        {
-            return blkEnd-blkOff;
         }
 
         public void write(int b) throws IOException
@@ -469,81 +476,78 @@ final class HashEntryAccess implements Constants
             Uns.putByte(blkAdr + blkOff++, (byte) b);
         }
 
-        public void writeShort(int v) throws IOException
-        {
-            assertAvail(2);
-
-            Uns.putShort(blkAdr + blkOff, (short) v);
-            blkOff += 2;
-        }
-
-        public void writeChar(int v) throws IOException
-        {
-            assertAvail(2);
-
-            Uns.putChar(blkAdr + blkOff, (char) v);
-            blkOff += 2;
-        }
-
-        public void writeInt(int v) throws IOException
-        {
-            assertAvail(4);
-
-            Uns.putInt(blkAdr + blkOff, v);
-            blkOff += 4;
-        }
-
-        public void writeLong(long v) throws IOException
-        {
-            assertAvail(8);
-
-            Uns.putLong(blkAdr + blkOff, v);
-            blkOff += 8;
-        }
-
-        public void writeFloat(float v) throws IOException
-        {
-            assertAvail(4);
-
-            Uns.putFloat(blkAdr + blkOff, v);
-            blkOff += 4;
-        }
-
-        public void writeDouble(double v) throws IOException
-        {
-            assertAvail(8);
-
-            Uns.putDouble(blkAdr + blkOff, v);
-            blkOff += 8;
-        }
+//        public void writeShort(int v) throws IOException
+//        {
+//            assertAvail(2);
+//
+//            Uns.putShort(blkAdr + blkOff, (short) v);
+//            blkOff += 2;
+//        }
+//
+//        public void writeChar(int v) throws IOException
+//        {
+//            assertAvail(2);
+//
+//            Uns.putChar(blkAdr + blkOff, (char) v);
+//            blkOff += 2;
+//        }
+//
+//        public void writeInt(int v) throws IOException
+//        {
+//            assertAvail(4);
+//
+//            Uns.putInt(blkAdr + blkOff, v);
+//            blkOff += 4;
+//        }
+//
+//        public void writeLong(long v) throws IOException
+//        {
+//            assertAvail(8);
+//
+//            Uns.putLong(blkAdr + blkOff, v);
+//            blkOff += 8;
+//        }
+//
+//        public void writeFloat(float v) throws IOException
+//        {
+//            assertAvail(4);
+//
+//            Uns.putFloat(blkAdr + blkOff, v);
+//            blkOff += 4;
+//        }
+//
+//        public void writeDouble(double v) throws IOException
+//        {
+//            assertAvail(8);
+//
+//            Uns.putDouble(blkAdr + blkOff, v);
+//            blkOff += 8;
+//        }
     }
 
-    final class HashEntryInput extends AbstractDataInput
+    private HashEntryInput newHashEntryInput(long hashEntryAdr, boolean value)
+    {
+        return new HashEntryInput(hashEntryAdr, value, getHashKeyLen(hashEntryAdr), getValueLen(hashEntryAdr));
+    }
+
+    static final class HashEntryInput extends AbstractDataInput
     {
         private long blkAdr;
         private long blkOff;
         private final long blkEnd;
 
-        HashEntryInput(long hashEntryAdr, boolean value)
+        HashEntryInput(long hashEntryAdr, boolean value, long serKeyLen, long valueLen)
         {
             if (hashEntryAdr == 0L)
                 throw new NullPointerException();
-
-            long serKeyLen = getHashKeyLen(hashEntryAdr);
             if (serKeyLen < 0L)
                 throw new InternalError();
-            long valueLen = getValueLen(hashEntryAdr);
             if (valueLen < 0L)
                 throw new InternalError();
             long blkOff = ENTRY_OFF_DATA;
 
             if (value)
-            {
-                serKeyLen = roundUp(serKeyLen);
-
-                // skip key
-                blkOff += serKeyLen;
-            }
+                blkOff += roundUp(serKeyLen);
 
             if (valueLen > Integer.MAX_VALUE)
                 throw new IllegalStateException("integer overflow");
@@ -560,7 +564,7 @@ final class HashEntryAccess implements Constants
 
         private void assertAvail(int req) throws IOException
         {
-            if (avail() < req)
+            if (avail() < req || req < 0)
                 throw new EOFException();
         }
 
@@ -588,73 +592,68 @@ final class HashEntryAccess implements Constants
 
             return Uns.getByte(blkAdr + blkOff++);
         }
-
-        public int readUnsignedShort() throws IOException
-        {
-            assertAvail(2);
-
-            int r = Uns.getShort(blkAdr + blkOff) & 0xffff;
-            blkOff += 2;
-            return r;
-        }
-
-        public short readShort() throws IOException
-        {
-            assertAvail(2);
-
-            short r = Uns.getShort(blkAdr + blkOff);
-            blkOff += 2;
-            return r;
-        }
-
-        public char readChar() throws IOException
-        {
-            assertAvail(2);
-
-            char r = Uns.getChar(blkAdr + blkOff);
-            blkOff += 2;
-            return r;
-        }
-
-        public int readInt() throws IOException
-        {
-            assertAvail(4);
-
-            int r = Uns.getInt(blkAdr + blkOff);
-            blkOff += 4;
-            return r;
-        }
-
-        public long readLong() throws IOException
-        {
-            assertAvail(8);
-
-            long r = Uns.getLong(blkAdr + blkOff);
-            blkOff += 8;
-            return r;
-        }
-
-        public float readFloat() throws IOException
-        {
-            assertAvail(4);
-
-            float r = Uns.getFloat(blkAdr + blkOff);
-            blkOff += 4;
-            return r;
-        }
-
-        public double readDouble() throws IOException
-        {
-            assertAvail(8);
-
-            double r = Uns.getDouble(blkAdr + blkOff);
-            blkOff += 8;
-            return r;
-        }
-    }
-
-    static abstract class HashEntryCallback
-    {
-        abstract void hashEntry(long hashEntryAdr);
+//
+//        public int readUnsignedShort() throws IOException
+//        {
+//            assertAvail(2);
+//
+//            int r = Uns.getShort(blkAdr + blkOff) & 0xffff;
+//            blkOff += 2;
+//            return r;
+//        }
+//
+//        public short readShort() throws IOException
+//        {
+//            assertAvail(2);
+//
+//            short r = Uns.getShort(blkAdr + blkOff);
+//            blkOff += 2;
+//            return r;
+//        }
+//
+//        public char readChar() throws IOException
+//        {
+//            assertAvail(2);
+//
+//            char r = Uns.getChar(blkAdr + blkOff);
+//            blkOff += 2;
+//            return r;
+//        }
+//
+//        public int readInt() throws IOException
+//        {
+//            assertAvail(4);
+//
+//            int r = Uns.getInt(blkAdr + blkOff);
+//            blkOff += 4;
+//            return r;
+//        }
+//
+//        public long readLong() throws IOException
+//        {
+//            assertAvail(8);
+//
+//            long r = Uns.getLong(blkAdr + blkOff);
+//            blkOff += 8;
+//            return r;
+//        }
+//
+//        public float readFloat() throws IOException
+//        {
+//            assertAvail(4);
+//
+//            float r = Uns.getFloat(blkAdr + blkOff);
+//            blkOff += 4;
+//            return r;
+//        }
+//
+//        public double readDouble() throws IOException
+//        {
+//            assertAvail(8);
+//
+//            double r = Uns.getDouble(blkAdr + blkOff);
+//            blkOff += 8;
+//            return r;
+//        }
     }
 }

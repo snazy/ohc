@@ -23,6 +23,9 @@ import org.testng.annotations.Test;
 
 public class BasicTest extends AbstractTest
 {
+
+    public static final int CAPACITY_64M = 1024 * 1024 * 64;
+
     @Test(expectedExceptions = OutOfOffHeapMemoryException.class)
     public void tooBig() throws IOException
     {
@@ -33,19 +36,43 @@ public class BasicTest extends AbstractTest
         // *** error: can't allocate region
         // *** set a breakpoint in malloc_error_break to debug
 
-        newBuilder()
-        .capacity(Long.MAX_VALUE)
-        .build();
+        newBuilder().capacity(Long.MAX_VALUE)
+                    .build();
     }
 
     @Test
-    public void rehashTest() throws IOException
+    public void cleanupTest() throws IOException
     {
         try (OHCache cache = newBuilder()
-                             .capacity(1024 * 1024 * 64)
-                             .blockSize(128)
+                             .capacity(CAPACITY_64M)
+                             .hashTableSize(256)
+                             .entriesPerPartitionTrigger(4)
+                             .build())
+        {
+            OHCacheStats stats = cache.extendedStats();
+
+            byte[] data = new byte[CAPACITY_64M / 256 - 70];
+            for (int i = 0; i < 256; i++)
+            {
+                String s = Integer.toString(i);
+                Assert.assertSame(cache.put(i, new BytesSource.StringSource(Integer.toString(i)), new BytesSource.ByteArraySource(data)), PutResult.ADD, s);
+            }
+
+            cache.cleanUp();
+
+            OHCacheStats stats2 = cache.extendedStats();
+            Assert.assertTrue(stats.getCleanupCount() < stats2.getCleanupCount());
+            Assert.assertTrue(stats.getCacheStats().evictionCount() < stats2.getCacheStats().evictionCount());
+        }
+    }
+
+    @Test
+    public void rehashTest() throws IOException, InterruptedException
+    {
+        try (OHCache cache = newBuilder()
+                             .capacity(CAPACITY_64M)
                              .hashTableSize(32)
-                             .lruListLenTrigger(4)
+                             .entriesPerPartitionTrigger(4)
                              .build())
         {
             for (int i = 0; i < 4 * 32; i++)
@@ -63,7 +90,7 @@ public class BasicTest extends AbstractTest
             }
 
             Assert.assertEquals(cache.getHashTableSize(), 32);
-            Assert.assertTrue(((OHCacheImpl)cache).rehash());
+            Assert.assertTrue(((OHCacheImpl) cache).rehash());
             Assert.assertEquals(cache.getHashTableSize(), 64);
 
             for (int i = 0; i < 4 * 32; i++)
@@ -88,8 +115,7 @@ public class BasicTest extends AbstractTest
                 Assert.assertEquals(valueSink.toString(), s, s);
             }
 
-            Assert.assertEquals(cache.getHashTableSize(), 64);
-            Assert.assertTrue(((OHCacheImpl)cache).rehash());
+            Thread.sleep(3000L);
             Assert.assertEquals(cache.getHashTableSize(), 128);
 
             for (int i = 0; i < 4 * 128; i++)

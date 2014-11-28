@@ -19,16 +19,17 @@ import java.util.concurrent.atomic.LongAdder;
 
 final class DataMemory implements Constants
 {
-    final long cleanUpTriggerMinFree;
     final LongAdder freeCapacity = new LongAdder();
 
-    DataMemory(long capacity, long cleanUpTriggerMinFree)
+    DataMemory(long capacity)
     {
         this.freeCapacity.add(capacity);
-        this.cleanUpTriggerMinFree = cleanUpTriggerMinFree;
 
         // just try to allocate the memory once to ensure that the configured capacity is available (at least during init)
-        Uns.free(Uns.allocate(capacity));
+        long tstAdr = Uns.allocate(capacity);
+        if (tstAdr == 0L)
+            throw new OutOfOffHeapMemoryException(capacity);
+        Uns.free(tstAdr);
     }
 
     long allocate(long bytes)
@@ -56,10 +57,14 @@ final class DataMemory implements Constants
 
     long free(long address)
     {
+        if (address == 0L)
+            throw new NullPointerException();
 
         // TODO queue 'free' requests and execute them async - seems to take very long (at least JEMalloc) !
 
         long bytes = Uns.getLongVolatile(address + ENTRY_OFF_DATA_LENGTH);
+        if (bytes == 0L)
+            throw new IllegalStateException();
         Uns.free(address);
         freeCapacity.add(bytes);
         return bytes;

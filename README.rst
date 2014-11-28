@@ -22,19 +22,18 @@ Architecture
 ------------
 
 OHC uses a simple hash table as its primary data structure. Each hash partition basically consists of a pointer
-to the least recently used hash entry (LRU head). And each hash entry has a pointer to its successor and predecessor
-building a LRU list. The hash table does not support re-hashing - it must be sized appropriately by the user.
+to one hash entry - each hash entry has a pointer to its successor and predecessor
+building a linked-list.
 
-Data memory is organized in fixed size blocks. Multiple free-block-lists are used as a simple memory management.
+The hash table will be automatically resized if the number of linked-list-iterations is too high (configurable).
 
-CAS based locks are used on each free list, each hash partition and each hash entry. Hash entry locks are
-required because OHC tries to release each lock on a whole hash partition as soon as possible. OHC has to
-ensure that data blocks for a hash entry are not recycled for other data while the application is reading from it.
+CAS based stamped locks are used on each hash partition and each hash entry. Hash entry locks are
+required because OHC tries to release each lock on a whole hash partition as soon as possible.
 
 Put operations do not succeed if there is not enough free space to serialize the data. Reason is that OHC will
 not block any operation longer than really necessary. This should be completely fine for caches since it is better
 to let a cache-put not succeed than to block the calling application. If there's demand for a *put guarantee*
-it can be implemented.
+it can be implemented (as long as there's enough free capacity).
 
 The plain ``OHCache`` interface provides low level get/put/remove operations that take a ``BytesSource`` or a
 ``BytesSink``. Reason for this is that you usually do not need to allocate more objects in the calling code -
@@ -42,8 +41,7 @@ with the cost of a bit more verbose coding. For convenience ``OHCache`` extends 
 that takes Java objects as keys and values - you have to provide appropriate key and value serializers then.
 Note that this approach requires to serialize the key to a byte array for each get/put/remove operation.
 
-OHC provides a pure LRU based eviction mechanism. By default OHC performs cache eviction regularly on its
-own (default is to keep 25% free space). But be aware that calculation of entries to evict is based on averages
+OHC provides a pure LRU based eviction mechanism. But be aware that calculation of entries to evict is based on averages
 and does its job not very accurately to increase overall performance - it's a trade-off between performance
 and accuracy.
 
@@ -51,9 +49,7 @@ Note on the ``hotN`` function: The implementation will take N divided by number 
 return much more results than expected (the results are not ordered - the results just represent some least
 recently accessed entries).
 
-Be careful with statistics and aggregation functions like ``size``, ``hotN`` or ``extendedStats``. These methods
-walk over the hash partitions (and lock them) or lock other data structures like the free lists. Although
-locks are not held longer than necessary, you should not call these methods just because you can.
+Memory allocation for hash entries is either performed using JEMalloc (preferred, if available) or ``Unsafe``.
 
 Configuration
 -------------
@@ -61,24 +57,15 @@ Configuration
 Use the class ``OHCacheBuilder`` to configure all necessary parameter like
 
 - hash table size (must be a power of 2)
-- data block size (must be a power of 2)
 - capacity for data blocks
 - eviction configuration
 - key and value serializers
 
-Generally you should work with a large hash table. The larger the hash table, the shorter the LRU list in each
-hash partition - that means less LRU link walks and increased performance. By default OHC calculates the size of the
-hash table on its own using the formula ``hash_table_size = capacity / block_size / 16``.
+Generally you should work with a large hash table. The larger the hash table, the shorter the linked-list in each
+hash partition - that means less linked-link walks and increased performance.
 
 The total amount of required off heap memory is the *total capacity* plus *hash table*. Each hash partition (currently)
 requires 16 bytes - so the formula is ``capacity + hash_table_size * 16``.
-
-Configure your data block size wisely. Too many data blocks for a single entry may degrade performance, too much
-wasted space degrades usable capacity.
-
-The first data block for a hash entry has an overhead of 64 bytes - each other data block has an overhead
-of 8 bytes. Means the first block has ``block_size - 64`` bytes available for key+value and each other
-``block_size - 8`` bytes.
 
 Important note on hash codes
 ----------------------------

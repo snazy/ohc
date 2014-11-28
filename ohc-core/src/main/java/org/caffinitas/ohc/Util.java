@@ -15,27 +15,40 @@
  */
 package org.caffinitas.ohc;
 
-import java.io.IOException;
-import java.io.OutputStream;
-
-final class ByteArrayOut extends AbstractDataOutput
+final class Util
 {
-    private final byte[] buffer;
-    private int pos;
-
-    public ByteArrayOut(byte[] buffer)
+    static int maxOf(int[] arr)
     {
-        this.buffer = buffer;
+        int r = 0;
+        for (int l : arr)
+            if (l > r)
+                r = l;
+        return r;
     }
 
-    public void write(int b)
+    static int minOf(int[] arr)
     {
-        buffer[pos++] = (byte) b;
+        int r = Integer.MAX_VALUE;
+        for (int l : arr)
+            if (l < r)
+                r = l;
+        return r;
     }
 
-    public void write(byte[] b, int off, int len)
+    static long minOf(long[] arr)
     {
-        System.arraycopy(b, off, buffer, pos, len);
-        pos += len;
+        long r = Long.MAX_VALUE;
+        for (long l : arr)
+            if (l < r)
+                r = l;
+        return r;
+    }
+
+    static double avgOf(int[] arr)
+    {
+        double r = 0d;
+        for (int l : arr)
+            r += l;
+        return r / arr.length;
     }
 }
