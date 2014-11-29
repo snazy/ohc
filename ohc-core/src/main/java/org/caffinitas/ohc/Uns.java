@@ -356,6 +356,8 @@ final class Uns
      */
     static long lockStampedRead(long address)
     {
+        // TODO current stamped locks have ABA problem?
+
         if (address == 0L)
             throw new NullPointerException();
 
@@ -380,6 +382,8 @@ final class Uns
      */
     static long lockStampedWrite(long address)
     {
+        // TODO current stamped locks have ABA problem?
+
         if (address == 0L)
             throw new NullPointerException();
 
@@ -405,6 +409,8 @@ final class Uns
      */
     static long lockStampedLongRun(long address)
     {
+        // TODO current stamped locks have ABA problem?
+
         if (address == 0L)
             throw new NullPointerException();
 
@@ -442,6 +448,8 @@ final class Uns
 
     static void unlockStampedRead(long address, long stamp)
     {
+        // TODO current stamped locks have ABA problem?
+
         if (address == 0L)
             throw new NullPointerException();
 
@@ -461,6 +469,8 @@ final class Uns
 
     static void unlockStampedWrite(long address, long stamp)
     {
+        // TODO current stamped locks have ABA problem?
+
         if (address == 0L)
             throw new NullPointerException();
 
@@ -470,6 +480,8 @@ final class Uns
 
     static void unlockStampedLongRun(long address, long stamp)
     {
+        // TODO current stamped locks have ABA problem?
+
         if (address == 0L)
             throw new NullPointerException();
 
@@ -479,6 +491,8 @@ final class Uns
 
     static void unlockForFail(long address, long stamp)
     {
+        // TODO current stamped locks have ABA problem?
+
         if (address == 0L)
             throw new NullPointerException();
 
