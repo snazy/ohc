@@ -185,9 +185,7 @@ public class BenchmarkOHC
             // benchmark
 
             printMessage("Start benchmark...");
-            runFor(exec, duration,
-                   readWriteRatio,
-                   readKeyDist, writeKeyDist, valueSizeDist);
+            runFor(exec, duration, readWriteRatio, readKeyDist, writeKeyDist, valueSizeDist);
             printMessage("");
             logMemoryUse(cache);
 
