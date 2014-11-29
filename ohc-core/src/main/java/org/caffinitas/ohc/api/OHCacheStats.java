@@ -23,7 +23,7 @@ import org.caffinitas.ohc.internal.Util;
 public final class OHCacheStats
 {
     private final CacheStats cacheStats;
-    private final int[] hashPartitionLengths;
+    private final long[] hashPartitionLengths;
     private final long capacity;
     private final long free;
     private final long size;
@@ -34,7 +34,7 @@ public final class OHCacheStats
     private final long putFailCount;
     private final long unlinkCount;
 
-    public OHCacheStats(CacheStats cacheStats, int[] hashPartitionLengths, long size, long capacity, long free,
+    public OHCacheStats(CacheStats cacheStats, long[] hashPartitionLengths, long size, long capacity, long free,
                         long cleanupCount, long rehashCount,
                         long putAddCount, long putReplaceCount, long putFailCount, long unlinkCount)
     {
@@ -76,7 +76,7 @@ public final class OHCacheStats
         return cacheStats;
     }
 
-    public int[] getHashPartitionLengths()
+    public long[] getHashPartitionLengths()
     {
         return hashPartitionLengths;
     }
@@ -111,12 +111,12 @@ public final class OHCacheStats
         return Util.avgOf(hashPartitionLengths);
     }
 
-    public int minHashPartitionLength()
+    public long minHashPartitionLength()
     {
         return Util.minOf(hashPartitionLengths);
     }
 
-    public int maxHashPartitionLength()
+    public long maxHashPartitionLength()
     {
         return Util.maxOf(hashPartitionLengths);
     }

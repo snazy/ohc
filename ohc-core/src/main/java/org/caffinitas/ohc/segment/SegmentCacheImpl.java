@@ -93,6 +93,10 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
             throw new RuntimeException(e);
         }
 
+        // off-heap allocation
+        this.capacity = builder.getCapacity();
+        this.dataMemory = new DataMemory(this.capacity);
+
         // build segments
         int segments = builder.getSegmentCount();
         if (segments <= 0)
@@ -102,7 +106,7 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         for (int i = 0; i < segments; i++)
             try
             {
-                maps[i] = new OffHeapMap(builder, replacementStrategyClass.newInstance());
+                maps[i] = new OffHeapMap(builder, dataMemory, replacementStrategyClass.newInstance());
             }
             catch (InstantiationException e)
             {
@@ -117,10 +121,6 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         int bitNum = Util.bitNum(segments) - 1;
         this.segmentShift = 64 - bitNum;
         this.segmentMask = ((long) segments - 1) << segmentShift;
-
-        // off-heap allocation
-        this.capacity = builder.getCapacity();
-        this.dataMemory = new DataMemory(this.capacity);
 
         // calculate trigger for cleanup/eviction/replacement
         double cut = builder.getCleanUpTriggerMinFree();
@@ -147,6 +147,8 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
             cleanUpTriggerMinFree = (long) cut;
         }
         this.cleanUpTriggerMinFree = cleanUpTriggerMinFree;
+
+        this.statisticsEnabled = builder.isStatisticsEnabled();
 
         this.keySerializer = builder.getKeySerializer();
         this.valueSerializer = builder.getValueSerializer();
@@ -485,6 +487,8 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
 
         long recycleGoal = cleanUpTriggerMinFree - freeCapacity;
         long perMapRecycleGoal = recycleGoal / maps.length;
+        if (perMapRecycleGoal <= 0L)
+            perMapRecycleGoal = 1L;
         long t0 = System.currentTimeMillis();
 
         long evicted = 0L;
@@ -493,7 +497,7 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
             long stamp = map.lock();
             try
             {
-                evicted += map.cleanUp(dataMemory, perMapRecycleGoal);
+                evicted += map.cleanUp(perMapRecycleGoal);
             }
             finally
             {
@@ -572,8 +576,11 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
 
     public OHCacheStats extendedStats()
     {
+        long[] mapSizes = new long[maps.length];
+        for (int i = 0; i < maps.length; i++)
+            mapSizes[i] = maps[i].size();
         return new OHCacheStats(stats(),
-                                new int[0],
+                                mapSizes,
                                 size(),
                                 capacity,
                                 freeCapacity(),

@@ -32,7 +32,7 @@ final class TwoQReplacementStrategy implements ReplacementStrategy
         HashEntries.setEntryReplacement0(hashEntryAdr, 0L);
     }
 
-    public long cleanUp(DataMemory dataMemory, long recycleGoal)
+    public long cleanUp(long recycleGoal, ReplacementCallback cb)
     {
         throw new UnsupportedOperationException();
     }

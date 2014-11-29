@@ -15,13 +15,7 @@
  */
 package org.caffinitas.ohc.segment;
 
-public interface ReplacementStrategy
+public interface ReplacementCallback
 {
-    void entryUsed(long hashEntryAdr);
-
-    void entryReplaced(long oldHashEntryAdr, long hashEntryAdr);
-
-    void entryRemoved(long hashEntryAdr);
-
-    long cleanUp(long recycleGoal, ReplacementCallback cb);
+    void evict(long hashEntryAdr);
 }

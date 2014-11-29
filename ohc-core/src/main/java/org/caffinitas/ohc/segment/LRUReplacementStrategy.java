@@ -20,7 +20,7 @@ final class LRUReplacementStrategy implements ReplacementStrategy
     private volatile long head;
     private volatile long tail;
 
-    private void removeLink(long hashEntryAdr)
+    private void removeLRU(long hashEntryAdr)
     {
         long next = lruNext(hashEntryAdr);
         long prev = lruPrev(hashEntryAdr);
@@ -36,7 +36,7 @@ final class LRUReplacementStrategy implements ReplacementStrategy
             lruNext(prev, next);
     }
 
-    private void addLink(long hashEntryAdr)
+    private void addLRU(long hashEntryAdr)
     {
         long h = head;
         lruNext(hashEntryAdr, h);
@@ -71,23 +71,23 @@ final class LRUReplacementStrategy implements ReplacementStrategy
 
     public void entryUsed(long hashEntryAdr)
     {
-        removeLink(hashEntryAdr);
-        addLink(hashEntryAdr);
+        removeLRU(hashEntryAdr);
+        addLRU(hashEntryAdr);
     }
 
     public void entryReplaced(long oldHashEntryAdr, long hashEntryAdr)
     {
         if (oldHashEntryAdr != 0L)
-            removeLink(oldHashEntryAdr);
-        addLink(hashEntryAdr);
+            removeLRU(oldHashEntryAdr);
+        addLRU(hashEntryAdr);
     }
 
     public void entryRemoved(long hashEntryAdr)
     {
-        removeLink(hashEntryAdr);
+        removeLRU(hashEntryAdr);
     }
 
-    public long cleanUp(DataMemory dataMemory, long recycleGoal)
+    public long cleanUp(long recycleGoal, ReplacementCallback cb)
     {
         long prev;
         long evicted = 0L;
@@ -98,10 +98,9 @@ final class LRUReplacementStrategy implements ReplacementStrategy
             prev = lruPrev(hashEntryAdr);
 
             long bytes = DataMemory.getEntryBytes(hashEntryAdr);
-            removeLink(hashEntryAdr);
+            removeLRU(hashEntryAdr);
 
-            HashEntries.awaitEntryUnreferenced(hashEntryAdr);
-            dataMemory.free(hashEntryAdr, false);
+            cb.evict(hashEntryAdr);
 
             recycleGoal -= bytes;
 

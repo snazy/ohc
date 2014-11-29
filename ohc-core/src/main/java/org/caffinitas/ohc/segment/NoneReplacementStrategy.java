@@ -32,7 +32,7 @@ public class NoneReplacementStrategy implements ReplacementStrategy
 
     }
 
-    public long cleanUp(DataMemory dataMemory, long recycleGoal)
+    public long cleanUp(long recycleGoal, ReplacementCallback cb)
     {
         return 0;
     }

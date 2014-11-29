@@ -32,14 +32,27 @@ final class OffHeapMap implements Constants
 
     volatile long size;
 
+    private final DataMemory dataMemory;
     private final ReplacementStrategy replacementStrategy;
     private final StampedLock lock;
 
     private volatile Table table;
     private volatile boolean rehashTrigger;
-
-    OffHeapMap(OHCacheBuilder builder, ReplacementStrategy replacementStrategy)
+    private ReplacementCallback replacementCallback = new ReplacementCallback()
     {
+        public void evict(long hashEntryAdr)
+        {
+            long hash = HashEntries.getEntryHash(hashEntryAdr);
+            table.removeLink(hash, hashEntryAdr);
+
+            HashEntries.awaitEntryUnreferenced(hashEntryAdr);
+            dataMemory.free(hashEntryAdr, true);
+        }
+    };
+
+    OffHeapMap(OHCacheBuilder builder, DataMemory dataMemory, ReplacementStrategy replacementStrategy)
+    {
+        this.dataMemory = dataMemory;
         this.replacementStrategy = replacementStrategy;
         lock = new StampedLock();
 
@@ -74,12 +87,11 @@ final class OffHeapMap implements Constants
     long getEntry(long hash, BytesSource keySource)
     {
         long firstHashEntryAdr = table.first(hash);
-        long prevHashEntryAdr = 0L;
         boolean first = true;
         int loops = 0;
         for (long hashEntryAdr = firstHashEntryAdr;
              hashEntryAdr != 0L;
-             prevHashEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first=false)
+             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first=false)
         {
             assertNotEndlessLoop(hash, firstHashEntryAdr, first, hashEntryAdr);
 
@@ -88,8 +100,8 @@ final class OffHeapMap implements Constants
 
             // return existing entry
 
-            table.removeLink(hash, hashEntryAdr, prevHashEntryAdr);
-            table.addLink(hash, hashEntryAdr);
+            table.removeLink(hash, hashEntryAdr);
+            table.addLinkAsHead(hash, hashEntryAdr);
 
             replacementStrategy.entryUsed(hashEntryAdr);
 
@@ -104,13 +116,12 @@ final class OffHeapMap implements Constants
     long replaceEntry(long hash, BytesSource keySource, long newHashEntryAdr)
     {
         long firstHashEntryAdr = table.first(hash);
-        long prevHashEntryAdr = 0L;
         boolean first = true;
         int loops = 0;
         long hashEntryAdr;
         for (hashEntryAdr = firstHashEntryAdr;
              hashEntryAdr != 0L;
-             prevHashEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first=false)
+             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first=false)
         {
             assertNotEndlessLoop(hash, firstHashEntryAdr, first, hashEntryAdr);
 
@@ -119,7 +130,7 @@ final class OffHeapMap implements Constants
 
             // replace existing entry
 
-            table.removeLink(hash, hashEntryAdr, prevHashEntryAdr);
+            table.removeLink(hash, hashEntryAdr);
 
             break;
         }
@@ -129,7 +140,7 @@ final class OffHeapMap implements Constants
         if (hashEntryAdr == 0L)
         size++;
 
-        table.addLink(hash, newHashEntryAdr);
+        table.addLinkAsHead(hash, newHashEntryAdr);
         replacementStrategy.entryReplaced(hashEntryAdr, newHashEntryAdr);
 
         return hashEntryAdr;
@@ -138,12 +149,11 @@ final class OffHeapMap implements Constants
     long removeEntry(long hash, BytesSource keySource)
     {
         long firstHashEntryAdr = table.first(hash);
-        long prevHashEntryAdr = 0L;
         boolean first = true;
         int loops = 0;
         for (long hashEntryAdr = firstHashEntryAdr;
              hashEntryAdr != 0L;
-             prevHashEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first=false)
+             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first=false)
         {
             assertNotEndlessLoop(hash, firstHashEntryAdr, first, hashEntryAdr);
 
@@ -152,7 +162,7 @@ final class OffHeapMap implements Constants
 
             // remove existing entry
 
-            table.removeLink(hash, hashEntryAdr, prevHashEntryAdr);
+            table.removeLink(hash, hashEntryAdr);
 
             replacementStrategy.entryRemoved(hashEntryAdr);
 
@@ -199,9 +209,9 @@ final class OffHeapMap implements Constants
         return rehashTrigger;
     }
 
-    long cleanUp(DataMemory dataMemory, long recycleGoal)
+    long cleanUp(long recycleGoal)
     {
-        return replacementStrategy.cleanUp(dataMemory, recycleGoal);
+        return replacementStrategy.cleanUp(recycleGoal, replacementCallback);
     }
 
     void rehash()
@@ -228,7 +238,7 @@ final class OffHeapMap implements Constants
 
                 HashEntries.setNextEntry(hashEntryAdr, 0L);
                 hash = HashEntries.getEntryHash(hashEntryAdr);
-                newTable.addLink(hash, hashEntryAdr);
+                newTable.addLinkAsHead(hash, hashEntryAdr);
             }
 
         long t = System.currentTimeMillis() - t0;
@@ -278,23 +288,37 @@ final class OffHeapMap implements Constants
             return (int) (hash & hashPartitionMask);
         }
 
-        void removeLink(long hash, long hashEntryAdr, long prevHashEntryAdr)
+        void removeLink(long hash, long hashEntryAdr)
         {
+            long prev = HashEntries.getPreviousEntry(hashEntryAdr);
             long next = HashEntries.getNextEntry(hashEntryAdr);
 
             long head = first(hash);
             if (head == hashEntryAdr)
+            {
+                if (prev != 0L)
+                    throw new IllegalStateException("head must not have a previous entry");
                 first(hash, next);
+            }
 
-            if (prevHashEntryAdr != 0L)
-                HashEntries.setNextEntry(prevHashEntryAdr, next);
+            if (prev != 0L)
+                HashEntries.setNextEntry(prev, next);
+            if (next != 0L)
+                HashEntries.setPreviousEntry(next, prev);
+
+            // just for safety
+            HashEntries.setPreviousEntry(hashEntryAdr, 0L);
+            HashEntries.setNextEntry(hashEntryAdr, 0L);
         }
 
-        void addLink(long hash, long hashEntryAdr)
+        void addLinkAsHead(long hash, long hashEntryAdr)
         {
             long head = first(hash);
             HashEntries.setNextEntry(hashEntryAdr, head);
+            HashEntries.setPreviousEntry(hashEntryAdr, 0L); // just for safety
             first(hash, hashEntryAdr);
+            if (head != 0L)
+                HashEntries.setPreviousEntry(head, hashEntryAdr);
         }
 
         int size()

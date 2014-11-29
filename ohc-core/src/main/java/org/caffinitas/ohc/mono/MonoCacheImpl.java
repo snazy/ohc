@@ -288,9 +288,9 @@ public final class MonoCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
-    int[] calcListLengths(boolean longestOnly)
+    long[] calcListLengths(boolean longestOnly)
     {
-        int[] ll = new int[longestOnly ? 1 : getHashTableSize()];
+        long[] ll = new long[longestOnly ? 1 : getHashTableSize()];
         for (int partNo = 0; partNo < ll.length; partNo++)
         {
             long lock = hashPartitions.lockPartition(partNo, false);

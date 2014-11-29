@@ -78,6 +78,7 @@ final class HashEntries implements Constants
     {
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_HASH, hash);
         setNextEntry(hashEntryAdr, 0L);
+        setPreviousEntry(hashEntryAdr, 0L);
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_KEY_LENGTH, keyLen);
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_VALUE_LENGTH, valueLen);
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_REFCOUNT, 0L);
@@ -192,6 +193,19 @@ final class HashEntries implements Constants
             throw new IllegalArgumentException();
         if (hashEntryAdr != 0L)
             Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_NEXT, nextAdr);
+    }
+
+    static long getPreviousEntry(long hashEntryAdr)
+    {
+        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_PREVIOUS) : 0L;
+    }
+
+    static void setPreviousEntry(long hashEntryAdr, long prevAdr)
+    {
+        if (hashEntryAdr == prevAdr)
+            throw new IllegalArgumentException();
+        if (hashEntryAdr != 0L)
+            Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_PREVIOUS, prevAdr);
     }
 
     static long getHashKeyLen(long hashEntryAdr)

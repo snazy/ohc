@@ -51,7 +51,7 @@ final class Uns
     static final Unsafe unsafe;
     private static final IAllocator allocator;
 
-    private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = false;
+    private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty("DEBUG_OFF_HEAP_MEMORY_ACCESS", "true"));
 
     //
     // #ifdef __DEBUG_OFF_HEAP_MEMORY_ACCESS
@@ -66,7 +66,7 @@ final class Uns
             if (allocatedLen == null)
             {
                 Throwable freedAt = ohFreeDebug.get(address);
-                throw new IllegalStateException("Free of unallocated region", freedAt);
+                throw new IllegalStateException("Free of unallocated region " + address, freedAt);
             }
             ohFreeDebug.put(address, new Exception("free backtrace"));
         }
@@ -88,7 +88,7 @@ final class Uns
             if (allocatedLen == null)
             {
                 Throwable freedAt = ohFreeDebug.get(address);
-                throw new IllegalStateException("Access to unallocated region", freedAt);
+                throw new IllegalStateException("Access to unallocated region " + address, freedAt);
             }
             if (offset < 0L)
                 throw new IllegalArgumentException("Negative offset");

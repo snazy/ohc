@@ -21,6 +21,15 @@ public final class Util
     {
     }
 
+    public static long maxOf(long[] arr)
+    {
+        long r = 0;
+        for (long l : arr)
+            if (l > r)
+                r = l;
+        return r;
+    }
+
     public static int maxOf(int[] arr)
     {
         int r = 0;
@@ -52,6 +61,14 @@ public final class Util
     {
         double r = 0d;
         for (int l : arr)
+            r += l;
+        return r / arr.length;
+    }
+
+    public static double avgOf(long[] arr)
+    {
+        double r = 0d;
+        for (long l : arr)
             r += l;
         return r / arr.length;
     }

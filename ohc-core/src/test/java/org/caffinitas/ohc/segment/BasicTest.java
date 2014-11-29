@@ -22,6 +22,7 @@ import org.caffinitas.ohc.api.BytesSource;
 import org.caffinitas.ohc.api.CacheSerializers;
 import org.caffinitas.ohc.api.OHCache;
 import org.caffinitas.ohc.api.OHCacheBuilder;
+import org.caffinitas.ohc.api.OHCacheStats;
 import org.caffinitas.ohc.api.OutOfOffHeapMemoryException;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -98,20 +99,30 @@ public class BasicTest extends AbstractTest
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
                                                            .keySerializer(CacheSerializers.stringSerializer)
                                                            .valueSerializer(CacheSerializers.stringSerializer)
+                                                           .statisticsEnabled(true)
                                                            .build())
         {
             for (int i = 0; i < 100000; i++)
                 cache.put("key-" + i, "" + i);
+
+            OHCacheStats stats = cache.extendedStats();
+            Assert.assertEquals(stats.getPutAddCount(), 100000);
 
             Assert.assertEquals(cache.size(), 100000);
 
             for (int i = 0; i < 100000; i++)
                 Assert.assertEquals(cache.getIfPresent("key-" + i), "" + i);
 
+            stats = cache.extendedStats();
+            Assert.assertEquals(stats.getCacheStats().hitCount(), 100000);
+
             for (int i = 0; i < 100000; i++)
                 cache.invalidate("key-" + i);
 
             Assert.assertEquals(cache.size(), 0);
+
+            stats = cache.extendedStats();
+            Assert.assertEquals(stats.getUnlinkCount(), 100000);
         }
     }
 
@@ -151,27 +162,27 @@ public class BasicTest extends AbstractTest
     @Test(dependsOnMethods = "serialize100k")
     public void cleanUpTest() throws IOException, InterruptedException
     {
-        char[] c950 = new char[950];
-        for (int i = 0; i < c950.length; i++)
-            c950[i] = (char) ('A' + i % 26);
-        String v = new String(c950);
+        char[] c940 = new char[940];
+        for (int i = 0; i < c940.length; i++)
+            c940[i] = (char) ('A' + i % 26);
+        String v = new String(c940);
 
         // Build cache with 64MB capacity and trigger on less than 8 MB free capacity
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
                                                            .keySerializer(CacheSerializers.stringSerializer)
                                                            .valueSerializer(CacheSerializers.stringSerializer)
-                                                           .capacity(64 * ONE_MB)
+                                                           .capacity(32 * ONE_MB)
                                                            .cleanUpTriggerMinFree(.125d)
                                                            .build())
         {
             int i;
-            for (i = 0; cache.freeCapacity() > 8 * ONE_MB; i++)
+            for (i = 0; cache.freeCapacity() > 4 * ONE_MB + 1024; i++)
                 cache.put(Integer.toString(i), v);
             // no eviction yet !!
 
             Thread.sleep(1500L);
 
-            Assert.assertEquals(cache.extendedStats().getCleanupCount(), 0L, "oops - cleanup triggered - check unit test!");
+            Assert.assertEquals(cache.extendedStats().getCleanupCount(), 0L, "oops - cleanup triggered - fix the unit test!");
 
             // this should trigger a cleanup (eviction/replacement)
             cache.put(Integer.toString(i), v);

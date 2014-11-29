@@ -28,16 +28,18 @@ public interface Constants
     static final long ENTRY_OFF_DATA_LENGTH = 16;
     // offset of serialized hash value
     static final long ENTRY_OFF_HASH = 24;
-    // offset of next hash entry in LRU list for this hash partition
+    // offset of next hash entry in a hash partition
     static final long ENTRY_OFF_NEXT = 32;
+    // offset of previous hash entry in a hash partition
+    static final long ENTRY_OFF_PREVIOUS = 40;
     // offset of serialized hash key length
-    static final long ENTRY_OFF_KEY_LENGTH = 40;
+    static final long ENTRY_OFF_KEY_LENGTH = 48;
     // offset of serialized value length
-    static final long ENTRY_OFF_VALUE_LENGTH = 48;
+    static final long ENTRY_OFF_VALUE_LENGTH = 56;
     // offset of entry lock
-    static final long ENTRY_OFF_REFCOUNT = 56;
+    static final long ENTRY_OFF_REFCOUNT = 64;
     // offset of data in first block
-    static final long ENTRY_OFF_DATA = 64;
+    static final long ENTRY_OFF_DATA = 72;
 
 // Hash partitions
 
