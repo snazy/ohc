@@ -13,32 +13,15 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc;
+package org.caffinitas.ohc.api;
 
-import org.caffinitas.ohc.api.BytesSource;
-
-public class ThirteenSource extends BytesSource.AbstractSource
+public enum PutResult
 {
+    ADD,
 
-    private final int len;
+    REPLACE,
 
-    public ThirteenSource(int len)
-    {
-        this.len = len;
-    }
+    NO_MORE_FREE_CAPACITY,
 
-    public int size()
-    {
-        return len;
-    }
-
-    public byte getByte(int pos)
-    {
-        return (byte) (pos % 13);
-    }
-
-    public long hash()
-    {
-        return len;
-    }
+    ALLOCATION_FAILED
 }

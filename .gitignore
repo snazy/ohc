@@ -1,4 +1,7 @@
 .idea
 out
 target
+
 .DS_Store
+
+hs_err_*.log

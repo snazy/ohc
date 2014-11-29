@@ -21,35 +21,12 @@ Java7 VM that support 64bit field CAS and ``sun.misc.Unsafe`` (Oracle JVMs on x6
 Architecture
 ------------
 
-OHC uses a simple hash table as its primary data structure. Each hash partition basically consists of a pointer
-to one hash entry - each hash entry has a pointer to its successor and predecessor
-building a linked-list.
+OHC uses a multiple segments. Each segment contains its own independent off-heap hash map. Synchronization occurs
+on critical sections that access a off-heap hash map. Necessary serialization and deserialization is performed
+outside of these critical sections.
 
-The hash table will be automatically resized if the number of linked-list-iterations is too high (configurable).
-
-CAS based stamped locks are used on each hash partition and each hash entry. Hash entry locks are
-required because OHC tries to release each lock on a whole hash partition as soon as possible.
-
-Put operations do not succeed if there is not enough free space to serialize the data. Reason is that OHC will
-not block any operation longer than really necessary. This should be completely fine for caches since it is better
-to let a cache-put not succeed than to block the calling application. If there's demand for a *put guarantee*
-it can be implemented (as long as there's enough free capacity).
-
-The plain ``OHCache`` interface provides low level get/put/remove operations that take a ``BytesSource`` or a
-``BytesSink``. Reason for this is that you usually do not need to allocate more objects in the calling code -
-with the cost of a bit more verbose coding. For convenience ``OHCache`` extends the Guava ``Cache`` interface
-that takes Java objects as keys and values - you have to provide appropriate key and value serializers then.
-Note that this approach requires to serialize the key to a byte array for each get/put/remove operation.
-
-OHC provides a pure LRU based eviction mechanism. But be aware that calculation of entries to evict is based on averages
-and does its job not very accurately to increase overall performance - it's a trade-off between performance
-and accuracy.
-
-Note on the ``hotN`` function: The implementation will take N divided by number of hash partitions keys and usually
-return much more results than expected (the results are not ordered - the results just represent some least
-recently accessed entries).
-
-Memory allocation for hash entries is either performed using JEMalloc (preferred, if available) or ``Unsafe``.
+Concurrent eviction is performed using either LRU (double linked list), timestamp or counter (2Q).
+Note that the last two replacement strategies are not yet implemented.
 
 Configuration
 -------------
@@ -96,6 +73,39 @@ has some "escape from JVM context" cost.
 But off heap memory is great when you have to deal with a huge amount of several/many GB of cache memory since
 that dos not put any pressure on the Java garbage collector. Let the Java GC do its job for the application where
 this library does its job for the cached data.
+
+Alternate implementation "mono"
+-------------------------------
+
+OHC uses a simple hash table as its primary data structure. Each hash partition basically consists of a pointer
+to one hash entry - each hash entry has a pointer to its successor and predecessor
+building a linked-list.
+
+The hash table will be automatically resized if the number of linked-list-iterations is too high (configurable).
+
+CAS based stamped locks are used on each hash partition and each hash entry. Hash entry locks are
+required because OHC tries to release each lock on a whole hash partition as soon as possible.
+
+Put operations do not succeed if there is not enough free space to serialize the data. Reason is that OHC will
+not block any operation longer than really necessary. This should be completely fine for caches since it is better
+to let a cache-put not succeed than to block the calling application. If there's demand for a *put guarantee*
+it can be implemented (as long as there's enough free capacity).
+
+The plain ``OHCache`` interface provides low level get/put/remove operations that take a ``BytesSource`` or a
+``BytesSink``. Reason for this is that you usually do not need to allocate more objects in the calling code -
+with the cost of a bit more verbose coding. For convenience ``OHCache`` extends the Guava ``Cache`` interface
+that takes Java objects as keys and values - you have to provide appropriate key and value serializers then.
+Note that this approach requires to serialize the key to a byte array for each get/put/remove operation.
+
+OHC provides a pure LRU based eviction mechanism. But be aware that calculation of entries to evict is based on averages
+and does its job not very accurately to increase overall performance - it's a trade-off between performance
+and accuracy.
+
+Note on the ``hotN`` function: The implementation will take N divided by number of hash partitions keys and usually
+return much more results than expected (the results are not ordered - the results just represent some least
+recently accessed entries).
+
+Memory allocation for hash entries is either performed using JEMalloc (preferred, if available) or ``Unsafe``.
 
 License
 -------

@@ -13,32 +13,27 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc;
+package org.caffinitas.ohc.segment;
 
-import org.caffinitas.ohc.api.BytesSource;
-
-public class ThirteenSource extends BytesSource.AbstractSource
+final class TimestampReplacementStrategy implements ReplacementStrategy
 {
-
-    private final int len;
-
-    public ThirteenSource(int len)
+    public void entryUsed(long hashEntryAdr)
     {
-        this.len = len;
+        HashEntries.setEntryReplacement0(hashEntryAdr, System.currentTimeMillis());
     }
 
-    public int size()
+    public void entryReplaced(long oldHashEntryAdr, long hashEntryAdr)
     {
-        return len;
+        HashEntries.setEntryReplacement0(hashEntryAdr, System.currentTimeMillis());
     }
 
-    public byte getByte(int pos)
+    public void entryRemoved(long hashEntryAdr)
     {
-        return (byte) (pos % 13);
+        HashEntries.setEntryReplacement0(hashEntryAdr, 0L);
     }
 
-    public long hash()
+    public long cleanUp(DataMemory dataMemory, long recycleGoal)
     {
-        return len;
+        throw new UnsupportedOperationException();
     }
 }

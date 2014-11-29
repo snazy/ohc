@@ -46,8 +46,8 @@ import org.apache.commons.io.FileUtils;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Timer;
 import com.yammer.metrics.stats.Snapshot;
-import org.caffinitas.ohc.OHCache;
-import org.caffinitas.ohc.OHCacheBuilder;
+import org.caffinitas.ohc.api.OHCache;
+import org.caffinitas.ohc.api.OHCacheBuilder;
 import org.caffinitas.ohc.benchmark.distribution.Distribution;
 import org.caffinitas.ohc.benchmark.distribution.FasterRandom;
 import org.caffinitas.ohc.benchmark.distribution.OptionDistribution;
@@ -150,6 +150,7 @@ public class BenchmarkOHC
                                   .valueSerializer(BenchmarkUtils.serializer)
                                   .hashTableSize(hashTableSize)
                                   .capacity(size)
+                                  .monoExperimental(false)
                                   .statisticsEnabled(true)
                                   .build();
 
@@ -219,7 +220,7 @@ public class BenchmarkOHC
         FasterRandom rnd = new FasterRandom();
         rnd.setSeed(new Random().nextLong());
 
-        printMessage("Running for %d seconds...", duration);
+        printMessage("%s: Running for %d seconds...", new Date(), duration);
 
         long writeTrigger = (long) (readWriteRatio * Long.MAX_VALUE);
 
@@ -257,7 +258,7 @@ public class BenchmarkOHC
             }
         }
 
-        printMessage("Time over ... waiting for %d tasks to complete...", exec.getActiveCount());
+        printMessage("%s: Time over ... waiting for %d tasks to complete...", new Date(), exec.getActiveCount());
         while (exec.getActiveCount() > 0)
             Thread.sleep(10);
         printStats("Final");
