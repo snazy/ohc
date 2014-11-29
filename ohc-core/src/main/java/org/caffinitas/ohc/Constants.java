@@ -46,7 +46,8 @@ public interface Constants
     // offset of CAS style lock field
     static final long PART_OFF_LOCK = 8L;
     // total memory required for a hash-partition
-    // TODO it makes sense to change PARTITION_ENTRY_LEN to 64 on big systems but may stay at 16 for systems with just one CPU package
-    static final int PARTITION_ENTRY_LEN = 16;
-
+    // it makes sense to use PARTITION_ENTRY_LEN of 64 on big systems (CPU cache line size)
+    static final int PARTITION_ENTRY_LEN = 64;
+    // maximum hash table size
+    static final int MAX_TABLE_SIZE = 1 << 27;
 }

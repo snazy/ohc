@@ -48,83 +48,59 @@ final class HashEntryAccess implements Constants
         long keyLen = keySource.size();
         if (valueSource != null)
             valueLen = valueSource.size();
-        if (valueLen < 0)
+        if (keyLen < 0 || valueLen < 0)
             throw new IllegalArgumentException();
 
-        long total = roundUp(keyLen) + valueLen;
-
         // allocate memory for whole hash-entry block-chain
-        long hashEntryAdr = dataMemory.allocate(total);
+        long valueOff = roundUp(keyLen);
+        long hashEntryAdr = dataMemory.allocate(valueOff + valueLen);
         if (hashEntryAdr == 0L)
             return 0L;
 
         // initialize hash entry fields
         initHashEntry(hash, keyLen, valueLen, hashEntryAdr);
 
-        // write key + value to data
-        long blkOff = ENTRY_OFF_DATA;
+        // serialize key
+        sourceToOffHeap(keySource, hashEntryAdr, ENTRY_OFF_DATA);
 
-        // write key to data
-        long len = keySource.size();
-        if (keySource.hasArray())
+        if (valueSource != null)
+            // serialize value
+            sourceToOffHeap(valueSource, hashEntryAdr, valueOff);
+
+        return hashEntryAdr;
+    }
+
+    private static void sourceToOffHeap(BytesSource source, long hashEntryAdr, long blkOff)
+    {
+        long len = source.size();
+        if (source.hasArray())
         {
             // keySource provides array access (can use Unsafe.copyMemory)
-            byte[] arr = keySource.array();
-            int arrOff = keySource.arrayOffset();
+            byte[] arr = source.array();
+            int arrOff = source.arrayOffset();
             Uns.copyMemory(arr, arrOff, hashEntryAdr + blkOff, len);
-            blkOff += len;
         }
         else
         {
             // keySource has no array
             for (int p = 0; p < len; )
             {
-                byte b = keySource.getByte(p++);
+                byte b = source.getByte(p++);
                 Uns.putByte(hashEntryAdr + blkOff++, b);
             }
         }
-
-        // round up to next 8 byte boundary (8 byte copy operations on 8 byte boundaries are faster)
-        blkOff = roundUp(blkOff);
-
-        if (valueSource != null)
-        {
-            // write value to data
-            //
-            // Although the following code is similar to the one used for the key above, it would require us to
-            // allocate objects to be able to use the same code for both - so...
-            //
-            len = valueSource.size();
-            if (valueSource.hasArray())
-            {
-                // valueSource provides array access (can use Unsafe.copyMemory)
-                byte[] arr = valueSource.array();
-                int arrOff = valueSource.arrayOffset();
-                Uns.copyMemory(arr, arrOff, hashEntryAdr + blkOff, len);
-            }
-            else
-            {
-                // valueSource has no array
-                for (int p = 0; p < len; p++)
-                {
-                    byte b = valueSource.getByte(p);
-                    Uns.putByte(hashEntryAdr + blkOff++, b);
-                }
-            }
-        }
-
-        return hashEntryAdr;
     }
 
-    void initHashEntry(int hash, long keyLen, long valueLen, long hashEntryAdr)
+    private static void initHashEntry(int hash, long keyLen, long valueLen, long hashEntryAdr)
     {
         touchEntry(hashEntryAdr);
+        // (long that contains the length of the malloc'd block set in DataMemory.allocate)
         Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_HASH, hash);
         setPreviousEntry(hashEntryAdr, 0L);
         setNextEntry(hashEntryAdr, 0L);
-        Uns.initStamped(hashEntryAdr + ENTRY_OFF_LOCK, false);
         Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_KEY_LENGTH, keyLen);
         Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_VALUE_LENGTH, valueLen);
+        Uns.initStamped(hashEntryAdr + ENTRY_OFF_LOCK, false);
     }
 
     long findHashEntry(int hash, BytesSource keySource)
@@ -169,44 +145,30 @@ final class HashEntryAccess implements Constants
                         loops);
     }
 
-    private boolean compareKey(long hashEntryAdr, BytesSource keySource, long serKeyLen)
+    private static boolean compareKey(long hashEntryAdr, BytesSource keySource, long serKeyLen)
     {
         if (hashEntryAdr == 0L)
             return false;
 
         long blkOff = ENTRY_OFF_DATA;
+        int p = 0;
 
         // array optimized version
         if (keySource.hasArray())
         {
             byte[] arr = keySource.array();
             int arrOff = keySource.arrayOffset();
-            for (int p = 0; p < serKeyLen; )
+            for (; p <= serKeyLen - 8; p += 8, blkOff += 8)
             {
-                if (serKeyLen - p >= 8)
-                {
-                    long lSer = Uns.getLong(hashEntryAdr + blkOff);
-                    long lKey = Uns.getLongFromByteArray(arr, arrOff + p);
-                    if (lSer != lKey)
-                        return false;
-                    blkOff += 8;
-                    p += 8;
-                }
-                else
-                {
-                    byte bSer = Uns.getByte(hashEntryAdr + blkOff++);
-                    byte bKey = keySource.getByte(p++);
-
-                    if (bSer != bKey)
-                        return false;
-                }
+                long lSer = Uns.getLong(hashEntryAdr + blkOff);
+                long lKey = Uns.getLongFromByteArray(arr, arrOff + p);
+                if (lSer != lKey)
+                    return false;
             }
-
-            return true;
         }
 
         // last-resort byte-by-byte compare
-        for (int p = 0; p < serKeyLen; p++)
+        for (; p < serKeyLen; p++)
         {
             byte bSer = Uns.getByte(hashEntryAdr + blkOff++);
             byte bKey = keySource.getByte(p);
@@ -218,7 +180,7 @@ final class HashEntryAccess implements Constants
         return true;
     }
 
-    void writeValueToSink(long hashEntryAdr, BytesSink valueSink)
+    static void writeValueToSink(long hashEntryAdr, BytesSink valueSink)
     {
         if (hashEntryAdr == 0L)
             return;
@@ -266,7 +228,7 @@ final class HashEntryAccess implements Constants
         return val;
     }
 
-    void addAsPartitionHead(int hash, long hashEntryAdr)
+    void addEntryToPartition(int hash, long hashEntryAdr)
     {
         if (hashEntryAdr == 0L)
             return;
@@ -330,7 +292,7 @@ final class HashEntryAccess implements Constants
         return partHead;
     }
 
-    long lockEntryRead(long hashEntryAdr)
+    static long lockEntryRead(long hashEntryAdr)
     {
         if (hashEntryAdr == 0L)
             return 0L;
@@ -341,7 +303,7 @@ final class HashEntryAccess implements Constants
         return stamp;
     }
 
-    long lockEntryWrite(long hashEntryAdr)
+    static long lockEntryWrite(long hashEntryAdr)
     {
         if (hashEntryAdr == 0L)
             return 0L;
@@ -352,34 +314,34 @@ final class HashEntryAccess implements Constants
         return stamp;
     }
 
-    void unlockEntryRead(long hashEntryAdr, long stamp)
+    static void unlockEntryRead(long hashEntryAdr, long stamp)
     {
         if (hashEntryAdr != 0L)
             Uns.unlockStampedRead(hashEntryAdr + ENTRY_OFF_LOCK, stamp);
     }
 
-    long getEntryTimestamp(long hashEntryAdr)
+    static long getEntryTimestamp(long hashEntryAdr)
     {
         return hashEntryAdr != 0L ? Uns.getLong(hashEntryAdr + ENTRY_OFF_TIMESTAMP) : 0L;
     }
 
-    void touchEntry(long hashEntryAdr)
+    static void touchEntry(long hashEntryAdr)
     {
         if (hashEntryAdr != 0L)
             Uns.putLong(hashEntryAdr + ENTRY_OFF_TIMESTAMP, System.currentTimeMillis());
     }
 
-    int getEntryHash(long hashEntryAdr)
+    static int getEntryHash(long hashEntryAdr)
     {
         return (int) Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_HASH);
     }
 
-    long getNextEntry(long hashEntryAdr)
+    static long getNextEntry(long hashEntryAdr)
     {
         return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_NEXT) : 0L;
     }
 
-    void setNextEntry(long hashEntryAdr, long nextAdr)
+    static void setNextEntry(long hashEntryAdr, long nextAdr)
     {
         if (hashEntryAdr == nextAdr)
             throw new IllegalArgumentException();
@@ -387,12 +349,12 @@ final class HashEntryAccess implements Constants
             Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_NEXT, nextAdr);
     }
 
-    long getPreviousEntry(long hashEntryAdr)
+    static long getPreviousEntry(long hashEntryAdr)
     {
         return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_PREVIOUS) : 0L;
     }
 
-    void setPreviousEntry(long hashEntryAdr, long previousAdr)
+    static void setPreviousEntry(long hashEntryAdr, long previousAdr)
     {
         if (hashEntryAdr == previousAdr)
             throw new IllegalArgumentException();
@@ -400,27 +362,27 @@ final class HashEntryAccess implements Constants
             Uns.putLongVolatile(hashEntryAdr + ENTRY_OFF_PREVIOUS, previousAdr);
     }
 
-    long getHashKeyLen(long hashEntryAdr)
+    static long getHashKeyLen(long hashEntryAdr)
     {
         return Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_KEY_LENGTH);
     }
 
-    long getValueLen(long hashEntryAdr)
+    static long getValueLen(long hashEntryAdr)
     {
         return Uns.getLongVolatile(hashEntryAdr + ENTRY_OFF_VALUE_LENGTH);
     }
 
-    DataInput readKeyFrom(long hashEntryAdr)
+    static DataInput readKeyFrom(long hashEntryAdr)
     {
         return newHashEntryInput(hashEntryAdr, false);
     }
 
-    DataInput readValueFrom(long hashEntryAdr)
+    static DataInput readValueFrom(long hashEntryAdr)
     {
         return newHashEntryInput(hashEntryAdr, true);
     }
 
-    <V> void valueToHashEntry(long hashEntryAdr, CacheSerializer<V> valueSerializer, V v, long keyLen, long valueLen) throws IOException
+    static <V> void valueToHashEntry(long hashEntryAdr, CacheSerializer<V> valueSerializer, V v, long keyLen, long valueLen) throws IOException
     {
         HashEntryOutput entryOutput = new HashEntryOutput(hashEntryAdr, keyLen, valueLen);
         valueSerializer.serialize(v, entryOutput);
@@ -436,6 +398,8 @@ final class HashEntryAccess implements Constants
         {
             if (hashEntryAdr == 0L)
                 throw new NullPointerException();
+            if (keyLen < 0L || valueLen < 0L)
+                throw new IllegalArgumentException();
 
             if (valueLen > Integer.MAX_VALUE)
                 throw new IllegalStateException("integer overflow");
@@ -453,7 +417,7 @@ final class HashEntryAccess implements Constants
 
         private long avail()
         {
-            return blkEnd-blkOff;
+            return blkEnd - blkOff;
         }
 
         public void write(byte[] b, int off, int len) throws IOException
@@ -525,7 +489,7 @@ final class HashEntryAccess implements Constants
 //        }
     }
 
-    private HashEntryInput newHashEntryInput(long hashEntryAdr, boolean value)
+    private static HashEntryInput newHashEntryInput(long hashEntryAdr, boolean value)
     {
         return new HashEntryInput(hashEntryAdr, value, getHashKeyLen(hashEntryAdr), getValueLen(hashEntryAdr));
     }
@@ -559,7 +523,7 @@ final class HashEntryAccess implements Constants
 
         private long avail()
         {
-            return blkEnd-blkOff;
+            return blkEnd - blkOff;
         }
 
         private void assertAvail(int req) throws IOException
@@ -571,7 +535,7 @@ final class HashEntryAccess implements Constants
         public int available()
         {
             long av = avail();
-            return av > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int)av;
+            return av > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) av;
         }
 
         public void readFully(byte[] b, int off, int len) throws IOException

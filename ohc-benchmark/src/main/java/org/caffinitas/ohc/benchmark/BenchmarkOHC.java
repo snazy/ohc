@@ -158,7 +158,7 @@ public class BenchmarkOHC
                          cache.getHashTableSize(),
                          cache.getCapacity());
 
-            LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>(50000);
+            LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>(5000);
             ThreadPoolExecutor exec = new ThreadPoolExecutor(threads, threads,
                                                              0L, TimeUnit.MILLISECONDS,
                                                              queue);
@@ -185,7 +185,9 @@ public class BenchmarkOHC
             // benchmark
 
             printMessage("Start benchmark...");
-            runFor(exec, duration, readWriteRatio, readKeyDist, writeKeyDist, valueSizeDist);
+            runFor(exec, duration,
+                   readWriteRatio,
+                   readKeyDist, writeKeyDist, valueSizeDist);
             printMessage("");
             logMemoryUse(cache);
 

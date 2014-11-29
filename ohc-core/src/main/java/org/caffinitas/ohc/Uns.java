@@ -32,8 +32,6 @@ package org.caffinitas.ohc;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
@@ -47,20 +45,6 @@ final class Uns
 
     static final Unsafe unsafe;
     private static final IAllocator allocator;
-
-    static class Free
-    {
-        final long address;
-        final long time;
-
-        Free(long address, long time)
-        {
-            this.address = address;
-            this.time = time;
-        }
-    }
-
-    private static Queue<Free> freeQueue = new ConcurrentLinkedQueue<>();
 
     static
     {
@@ -79,11 +63,9 @@ final class Uns
             }
             catch (Throwable t)
             {
-                LOGGER.warn("jemalloc native library not found (" + t + ")");
+                LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
                 alloc = new NativeAllocator();
             }
-//            allocator = new DebugAllocator(alloc);
-//            allocator = new DebugAllocator(new NativeAllocator());
             allocator = alloc;
         }
         catch (Exception e)
@@ -295,45 +277,22 @@ final class Uns
         allocator.free(address);
     }
 
-    /**
-     * Free the given address ("old" hash partition table) later to allow concurrent access to complete "normally"
-     * since access to the hash table itself is not not locked.
-     * <p/>
-     * Although the address block should not be accessed, a rare condition (under very heavy load
-     * with "concurrent" Full-GC might raise such a situation during or shortly after a rehash.
-     */
-    static void freeLater(long address)
+    static void processOutstandingFree()
     {
-        freeQueue.add(new Free(address, System.currentTimeMillis() + 60000L));
-    }
+        // This is basically a locked copy of the array containing the addresses to free()
+        asyncFreeIndex.set(asyncFree.length);
+        long[] lst = asyncFree.clone();
+        Arrays.fill(asyncFree, 0L);
+        asyncFreeIndex.set(0);
 
-    static void processOutstandingFree(boolean now)
-    {
-        while (true)
+        for (int i = 0; i < lst.length; i++)
         {
-            // This is basically a locked copy of the array containing the addresses to free()
-            asyncFreeIndex.set(asyncFree.length);
-            long[] lst = asyncFree.clone();
-            Arrays.fill(asyncFree, 0L);
-            asyncFreeIndex.set(0);
-
-            for (int i = 0; i < lst.length; i++)
+            long adr = asyncFree[i];
+            if (adr != 0L)
             {
-                long adr = asyncFree[i];
-                if (adr != 0L)
-                {
-                    free(adr);
-                    asyncFree[i] = 0L;
-                }
+                free(adr);
+                asyncFree[i] = 0L;
             }
-
-            Free f = freeQueue.peek();
-            if (f == null)
-                break;
-            if (!now && f.time > System.currentTimeMillis())
-                break;
-            freeQueue.remove(f);
-            free(f.address);
         }
     }
 

@@ -65,7 +65,7 @@ Generally you should work with a large hash table. The larger the hash table, th
 hash partition - that means less linked-link walks and increased performance.
 
 The total amount of required off heap memory is the *total capacity* plus *hash table*. Each hash partition (currently)
-requires 16 bytes - so the formula is ``capacity + hash_table_size * 16``.
+requires 16 bytes but 64 byte alignment is used (CPU cache line size) - so the formula is ``capacity + hash_table_size * 64``.
 
 Important note on hash codes
 ----------------------------

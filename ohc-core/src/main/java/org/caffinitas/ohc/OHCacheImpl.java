@@ -58,7 +58,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     }
 
     public static final int MIN_HASH_TABLE_SIZE = 32;
-    private static final int MAXIMUM_INT = 1 << 30;
     public static final int ONE_GIGABYTE = 1024 * 1024 * 1024;
 
     private final long capacity;
@@ -178,7 +177,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
                         try
                         {
-                            Uns.processOutstandingFree(false);
+                            Uns.processOutstandingFree();
 
                             if (signals.cleanupTrigger.compareAndSet(true, false))
                                 cleanUp();
@@ -207,8 +206,8 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     static int roundUpToPowerOf2(int number)
     {
-        return number >= MAXIMUM_INT
-               ? MAXIMUM_INT
+        return number >= Constants.MAX_TABLE_SIZE
+               ? Constants.MAX_TABLE_SIZE
                : (number > 1) ? Integer.highestOneBit((number - 1) << 1) : 1;
     }
 
@@ -242,7 +241,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     Thread.currentThread().interrupt();
                 }
 
-                Uns.processOutstandingFree(true);
+                Uns.processOutstandingFree();
             }
         }
         finally
@@ -276,9 +275,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             long cnt = 0;
             for (long hashEntryAdr = partHead; hashEntryAdr != 0L; hashEntryAdr = next, cnt++)
             {
-                next = hashEntryAccess.getNextEntry(hashEntryAdr);
+                next = HashEntryAccess.getNextEntry(hashEntryAdr);
                 // need to lock the entry since another thread might still read from it
-                hashEntryAccess.lockEntryWrite(hashEntryAdr);
+                HashEntryAccess.lockEntryWrite(hashEntryAdr);
                 dataMemory.free(hashEntryAdr, false);
             }
             unlinkCount.add(cnt);
@@ -295,7 +294,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             try
             {
                 int l = 0;
-                for (long hashEntryAdr = hashPartitions.getPartitionHead(partNo); hashEntryAdr != 0L; hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr))
+                for (long hashEntryAdr = hashPartitions.getPartitionHead(partNo); hashEntryAdr != 0L; hashEntryAdr = HashEntryAccess.getNextEntry(hashEntryAdr))
                     l++;
                 if (longestOnly)
                 {
@@ -398,7 +397,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         maybeTriggerCleanup();
 
-        // find + lock hash partition
+        // lock hash partition
         long lock = hashPartitions.lockPartition(hash, true);
         try
         {
@@ -414,7 +413,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
 
             // add new entry
-            hashEntryAccess.addAsPartitionHead(hash, newHashEntryAdr);
+            hashEntryAccess.addEntryToPartition(hash, newHashEntryAdr);
         }
         finally
         {
@@ -435,11 +434,11 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             // We have to lock the old entry before we can actually free the allocated blocks.
             // There's no need for a corresponding unlock because we use CAS on a field for locking.
-            hashEntryAccess.lockEntryWrite(oldHashEntryAdr);
+            HashEntryAccess.lockEntryWrite(oldHashEntryAdr);
 
             // Write old value (if wanted).
             if (oldValueSink != null)
-                hashEntryAccess.writeValueToSink(oldHashEntryAdr, oldValueSink);
+                HashEntryAccess.writeValueToSink(oldHashEntryAdr, oldValueSink);
         }
         finally
         {
@@ -478,7 +477,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
 
                 // to keep the hash-partition lock short, lock the entry here
-                entryLock = hashEntryAccess.lockEntryRead(hashEntryAdr);
+                entryLock = HashEntryAccess.lockEntryRead(hashEntryAdr);
             }
         }
         finally
@@ -496,13 +495,13 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         // Write the value to the caller and unlock the entry.
         try
         {
-            hashEntryAccess.touchEntry(hashEntryAdr);
+            HashEntryAccess.touchEntry(hashEntryAdr);
 
-            hashEntryAccess.writeValueToSink(hashEntryAdr, valueSink);
+            HashEntryAccess.writeValueToSink(hashEntryAdr, valueSink);
         }
         finally
         {
-            hashEntryAccess.unlockEntryRead(hashEntryAdr, entryLock);
+            HashEntryAccess.unlockEntryRead(hashEntryAdr, entryLock);
         }
 
         return true;
@@ -533,7 +532,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
             // We have to lock the old entry before we can actually free the allocated blocks.
             // There's no need for a corresponding unlock because we use CAS on a field for locking.
-            hashEntryAccess.lockEntryWrite(hashEntryAdr);
+            HashEntryAccess.lockEntryWrite(hashEntryAdr);
         }
         finally
         {
@@ -577,7 +576,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             if (hashEntryAdr != 0L)
             {
                 // to keep the hash-partition lock short, lock the entry here
-                entryLock = hashEntryAccess.lockEntryRead(hashEntryAdr);
+                entryLock = HashEntryAccess.lockEntryRead(hashEntryAdr);
             }
         }
         finally
@@ -592,11 +591,11 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (hashEntryAdr == 0L)
             return null;
 
-        hashEntryAccess.touchEntry(hashEntryAdr);
+        HashEntryAccess.touchEntry(hashEntryAdr);
 
         try
         {
-            return valueSerializer.deserialize(hashEntryAccess.readValueFrom(hashEntryAdr));
+            return valueSerializer.deserialize(HashEntryAccess.readValueFrom(hashEntryAdr));
         }
         catch (IOException e)
         {
@@ -604,7 +603,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            hashEntryAccess.unlockEntryRead(hashEntryAdr, entryLock);
+            HashEntryAccess.unlockEntryRead(hashEntryAdr, entryLock);
         }
     }
 
@@ -654,7 +653,7 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         try
         {
-            hashEntryAccess.valueToHashEntry(newHashEntryAdr, valueSerializer, v, ks.size(), valueLen);
+            HashEntryAccess.valueToHashEntry(newHashEntryAdr, valueSerializer, v, ks.size(), valueLen);
         }
         catch (IOException e)
         {
@@ -731,23 +730,23 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     int listLen = 0;
                     for (long hashEntryAdr = hashPartitions.getPartitionHead(partNo);
                          hashEntryAdr != 0L;
-                         hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr), listLen++)
+                         hashEntryAdr = HashEntryAccess.getNextEntry(hashEntryAdr), listLen++)
                     {
                         if (candidateCount < entriesToRemove)
                         {
-                            candidateHash[candidateCount] = hashEntryAccess.getEntryHash(hashEntryAdr);
-                            candidateTS[candidateCount] = hashEntryAccess.getEntryTimestamp(hashEntryAdr);
+                            candidateHash[candidateCount] = HashEntryAccess.getEntryHash(hashEntryAdr);
+                            candidateTS[candidateCount] = HashEntryAccess.getEntryTimestamp(hashEntryAdr);
                             candidateCount++;
                         }
                         else
                         {
-                            long ts = hashEntryAccess.getEntryTimestamp(hashEntryAdr);
+                            long ts = HashEntryAccess.getEntryTimestamp(hashEntryAdr);
                             for (int c = 0; c < candidateTS.length; c++)
                             {
                                 long cts = candidateTS[c];
                                 if (ts < cts)
                                 {
-                                    candidateHash[c] = hashEntryAccess.getEntryHash(hashEntryAdr);
+                                    candidateHash[c] = HashEntryAccess.getEntryHash(hashEntryAdr);
                                     candidateTS[c] = ts;
                                     break;
                                 }
@@ -826,17 +825,17 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                     // walk through partition linked-list and re-check for the candidate
                     for (long hashEntryAdr = partHead;
                          hashEntryAdr != 0L;
-                         hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr))
+                         hashEntryAdr = HashEntryAccess.getNextEntry(hashEntryAdr))
                     {
                         // only remove the candidate if the last-access timestamp matches
-                        if (hashEntryAccess.getEntryHash(hashEntryAdr) == h
+                        if (HashEntryAccess.getEntryHash(hashEntryAdr) == h
                             // TODO decide whether to compare the entry touch timestamp again - may degrade cleanup "efficiency" but increase "accuracy"
 //                            && candidateTS[c] == hashEntryAccess.getEntryTimestamp(hashEntryAdr)
                         )
                         {
                             partHead = hashEntryAccess.unlinkFromPartition(partHead, h, hashEntryAdr);
 
-                            hashEntryAccess.lockEntryWrite(hashEntryAdr);
+                            HashEntryAccess.lockEntryWrite(hashEntryAdr);
 
                             recycleAdrs[recycleIdx++] = hashEntryAdr;
                             candidateTS[c] = 0L;
@@ -907,7 +906,6 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         assertNotClosed();
 
-        // TODO size becomes incorrect
         return size.longValue();
     }
 
@@ -990,25 +988,25 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
             {
                 for (long hashEntryAdr = hashPartitions.getPartitionHead(partNo);
                      hashEntryAdr != 0L;
-                     hashEntryAdr = hashEntryAccess.getNextEntry(hashEntryAdr))
+                     hashEntryAdr = HashEntryAccess.getNextEntry(hashEntryAdr))
                 {
-                    long ts = hashEntryAccess.getEntryTimestamp(hashEntryAdr);
+                    long ts = HashEntryAccess.getEntryTimestamp(hashEntryAdr);
 
                     if (hotFound < hotN)
                     {
-                        hotLocks[hotFound] = hashEntryAccess.lockEntryRead(hashEntryAdr);
+                        hotLocks[hotFound] = HashEntryAccess.lockEntryRead(hashEntryAdr);
                         hotTS[hotFound] = ts;
                         hotEntries[hotFound++] = hashEntryAdr;
                         minTS = Math.min(ts, minTS);
                     }
                     else if (ts > minTS)
                     {
-                        long entryLock = hashEntryAccess.lockEntryRead(hashEntryAdr);
+                        long entryLock = HashEntryAccess.lockEntryRead(hashEntryAdr);
                         for (int i = 0; i < hotTS.length; i++)
                         {
                             if (hotTS[i] == minTS)
                             {
-                                hashEntryAccess.unlockEntryRead(hashEntryAdr, hotLocks[i]);
+                                HashEntryAccess.unlockEntryRead(hashEntryAdr, hotLocks[i]);
                                 hotLocks[i] = entryLock;
                                 hotTS[i] = ts;
                                 hotEntries[i] = hashEntryAdr;
@@ -1031,18 +1029,18 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
         for (int i = 0; i < hotFound; i++)
             try
             {
-                keys.add(keySerializer.deserialize(hashEntryAccess.readKeyFrom(hotEntries[i])));
+                keys.add(keySerializer.deserialize(HashEntryAccess.readKeyFrom(hotEntries[i])));
             }
             catch (IOException e)
             {
                 for (; i < hotFound; i++)
-                    hashEntryAccess.unlockEntryRead(hotEntries[i], hotLocks[i]);
+                    HashEntryAccess.unlockEntryRead(hotEntries[i], hotLocks[i]);
                 throw new IOError(e);
             }
             finally
             {
                 if (i<hotFound)
-                    hashEntryAccess.unlockEntryRead(hotEntries[i], hotLocks[i]);
+                    HashEntryAccess.unlockEntryRead(hotEntries[i], hotLocks[i]);
             }
 
         return keys.iterator();
@@ -1056,9 +1054,9 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
     private void rehashInt()
     {
         int hashTableSize = getHashTableSize();
-        int newHashTableSize = hashTableSize << 1;
-        if (newHashTableSize == MAXIMUM_INT)
+        if (hashTableSize == Constants.MAX_TABLE_SIZE)
             return;
+        int newHashTableSize = hashTableSize << 1;
         LOGGER.info("OHC hash table resize from {} to {} starts...", hashTableSize, newHashTableSize);
 
         long t0 = System.currentTimeMillis();
@@ -1085,36 +1083,36 @@ final class OHCacheImpl<K, V> implements OHCache<K, V>
                      hashEntryAdr != 0L;
                      hashEntryAdr = next)
                 {
-                    next = hashEntryAccess.getNextEntry(hashEntryAdr);
+                    next = HashEntryAccess.getNextEntry(hashEntryAdr);
 
                     entries++;
 
-                    int hash = hashEntryAccess.getEntryHash(hashEntryAdr);
+                    int hash = HashEntryAccess.getEntryHash(hashEntryAdr);
                     if ((hash & hashTableSize) == 0)
                     {
-                        hashEntryAccess.setPreviousEntry(hashEntryAdr, curr0);
+                        HashEntryAccess.setPreviousEntry(hashEntryAdr, curr0);
                         if (curr0 == 0L)
                             hashPartitions.setPartitionHead(partNo, hashEntryAdr);
                         else
-                            hashEntryAccess.setNextEntry(curr0, hashEntryAdr);
+                            HashEntryAccess.setNextEntry(curr0, hashEntryAdr);
                         curr0 = hashEntryAdr;
                     }
                     else
                     {
-                        hashEntryAccess.setPreviousEntry(hashEntryAdr, curr1);
+                        HashEntryAccess.setPreviousEntry(hashEntryAdr, curr1);
                         if (curr1 == 0L)
                             hashPartitions.setPartitionHead(partNo | hashTableSize, hashEntryAdr);
                         else
-                            hashEntryAccess.setNextEntry(curr1, hashEntryAdr);
+                            HashEntryAccess.setNextEntry(curr1, hashEntryAdr);
                         curr1 = hashEntryAdr;
                     }
                 }
                 if (curr0 != 0L)
-                    hashEntryAccess.setNextEntry(curr0, 0L);
+                    HashEntryAccess.setNextEntry(curr0, 0L);
                 else
                     hashPartitions.setPartitionHead(partNo, 0L);
                 if (curr1 != 0L)
-                    hashEntryAccess.setNextEntry(curr1, 0L);
+                    HashEntryAccess.setNextEntry(curr1, 0L);
                 else
                     hashPartitions.setPartitionHead(partNo | hashTableSize, 0L);
             }

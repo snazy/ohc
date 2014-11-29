@@ -101,11 +101,6 @@ final class HashPartitions implements Constants
         Uns.unlockStampedLongRun(table.get().partitionAddressLock(partNo), lock);
     }
 
-    static long partOffset(int partNo)
-    {
-        return ((long)partNo) * PARTITION_ENTRY_LEN;
-    }
-
     int partitionForHash(int hash)
     {
         return table.get().partitionForHash(hash);
@@ -136,7 +131,7 @@ final class HashPartitions implements Constants
             int msz = PARTITION_ENTRY_LEN * hashTableSize;
             this.address = Uns.allocate(msz);
             hashPartitionMask = hashTableSize - 1;
-            // it's important to initialize the hash partition memory!
+            // It's important to initialize the hash partition memory.
             // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
             Uns.setMemory(address, msz, (byte) 0);
 
@@ -145,9 +140,9 @@ final class HashPartitions implements Constants
                 Uns.initStamped(adr, forRehash);
         }
 
-        int partitionForHash(int hash)
+        void release()
         {
-            return hash & hashPartitionMask;
+            Uns.asyncFree(address);
         }
 
         long partitionAddressLock(int hash)
@@ -162,12 +157,12 @@ final class HashPartitions implements Constants
 
         private long partitionAddress(int hash)
         {
-            return address + partOffset(partitionForHash(hash));
+            return address + partitionForHash(hash) * PARTITION_ENTRY_LEN;
         }
 
-        void release()
+        int partitionForHash(int hash)
         {
-            Uns.freeLater(address);
+            return hash & hashPartitionMask;
         }
     }
 }
