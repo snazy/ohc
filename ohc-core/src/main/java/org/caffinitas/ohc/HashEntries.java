@@ -16,6 +16,7 @@
 package org.caffinitas.ohc;
 
 import java.io.DataInput;
+
 import static org.caffinitas.ohc.Constants.*;
 
 /**
@@ -119,7 +120,7 @@ public final class HashEntries
 
     static long getAllocLen(long address)
     {
-        return Uns.getLongVolatile(address, ENTRY_OFF_ALLOC_LEN);
+        return allocLen(getKeyLen(address), getValueLen(address));
     }
 
     static DataInput readKeyFrom(long hashEntryAdr)

@@ -24,20 +24,18 @@ abstract class Constants
     static final long ENTRY_OFF_LRU_NEXT = 0;
     // offset of LRU replacement strategy previous pointer
     static final long ENTRY_OFF_LRU_PREV = 8;
-    // offset of total length
-    static final long ENTRY_OFF_ALLOC_LEN = 16;
-    // offset of serialized hash value
-    static final long ENTRY_OFF_HASH = 24;
+    // offset of entry lock
+    static final long ENTRY_OFF_REFCOUNT = 16;
     // offset of next hash entry in a hash bucket
-    static final long ENTRY_OFF_NEXT = 32;
+    static final long ENTRY_OFF_NEXT = 24;
     // offset of previous hash entry in a hash bucket
-    static final long ENTRY_OFF_PREVIOUS = 40;
+    static final long ENTRY_OFF_PREVIOUS = 32;
+    // offset of serialized hash value
+    static final long ENTRY_OFF_HASH = 40;
     // offset of serialized hash key length
     static final long ENTRY_OFF_KEY_LENGTH = 48;
     // offset of serialized value length
     static final long ENTRY_OFF_VALUE_LENGTH = 56;
-    // offset of entry lock
-    static final long ENTRY_OFF_REFCOUNT = 64;
     // offset of data in first block
     static final long ENTRY_OFF_DATA = 72;
 
@@ -54,5 +52,10 @@ abstract class Constants
         if (rem != 0)
             val += 8L - rem;
         return val;
+    }
+
+    static long allocLen(long keyLen, long valueLen)
+    {
+        return ENTRY_OFF_DATA + roundUpTo8(keyLen) + valueLen;
     }
 }

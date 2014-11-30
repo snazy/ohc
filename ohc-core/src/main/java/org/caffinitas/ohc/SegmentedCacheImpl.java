@@ -545,7 +545,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             throw new IllegalArgumentException();
 
         // allocate memory for whole hash-entry block-chain
-        long bytes = ENTRY_OFF_DATA + roundUpTo8(keyLen) + valueLen;
+        long bytes = allocLen(keyLen, valueLen);
 
         freeCapacity.add(-bytes);
         if (freeCapacity.longValue() < 0L)
@@ -556,10 +556,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
         long adr = Uns.allocate(bytes);
         if (adr != 0L)
-        {
-            Uns.putLongVolatile(adr, ENTRY_OFF_ALLOC_LEN, bytes);
             return adr;
-        }
 
         freeCapacity.add(bytes);
         return 0L;
