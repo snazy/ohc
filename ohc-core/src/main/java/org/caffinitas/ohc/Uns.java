@@ -50,6 +50,7 @@ final class Uns
     private static final IAllocator allocator;
 
     private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty("DEBUG_OFF_HEAP_MEMORY_ACCESS", "false"));
+    private static final boolean __DISABLE_JEMALLOC = Boolean.parseBoolean(System.getProperty("DISABLE_JEMALLOC", "false"));
 
     //
     // #ifdef __DEBUG_OFF_HEAP_MEMORY_ACCESS
@@ -112,18 +113,20 @@ final class Uns
             if (unsafe.addressSize() > 8)
                 throw new RuntimeException("Address size " + unsafe.addressSize() + " not supported yet (max 8 bytes)");
 
-            IAllocator alloc;
-            try
-            {
-                alloc = new JEMallocAllocator();
-            }
-            catch (Throwable t)
-            {
-                LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
+            IAllocator alloc = null;
+            if (!__DISABLE_JEMALLOC)
+                try
+                {
+                    alloc = new JEMallocAllocator();
+                }
+                catch (Throwable t)
+                {
+                    LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
+
+                }
+            if (alloc == null)
                 alloc = new NativeAllocator();
-            }
             allocator = alloc;
-//            allocator = new NativeAllocator();
         }
         catch (Exception e)
         {

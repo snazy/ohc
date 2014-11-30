@@ -146,7 +146,7 @@ public class BasicTest extends AbstractTest
                                                            .keySerializer(stringSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(32 * ONE_MB)
-                                                           .cleanUpTriggerMinFree(.125d)
+                                                           .cleanUpTriggerFree(.125d)
                                                            .build())
         {
             int i;

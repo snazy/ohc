@@ -28,7 +28,9 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
 
     void resetStatistics();
 
-    int getHashTableSize();
+    int[] getHashTableSizes();
+
+    int getSegments();
 
     long getCapacity();
 
@@ -39,4 +41,6 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
     Iterator<K> hotN(int n);
 
     OHCacheStats extendedStats();
+
+    double getLoadFactor();
 }

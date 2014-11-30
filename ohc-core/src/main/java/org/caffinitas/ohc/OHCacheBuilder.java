@@ -23,7 +23,8 @@ public class OHCacheBuilder<K, V>
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
     private double loadFactor;
-    private double cleanUpTriggerMinFree = -1d;
+    private double cleanUpTriggerFree = -1d;
+    private double cleanUpTargetFree = -1d;
     private boolean statisticsEnabled;
 
     private OHCacheBuilder()
@@ -84,14 +85,25 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public double getCleanUpTriggerMinFree()
+    public double getCleanUpTriggerFree()
     {
-        return cleanUpTriggerMinFree;
+        return cleanUpTriggerFree;
     }
 
-    public OHCacheBuilder<K, V> cleanUpTriggerMinFree(double cleanUpTrigger)
+    public OHCacheBuilder<K, V> cleanUpTriggerFree(double cleanUpTriggerFree)
     {
-        this.cleanUpTriggerMinFree = cleanUpTrigger;
+        this.cleanUpTriggerFree = cleanUpTriggerFree;
+        return this;
+    }
+
+    public double getCleanUpTargetFree()
+    {
+        return cleanUpTargetFree;
+    }
+
+    public OHCacheBuilder<K, V> cleanUpTargetFree(double cleanUpTargetFree)
+    {
+        this.cleanUpTargetFree = cleanUpTargetFree;
         return this;
     }
 

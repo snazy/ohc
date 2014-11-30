@@ -41,11 +41,16 @@ final class OffHeapMap
         this.cache = cache;
 
         int hts = builder.getHashTableSize();
-        if (hts < 8192)
+        if (hts <= 0)
             hts = 8192;
+        if (hts < 256)
+            hts = 256;
         table = new Table(roundUpToPowerOf2(hts));
 
-        this.loadFactor = builder.getLoadFactor();
+        double lf = builder.getLoadFactor();
+        if (lf <= .0d)
+            lf = .75d;
+        this.loadFactor = lf;
         threshold = (long) ((double) table.size() * loadFactor);
     }
 
@@ -111,7 +116,7 @@ final class OffHeapMap
 
         if (hashEntryAdr == 0L)
         {
-            if (size == threshold)
+            if (size >= threshold)
                 rehash();
 
             size++;
@@ -224,6 +229,16 @@ final class OffHeapMap
             HashEntries.reference(hashEntryAdr);
         }
         return r;
+    }
+
+    double loadFactor()
+    {
+        return loadFactor;
+    }
+
+    int hashTableSize()
+    {
+        return table.size();
     }
 
     static final class Table

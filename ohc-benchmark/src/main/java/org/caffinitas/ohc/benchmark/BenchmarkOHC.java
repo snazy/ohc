@@ -57,8 +57,10 @@ import static java.lang.Thread.sleep;
 public class BenchmarkOHC
 {
     public static final String THREADS = "t";
-    public static final String SIZE = "s";
+    public static final String CAPACITY = "cap";
     public static final String DURATION = "d";
+    public static final String SEGMENT_COUNT = "sc";
+    public static final String LOAD_FACTOR = "lf";
     public static final String HASH_TABLE_SIZE = "z";
     public static final String WARM_UP = "wu";
     public static final String READ_WRITE_RATIO = "r";
@@ -127,8 +129,10 @@ public class BenchmarkOHC
             else if (cores > 2)
                 cores--;
             int threads = Integer.parseInt(cmd.getOptionValue(THREADS, Integer.toString(cores)));
-            long size = Long.parseLong(cmd.getOptionValue(SIZE, "" + (1024 * 1024 * 1024)));
-            int hashTableSize = Integer.parseInt(cmd.getOptionValue(HASH_TABLE_SIZE, "64"));
+            long capacity = Long.parseLong(cmd.getOptionValue(CAPACITY, "" + (1024 * 1024 * 1024)));
+            int hashTableSize = Integer.parseInt(cmd.getOptionValue(HASH_TABLE_SIZE, "0"));
+            int segmentCount = Integer.parseInt(cmd.getOptionValue(SEGMENT_COUNT, "0"));
+            double loadFactor = Double.parseDouble(cmd.getOptionValue(LOAD_FACTOR, "0"));
 
             double readWriteRatio = Double.parseDouble(cmd.getOptionValue(READ_WRITE_RATIO, ".5"));
             Distribution readKeyDist = parseDistribution(cmd.getOptionValue(READ_KEY_DIST, DEFAULT_KEY_DIST));
@@ -149,13 +153,19 @@ public class BenchmarkOHC
                                   .keySerializer(BenchmarkUtils.longSerializer)
                                   .valueSerializer(BenchmarkUtils.serializer)
                                   .hashTableSize(hashTableSize)
-                                  .capacity(size)
+                    .loadFactor(loadFactor)
+                    .segmentCount(segmentCount)
+                                  .capacity(capacity)
                                   .statisticsEnabled(true)
                                   .build();
 
             printMessage("Cache configuration: hash-table-size: %d%n" +
+                         "                     load-factor    : %.3f%n" +
+                         "                     segments       : %d%n" +
                          "                     capacity       : %d%n",
-                         cache.getHashTableSize(),
+                         cache.getHashTableSizes()[0],
+                         cache.getLoadFactor(),
+                         cache.getSegments(),
                          cache.getCapacity());
 
             LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>(5000);
@@ -265,7 +275,7 @@ public class BenchmarkOHC
 
     private static void printStats(String title)
     {
-        printMessage("%s%n     %s entries, %d/%d free, table-size:%d", title, cache.size(), cache.freeCapacity(), cache.getCapacity(), cache.getHashTableSize());
+        printMessage("%s%n     %s entries, %d/%d free, %s", title, cache.size(), cache.freeCapacity(), cache.getCapacity(), cache.extendedStats());
         for (Map.Entry<String, GCStats> gcStat : gcStats.entrySet())
         {
             GCStats gs = gcStat.getValue();
@@ -340,9 +350,11 @@ public class BenchmarkOHC
         options.addOption(DURATION, true, "benchmark duration in seconds");
         options.addOption(READ_WRITE_RATIO, true, "read-write ration (as a double 0..1 representing the chance for a read)");
 
-        options.addOption(SIZE, true, "size of the cache");
+        options.addOption(CAPACITY, true, "size of the cache");
 
         options.addOption(HASH_TABLE_SIZE, true, "hash table size");
+        options.addOption(LOAD_FACTOR, true, "hash table load factor");
+        options.addOption(SEGMENT_COUNT, true, "number of segments (number of individual off-heap-maps)");
 
         options.addOption(VALUE_SIZE_DIST, true, "value sizes - default: " + DEFAULT_VALUE_SIZE_DIST);
         options.addOption(READ_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);

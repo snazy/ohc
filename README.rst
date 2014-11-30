@@ -21,7 +21,7 @@ Java7 VM that support 64bit field CAS and ``sun.misc.Unsafe`` (Oracle JVMs on x6
 Architecture
 ------------
 
-OHC uses a multiple segments. Each segment contains its own independent off-heap hash map. Synchronization occurs
+OHC uses multiple segments. Each segment contains its own independent off-heap hash map. Synchronization occurs
 on critical sections that access a off-heap hash map. Necessary serialization and deserialization is performed
 outside of these critical sections.
 
@@ -33,25 +33,18 @@ Configuration
 
 Use the class ``OHCacheBuilder`` to configure all necessary parameter like
 
-- hash table size (must be a power of 2)
-- capacity for data blocks
-- eviction configuration
+- number of segments (must be a power of 2), defaults to number-of-cores * 2
+- hash table size (must be a power of 2), defaults to 8192
+- load factory, defaults to .75
+- capacity for data over the whole cache
+- eviction configuration (cleanup-trigger-free-percentage triggers a cleanup, cleanup-target-free-percentage defines the target free capacity)
 - key and value serializers
 
 Generally you should work with a large hash table. The larger the hash table, the shorter the linked-list in each
 hash partition - that means less linked-link walks and increased performance.
 
-The total amount of required off heap memory is the *total capacity* plus *hash table*. Each hash partition (currently)
-requires 16 bytes but 64 byte alignment is used (CPU cache line size) - so the formula is ``capacity + hash_table_size * 64``.
-
-Important note on hash codes
-----------------------------
-
-Hash codes are essential for caches to distribute load. Many hash code implementations
-(like ``java.lang.String.hashCode()``) are not optimal for hash tables (``HashMap`` uses an alternative
-hash if the key is a ``String``) because hash code distribution is not uniform. Consider using something
-like Murmur3 or some fast cryptographic hash code - Google's Guava provides a lot of different hash algorithms.
-Consider using ``OHCache.extendedStats().getHashPartitionLengths()`` plus a histogram for your tests.
+The total amount of required off heap memory is the *total capacity* plus *hash table*. Each hash bucket (currently)
+requires 8 bytes - so the formula is ``capacity + segment_count * hash_table_size * 8``.
 
 Why off-heap memory
 -------------------
@@ -90,12 +83,6 @@ Put operations do not succeed if there is not enough free space to serialize the
 not block any operation longer than really necessary. This should be completely fine for caches since it is better
 to let a cache-put not succeed than to block the calling application. If there's demand for a *put guarantee*
 it can be implemented (as long as there's enough free capacity).
-
-The plain ``OHCache`` interface provides low level get/put/remove operations that take a ``BytesSource`` or a
-``BytesSink``. Reason for this is that you usually do not need to allocate more objects in the calling code -
-with the cost of a bit more verbose coding. For convenience ``OHCache`` extends the Guava ``Cache`` interface
-that takes Java objects as keys and values - you have to provide appropriate key and value serializers then.
-Note that this approach requires to serialize the key to a byte array for each get/put/remove operation.
 
 OHC provides a pure LRU based eviction mechanism. But be aware that calculation of entries to evict is based on averages
 and does its job not very accurately to increase overall performance - it's a trade-off between performance

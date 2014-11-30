@@ -48,7 +48,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private final int segmentShift;
     private final long capacity;
     private final LongAdder freeCapacity = new LongAdder();
-    private final long cleanUpTriggerMinFree;
+    private final long cleanUpTriggerFree;
+    private final long cleanUpTargetFree;
 
     private final AtomicBoolean cleanupActive = new AtomicBoolean();
 
@@ -86,9 +87,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         this.segmentMask = ((long) segments - 1) << segmentShift;
 
         // calculate trigger for cleanup/eviction/replacement
-        double cut = builder.getCleanUpTriggerMinFree();
-        long cleanUpTriggerMinFree;
-        if (cut < 0d)
+        double cuTrigger = builder.getCleanUpTriggerFree();
+        long cleanUpTriggerFree;
+        if (cuTrigger < 0d)
         {
             // auto-sizing
 
@@ -96,20 +97,30 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             // 10% if capacity less than 16 GB
             // 5% if capacity is higher than 16GB
             if (capacity < 8L * ONE_GIGABYTE)
-                cleanUpTriggerMinFree = (long) (.125d * capacity);
+                cleanUpTriggerFree = (long) (.125d * capacity);
             else if (capacity < 16L * ONE_GIGABYTE)
-                cleanUpTriggerMinFree = (long) (.10d * capacity);
+                cleanUpTriggerFree = (long) (.10d * capacity);
             else
-                cleanUpTriggerMinFree = (long) (.05d * capacity);
+                cleanUpTriggerFree = (long) (.05d * capacity);
         }
         else
         {
-            if (cut >= 1d)
-                throw new IllegalArgumentException("Invalid clean-up percentage trigger value " + String.format("%.2f", cut));
-            cut *= capacity;
-            cleanUpTriggerMinFree = (long) cut;
+            if (cuTrigger >= 1d)
+                throw new IllegalArgumentException("Invalid clean-up percentage trigger value " + String.format("%.2f", cuTrigger));
+            cuTrigger *= capacity;
+            cleanUpTriggerFree = (long) cuTrigger;
         }
-        this.cleanUpTriggerMinFree = cleanUpTriggerMinFree;
+        this.cleanUpTriggerFree = cleanUpTriggerFree;
+
+        double cuTarget = builder.getCleanUpTargetFree();
+        if (cuTarget < cuTrigger)
+            cuTarget = cuTrigger;
+        long cleanUpTargetFree = (long) (cuTarget * capacity);
+        if (cuTarget < 0)
+            cleanUpTargetFree = 2 * cleanUpTriggerFree;
+        if (cuTarget > .9d || cleanUpTargetFree > capacity)
+            cleanUpTargetFree = (long) (.9d * capacity);
+        this.cleanUpTargetFree = cleanUpTargetFree;
 
         this.statisticsEnabled = builder.isStatisticsEnabled();
 
@@ -167,8 +178,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long hash = key.hash();
 
         long dataSize = roundUpTo8(key.size()) + valueLen + Constants.ENTRY_OFF_DATA;
-        if (freeCapacity() - cleanUpTriggerMinFree <= dataSize)
-            cleanUpInternal(dataSize);
+        if (freeCapacity() - cleanUpTriggerFree <= dataSize)
+            cleanUpInternal();
 
         // Allocate and fill new hash entry.
         long newHashEntryAdr = allocate(keyLen, valueLen);
@@ -320,17 +331,17 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public void cleanUp()
     {
-        if (freeCapacity() > cleanUpTriggerMinFree)
+        if (freeCapacity() > cleanUpTriggerFree)
             return;
 
-        cleanUpInternal(0L);
+        cleanUpInternal();
     }
 
-    private void cleanUpInternal(long add)
+    private void cleanUpInternal()
     {
         if (cleanupActive.compareAndSet(false, true))
         {
-            long recycleGoal = add + cleanUpTriggerMinFree - freeCapacity();
+            long recycleGoal = cleanUpTargetFree - freeCapacity();
             long perMapRecycleGoal = recycleGoal / maps.length;
             if (perMapRecycleGoal <= 0L)
                 perMapRecycleGoal = 1L;
@@ -445,9 +456,22 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return size;
     }
 
-    public int getHashTableSize()
+    public int getSegments()
     {
         return maps.length;
+    }
+
+    public double getLoadFactor()
+    {
+        return maps[0].loadFactor();
+    }
+
+    public int[] getHashTableSizes()
+    {
+        int[] r = new int[maps.length];
+        for (int i = 0; i < maps.length; i++)
+            r[i] = maps[i].hashTableSize();
+        return r;
     }
 
     //
