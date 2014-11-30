@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
 
 import com.google.common.cache.CacheStats;
@@ -49,7 +50,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private final LongAdder freeCapacity = new LongAdder();
     private final long cleanUpTriggerMinFree;
 
-    private final Thread maintenance;
+    private final AtomicBoolean cleanupActive = new AtomicBoolean();
 
     private boolean statisticsEnabled;
     private volatile long hitCount;
@@ -114,27 +115,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
         this.keySerializer = builder.getKeySerializer();
         this.valueSerializer = builder.getValueSerializer();
-
-        maintenance = new Thread(new Runnable()
-        {
-            public void run()
-            {
-                while (true)
-                {
-                    try
-                    {
-                        Thread.sleep(100L);
-                    }
-                    catch (InterruptedException e)
-                    {
-                        break;
-                    }
-
-                    maintenance();
-                }
-            }
-        }, "OHC cleanup");
-        maintenance.start();
     }
 
     private static int bitNum(long val)
@@ -143,19 +123,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         for (; val != 0L; bit++)
             val >>>= 1;
         return bit;
-    }
-
-    void maintenance()
-    {
-        try
-        {
-            if (freeCapacity() < cleanUpTriggerMinFree)
-                cleanUp();
-        }
-        catch (Throwable t)
-        {
-            LOGGER.error("Failure during cleanup", t);
-        }
     }
 
     //
@@ -199,8 +166,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long valueLen = valueSerializer.serializedSize(v);
         long hash = key.hash();
 
-//        if (dataMemory.freeCapacity() <= Util.roundUpTo8(keySource.size()) + valueLen + Constants.ENTRY_OFF_DATA)
-//            cleanUp();
+        long dataSize = roundUpTo8(key.size()) + valueLen + Constants.ENTRY_OFF_DATA;
+        if (freeCapacity() - cleanUpTriggerMinFree <= dataSize)
+            cleanUpInternal(dataSize);
 
         // Allocate and fill new hash entry.
         long newHashEntryAdr = allocate(keyLen, valueLen);
@@ -352,23 +320,30 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public void cleanUp()
     {
-        // TODO need something against concurrent cleanUp() runs
-
-        long freeCapacity = freeCapacity();
-        if (freeCapacity > cleanUpTriggerMinFree)
+        if (freeCapacity() > cleanUpTriggerMinFree)
             return;
 
-        long recycleGoal = cleanUpTriggerMinFree - freeCapacity;
-        long perMapRecycleGoal = recycleGoal / maps.length;
-        if (perMapRecycleGoal <= 0L)
-            perMapRecycleGoal = 1L;
+        cleanUpInternal(0L);
+    }
 
-        long evicted = 0L;
-        for (OffHeapMap map : maps)
-            evicted += map.cleanUp(perMapRecycleGoal);
+    private void cleanUpInternal(long add)
+    {
+        if (cleanupActive.compareAndSet(false, true))
+        {
+            long recycleGoal = add + cleanUpTriggerMinFree - freeCapacity();
+            long perMapRecycleGoal = recycleGoal / maps.length;
+            if (perMapRecycleGoal <= 0L)
+                perMapRecycleGoal = 1L;
 
-        evictedEntries += evicted;
-        cleanUpCount++;
+            long evicted = 0L;
+            for (OffHeapMap map : maps)
+                evicted += map.cleanUp(perMapRecycleGoal);
+
+            evictedEntries += evicted;
+            cleanUpCount++;
+
+            cleanupActive.set(false);
+        }
     }
 
     //
@@ -377,22 +352,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public void close() throws IOException
     {
-        if (maintenance != null)
-        {
-            try
-            {
-                maintenance.interrupt();
-                maintenance.join(60000);
-                maintenance.interrupt();
-                if (maintenance.isAlive())
-                    throw new RuntimeException("Background OHC maintenance did not terminate normally. This usually indicates a bug.");
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-            }
-        }
-
         invalidateAll();
 
         for (OffHeapMap map : maps)

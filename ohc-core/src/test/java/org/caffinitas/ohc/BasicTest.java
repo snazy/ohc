@@ -152,18 +152,12 @@ public class BasicTest extends AbstractTest
             int i;
             for (i = 0; cache.freeCapacity() > 4 * ONE_MB + 1024; i++)
                 cache.put(Integer.toString(i), v);
-            // no eviction yet !!
-
-            Thread.sleep(1500L);
 
             Assert.assertEquals(cache.extendedStats().getCleanupCount(), 0L, "oops - cleanup triggered - fix the unit test!");
 
-            // this should trigger a cleanup (eviction/replacement)
-            cache.put(Integer.toString(i), v);
-
             long free = cache.freeCapacity();
 
-            Thread.sleep(1500L);
+            cache.put(Integer.toString(i), v);
 
             Assert.assertEquals(cache.extendedStats().getCleanupCount(), 1L, "cleanup did not run");
             Assert.assertTrue(free < cache.freeCapacity(), "free capacity did not increase");
