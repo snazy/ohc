@@ -26,7 +26,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.management.MBeanServer;
 import javax.management.Notification;
 import javax.management.NotificationListener;
@@ -78,8 +78,8 @@ public class BenchmarkOHC
 
     static final class GCStats
     {
-        final LongAdder count = new LongAdder();
-        final LongAdder duration = new LongAdder();
+        final AtomicLong count = new AtomicLong();
+        final AtomicLong duration = new AtomicLong();
         int cores;
     }
 
@@ -106,8 +106,8 @@ public class BenchmarkOHC
                         if (ex != null)
                             stats = ex;
                     }
-                    stats.count.increment();
-                    stats.duration.add(duration);
+                    stats.count.incrementAndGet();
+                    stats.duration.addAndGet(duration);
                     Number gcThreadCount = (Number) gcInfo.get("GcThreadCount");
                     if (gcThreadCount != null && gcThreadCount.intValue() > stats.cores)
                         stats.cores = gcThreadCount.intValue();

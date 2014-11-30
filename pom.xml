@@ -170,7 +170,7 @@
                     <version>${version.org.apache.maven.plugins.maven-compiler-plugin}</version>
                     <configuration>
                         <source>1.7</source>
-                        <target>1.8</target>
+                        <target>1.7</target>
                     </configuration>
                 </plugin>
 

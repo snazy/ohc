@@ -23,7 +23,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.cache.CacheStats;
 import com.google.common.collect.AbstractIterator;
@@ -47,7 +47,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private final long segmentMask;
     private final int segmentShift;
     private final long capacity;
-    private final LongAdder freeCapacity = new LongAdder();
+    private final AtomicLong freeCapacity = new AtomicLong();
     private final long cleanUpTriggerFree;
     private final long cleanUpTargetFree;
 
@@ -70,7 +70,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     {
         // off-heap allocation
         this.capacity = builder.getCapacity();
-        this.freeCapacity.add(capacity);
+        this.freeCapacity.set(capacity);
 
         // build segments
         int segments = builder.getSegmentCount();
@@ -547,10 +547,10 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         // allocate memory for whole hash-entry block-chain
         long bytes = allocLen(keyLen, valueLen);
 
-        freeCapacity.add(-bytes);
+        freeCapacity.addAndGet(-bytes);
         if (freeCapacity.longValue() < 0L)
         {
-            freeCapacity.add(bytes);
+            freeCapacity.addAndGet(bytes);
             return 0L;
         }
 
@@ -558,7 +558,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         if (adr != 0L)
             return adr;
 
-        freeCapacity.add(bytes);
+        freeCapacity.addAndGet(bytes);
         return 0L;
     }
 
@@ -577,7 +577,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         if (bytes == 0L)
             throw new IllegalStateException();
         Uns.free(address);
-        freeCapacity.add(bytes);
+        freeCapacity.addAndGet(bytes);
         return bytes;
     }
 }

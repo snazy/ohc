@@ -16,8 +16,7 @@ OHC shall provide a good performance on both commodity hardware and big systems 
 Requirements
 ------------
 
-Java8 VM that support 64bit field CAS and ``sun.misc.Unsafe`` (Oracle JVMs on x64 Intel CPUs).
-Intent to backport for Java7 VM.
+Java7 VM that support 64bit field CAS and ``sun.misc.Unsafe`` (Oracle JVMs on x64 Intel CPUs).
 
 Architecture
 ------------
