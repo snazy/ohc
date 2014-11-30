@@ -38,6 +38,8 @@ public class BasicTest extends AbstractTest
             String k = "123";
             cache.put(k, "hello world \u00e4\u00f6\u00fc\u00df");
 
+            Assert.assertTrue(cache.freeCapacity() < cache.getCapacity());
+
             String v = cache.getIfPresent(k);
             Assert.assertEquals(v, "hello world \u00e4\u00f6\u00fc\u00df");
 

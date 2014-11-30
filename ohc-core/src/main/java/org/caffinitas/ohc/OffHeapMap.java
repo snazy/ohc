@@ -16,7 +16,6 @@
 package org.caffinitas.ohc;
 
 import static org.caffinitas.ohc.Constants.BUCKET_ENTRY_LEN;
-import static org.caffinitas.ohc.Constants.allocLen;
 
 final class OffHeapMap
 {
@@ -38,6 +37,7 @@ final class OffHeapMap
 
     private long rehashes;
     private long cleanUpCount;
+    private long evictedEntries;
 
     OffHeapMap(OHCacheBuilder builder, long capacity, long cleanUpTriggerFree, long cleanUpTargetFree)
     {
@@ -84,6 +84,7 @@ final class OffHeapMap
     {
         rehashes = 0L;
         cleanUpCount = 0L;
+        evictedEntries = 0L;
     }
 
     long rehashes()
@@ -94,6 +95,11 @@ final class OffHeapMap
     long cleanUpCount()
     {
         return cleanUpCount;
+    }
+
+    long evictedEntries()
+    {
+        return evictedEntries;
     }
 
     synchronized long getEntry(KeyBuffer key)
@@ -119,8 +125,13 @@ final class OffHeapMap
         return 0L;
     }
 
-    synchronized boolean replaceEntry(KeyBuffer key, long newHashEntryAdr)
+    synchronized boolean replaceEntry(KeyBuffer key, long newHashEntryAdr, long bytes)
     {
+        if (freeCapacity - bytes < cleanUpTriggerFree)
+            cleanUp();
+
+        freeCapacity -= bytes;
+
         long hashEntryAdr;
         for (hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
@@ -451,33 +462,7 @@ final class OffHeapMap
         freeCapacity += bytes;
     }
 
-    synchronized long allocate(long keyLen, long valueLen)
-    {
-        if (keyLen < 0 || valueLen < 0)
-            throw new IllegalArgumentException();
-
-        // allocate memory for whole hash-entry block-chain
-        long bytes = allocLen(keyLen, valueLen);
-
-        if (freeCapacity - bytes < cleanUpTriggerFree)
-            cleanUp();
-
-        freeCapacity-=bytes;
-        if (freeCapacity < 0L)
-        {
-            freeCapacity+=bytes;
-            return 0L;
-        }
-
-        long adr = Uns.allocate(bytes);
-        if (adr != 0L)
-            return adr;
-
-        freeCapacity+=bytes;
-        return 0L;
-    }
-
-    synchronized long cleanUp()
+    synchronized void cleanUp()
     {
         long recycleGoal = cleanUpTargetFree - freeCapacity;
         if (recycleGoal <= 0L)
@@ -504,8 +489,7 @@ final class OffHeapMap
         }
 
         cleanUpCount++;
-
-        return evicted;
+        evictedEntries += evicted;
     }
 
     private void dereference(long hashEntryAdr)

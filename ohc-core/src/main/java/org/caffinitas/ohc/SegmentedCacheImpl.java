@@ -51,7 +51,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private volatile long loadSuccessCount;
     private volatile long loadExceptionCount;
     private volatile long totalLoadTime;
-    private volatile long evictedEntries;
     private volatile long putFailCount;
     private volatile long putAddCount;
     private volatile long putReplaceCount;
@@ -168,9 +167,11 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long valueLen = valueSerializer.serializedSize(v);
         long hash = key.hash();
 
+        long bytes = allocLen(keyLen, valueLen);
+
         // Allocate and fill new hash entry.
-        long newHashEntryAdr = segment(hash).allocate(keyLen, valueLen);
-        if (newHashEntryAdr == 0L)
+        long hashEntryAdr = Uns.allocate(bytes);
+        if (hashEntryAdr == 0L)
         {
             if (statisticsEnabled)
                 putFailCount++;
@@ -180,24 +181,24 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             return;
         }
         // initialize hash entry
-        HashEntries.init(hash, keyLen, valueLen, newHashEntryAdr);
-        HashEntries.toOffHeap(key, newHashEntryAdr, ENTRY_OFF_DATA);
+        HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
+        HashEntries.toOffHeap(key, hashEntryAdr, ENTRY_OFF_DATA);
         try
         {
-            valueSerializer.serialize(v, new HashEntryOutput(newHashEntryAdr, key.size(), valueLen));
+            valueSerializer.serialize(v, new HashEntryOutput(hashEntryAdr, key.size(), valueLen));
         }
         catch (VirtualMachineError e)
         {
-            free(newHashEntryAdr);
+            Uns.free(hashEntryAdr);
             throw e;
         }
         catch (Throwable e)
         {
-            free(newHashEntryAdr);
+            Uns.free(hashEntryAdr);
             throw new IOError(e);
         }
 
-        if (segment(hash).replaceEntry(key, newHashEntryAdr))
+        if (segment(hash).replaceEntry(key, hashEntryAdr, bytes))
         {
             if (statisticsEnabled)
                 putAddCount++;
@@ -354,7 +355,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         loadSuccessCount = 0;
         loadExceptionCount = 0;
         totalLoadTime = 0;
-        evictedEntries = 0;
     }
 
     public OHCacheStats extendedStats()
@@ -388,7 +388,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                              loadSuccessCount,
                              loadExceptionCount,
                              totalLoadTime,
-                             evictedEntries
+                             evictedEntries()
         );
     }
 
@@ -414,6 +414,14 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         for (OffHeapMap map : maps)
             cleanUpCount += map.cleanUpCount();
         return cleanUpCount;
+    }
+
+    public long evictedEntries()
+    {
+        long evictedEntries = 0L;
+        for (OffHeapMap map : maps)
+            evictedEntries += map.evictedEntries();
+        return evictedEntries;
     }
 
     public long size()
@@ -513,18 +521,18 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             free(hashEntryAdr);
     }
 
-    long free(long address)
+    long free(long hashEntryAdr)
     {
-        if (address == 0L)
+        if (hashEntryAdr == 0L)
             throw new NullPointerException();
 
-        long bytes = HashEntries.getAllocLen(address);
+        long bytes = HashEntries.getAllocLen(hashEntryAdr);
         if (bytes == 0L)
             throw new IllegalStateException();
 
-        long hash = HashEntries.getHash(address);
+        long hash = HashEntries.getHash(hashEntryAdr);
 
-        Uns.free(address);
+        Uns.free(hashEntryAdr);
         segment(hash).freed(bytes);
         return bytes;
     }
