@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.LongAdder;
 
 import com.google.common.cache.CacheStats;
+import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -296,8 +297,51 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public Iterator<K> hotN(int n)
     {
-        // TODO implement
-        return null;
+        // hotN implementation does only return a (good) approximation - not necessarily the exact hotN
+        // since it iterates over the all segments and takes a fraction of 'n' from them.
+        // This implementation may also return more results than expected just to keep it simple
+        // (it does not really matter if you request 5000 keys and e.g. get 5015).
+
+        final int perMap = n / maps.length + 1;
+
+        return new AbstractIterator<K>()
+        {
+            int mapIndex;
+
+            long[] hotPerMap;
+            int subIndex;
+
+            protected K computeNext()
+            {
+                while (true)
+                {
+                    if (hotPerMap != null && subIndex < hotPerMap.length)
+                    {
+                        long hashEntryAdr = hotPerMap[subIndex++];
+                        if (hashEntryAdr != 0L)
+                            try
+                            {
+                                return keySerializer.deserialize(HashEntries.readKeyFrom(hashEntryAdr));
+                            }
+                            catch (IOException e)
+                            {
+                                LOGGER.error("Key serializer failed to deserialize", e);
+                                continue;
+                            }
+                            finally
+                            {
+                                dereference(hashEntryAdr);
+                            }
+                    }
+
+                    if (mapIndex == maps.length)
+                        return endOfData();
+
+                    hotPerMap = maps[mapIndex++].hotN(perMap);
+                    subIndex = 0;
+                }
+            }
+        };
     }
 
     public void invalidateAll()

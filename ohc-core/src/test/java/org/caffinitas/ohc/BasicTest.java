@@ -50,6 +50,24 @@ public class BasicTest extends AbstractTest
     }
 
     @Test(dependsOnMethods = "serializing")
+    public void hotN() throws IOException, InterruptedException
+    {
+        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
+                                                           .keySerializer(stringSerializer)
+                                                           .valueSerializer(stringSerializer)
+                                                           .build())
+        {
+            cache.put("1", "one");
+            cache.put("2", "two");
+            cache.put("3", "two");
+            cache.put("4", "two");
+            cache.put("5", "two");
+
+            Assert.assertNotNull(cache.hotN(1).next());
+        }
+    }
+
+    @Test(dependsOnMethods = "serializing")
     public void serialize100k() throws IOException, InterruptedException
     {
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()

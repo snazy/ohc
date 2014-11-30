@@ -15,20 +15,16 @@
  */
 package org.caffinitas.ohc;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import static org.caffinitas.ohc.Constants.*;
+import static org.caffinitas.ohc.Constants.BUCKET_ENTRY_LEN;
 
 final class OffHeapMap
 {
     // maximum hash table size
     private static final int MAX_TABLE_SIZE = 1 << 27;
-    private static final Logger LOGGER = LoggerFactory.getLogger(OffHeapMap.class);
-
-    private final double entriesPerBucketTrigger;
 
     private volatile long size;
+    private long threshold;
+    private final double loadFactor;
 
     // not nice to have a cyclic ref with ShardCacheImpl - but using an interface just for the sake of it feels too heavy
     private final SegmentedCacheImpl cache;
@@ -49,7 +45,8 @@ final class OffHeapMap
             hts = 8192;
         table = new Table(roundUpToPowerOf2(hts));
 
-        this.entriesPerBucketTrigger = builder.getEntriesPerSegmentTrigger();
+        this.loadFactor = builder.getLoadFactor();
+        threshold = (long) ((double) table.size() * loadFactor);
     }
 
     void release()
@@ -74,12 +71,11 @@ final class OffHeapMap
 
     synchronized long getEntry(KeyBuffer key)
     {
-        int loops = 0;
         for (long hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNext(hashEntryAdr), loops++)
+             hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
-            if (notSameKey(key, loops, hashEntryAdr))
+            if (notSameKey(key, hashEntryAdr))
                 continue;
 
             // return existing entry
@@ -98,13 +94,12 @@ final class OffHeapMap
 
     synchronized long replaceEntry(KeyBuffer key, long newHashEntryAdr)
     {
-        int loops = 0;
         long hashEntryAdr;
         for (hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNext(hashEntryAdr), loops++)
+             hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
-            if (notSameKey(key, loops, hashEntryAdr))
+            if (notSameKey(key, hashEntryAdr))
                 continue;
 
             // replace existing entry
@@ -115,7 +110,12 @@ final class OffHeapMap
         }
 
         if (hashEntryAdr == 0L)
+        {
+            if (size == threshold)
+                rehash();
+
             size++;
+        }
 
         add(newHashEntryAdr);
 
@@ -143,12 +143,11 @@ final class OffHeapMap
 
     synchronized long removeEntry(KeyBuffer key)
     {
-        int loops = 0;
         for (long hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNext(hashEntryAdr), loops++)
+             hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
-            if (notSameKey(key, loops, hashEntryAdr))
+            if (notSameKey(key, hashEntryAdr))
                 continue;
 
             // remove existing entry
@@ -165,14 +164,8 @@ final class OffHeapMap
         return 0L;
     }
 
-    private boolean notSameKey(KeyBuffer key, int loops, long hashEntryAdr)
+    private boolean notSameKey(KeyBuffer key, long hashEntryAdr)
     {
-        if (loops >= entriesPerBucketTrigger)
-        {
-            LOGGER.warn("Degraded OHC performance! Segment linked list very long - rehash triggered");
-            rehash();
-        }
-
         long hashEntryHash = HashEntries.getHash(hashEntryAdr);
         if (hashEntryHash != key.hash())
             return true;
@@ -207,6 +200,7 @@ final class OffHeapMap
                 newTable.addLinkAsHead(HashEntries.getHash(hashEntryAdr), hashEntryAdr);
             }
 
+        threshold = (long) ((double) newTable.size() * loadFactor);
         table = newTable;
         rehashes++;
     }
@@ -216,6 +210,20 @@ final class OffHeapMap
         return number >= MAX_TABLE_SIZE
                ? MAX_TABLE_SIZE
                : (number > 1) ? Integer.highestOneBit((number - 1) << 1) : 1;
+    }
+
+    synchronized long[] hotN(int n)
+    {
+        long[] r = new long[n];
+        int i = 0;
+        for (long hashEntryAdr = lruHead;
+             hashEntryAdr != 0L;
+             hashEntryAdr = lruNext(hashEntryAdr))
+        {
+            r[i++] = hashEntryAdr;
+            HashEntries.reference(hashEntryAdr);
+        }
+        return r;
     }
 
     static final class Table

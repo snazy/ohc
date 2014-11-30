@@ -22,7 +22,7 @@ public class OHCacheBuilder<K, V>
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
-    private int entriesPerSegmentTrigger = 10;
+    private double loadFactor;
     private double cleanUpTriggerMinFree = -1d;
     private boolean statisticsEnabled;
 
@@ -84,17 +84,6 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public int getEntriesPerSegmentTrigger()
-    {
-        return entriesPerSegmentTrigger;
-    }
-
-    public OHCacheBuilder<K, V> entriesPerSegmentTrigger(int entriesPerBucketTrigger)
-    {
-        this.entriesPerSegmentTrigger = entriesPerBucketTrigger;
-        return this;
-    }
-
     public double getCleanUpTriggerMinFree()
     {
         return cleanUpTriggerMinFree;
@@ -125,6 +114,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> segmentCount(int segmentCount)
     {
         this.segmentCount = segmentCount;
+        return this;
+    }
+
+    public double getLoadFactor()
+    {
+        return loadFactor;
+    }
+
+    public OHCacheBuilder<K, V> loadFactor(double loadFactor)
+    {
+        this.loadFactor = loadFactor;
         return this;
     }
 }
