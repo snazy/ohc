@@ -25,9 +25,4 @@ public abstract class AbstractTest
         }
     };
 
-    protected OHCacheBuilder<Object, Object> newBuilder()
-    {
-        return OHCacheBuilder.newBuilder();
-    }
-
 }

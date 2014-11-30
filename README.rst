@@ -16,7 +16,8 @@ OHC shall provide a good performance on both commodity hardware and big systems 
 Requirements
 ------------
 
-Java7 VM that support 64bit field CAS and ``sun.misc.Unsafe`` (Oracle JVMs on x64 Intel CPUs).
+Java8 VM that support 64bit field CAS and ``sun.misc.Unsafe`` (Oracle JVMs on x64 Intel CPUs).
+Intent to backport for Java7 VM.
 
 Architecture
 ------------
@@ -66,33 +67,6 @@ has some "escape from JVM context" cost.
 But off heap memory is great when you have to deal with a huge amount of several/many GB of cache memory since
 that dos not put any pressure on the Java garbage collector. Let the Java GC do its job for the application where
 this library does its job for the cached data.
-
-Alternate implementation "mono"
--------------------------------
-
-OHC uses a simple hash table as its primary data structure. Each hash partition basically consists of a pointer
-to one hash entry - each hash entry has a pointer to its successor and predecessor
-building a linked-list.
-
-The hash table will be automatically resized if the number of linked-list-iterations is too high (configurable).
-
-CAS based stamped locks are used on each hash partition and each hash entry. Hash entry locks are
-required because OHC tries to release each lock on a whole hash partition as soon as possible.
-
-Put operations do not succeed if there is not enough free space to serialize the data. Reason is that OHC will
-not block any operation longer than really necessary. This should be completely fine for caches since it is better
-to let a cache-put not succeed than to block the calling application. If there's demand for a *put guarantee*
-it can be implemented (as long as there's enough free capacity).
-
-OHC provides a pure LRU based eviction mechanism. But be aware that calculation of entries to evict is based on averages
-and does its job not very accurately to increase overall performance - it's a trade-off between performance
-and accuracy.
-
-Note on the ``hotN`` function: The implementation will take N divided by number of hash partitions keys and usually
-return much more results than expected (the results are not ordered - the results just represent some least
-recently accessed entries).
-
-Memory allocation for hash entries is either performed using JEMalloc (preferred, if available) or ``Unsafe``.
 
 License
 -------
