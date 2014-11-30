@@ -56,7 +56,7 @@ public class BasicTest extends AbstractTest
         try (OHCache cache = newBuilder()
                              .capacity(CAPACITY_64M)
                              .hashTableSize(256)
-                             .entriesPerPartitionTrigger(4)
+                             .entriesPerSegmentTrigger(4)
                              .build())
         {
             OHCacheStats stats = cache.extendedStats();
@@ -82,7 +82,7 @@ public class BasicTest extends AbstractTest
         try (OHCache cache = newBuilder()
                              .capacity(CAPACITY_64M)
                              .hashTableSize(32)
-                             .entriesPerPartitionTrigger(4)
+                             .entriesPerSegmentTrigger(4)
                              .build())
         {
             for (int i = 0; i < 4 * 32; i++)

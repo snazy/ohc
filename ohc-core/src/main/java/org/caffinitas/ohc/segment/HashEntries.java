@@ -24,9 +24,9 @@ import org.caffinitas.ohc.internal.Util;
 /**
  * Encapsulates access to hash entries.
  */
-final class HashEntries implements Constants
+public final class HashEntries implements Constants
 {
-    static long createNewEntry(DataMemory dataMemory, long hash, BytesSource keySource, BytesSource valueSource, long valueLen)
+    static long createNew(DataMemory dataMemory, long hash, BytesSource keySource, BytesSource valueSource, long valueLen)
     {
         long keyLen = keySource.size();
         if (valueSource != null)
@@ -41,19 +41,19 @@ final class HashEntries implements Constants
             return 0L;
 
         // initialize hash entry fields
-        initHashEntry(hash, keyLen, valueLen, hashEntryAdr);
+        init(hash, keyLen, valueLen, hashEntryAdr);
 
         // serialize key
-        sourceToOffHeap(keySource, hashEntryAdr, ENTRY_OFF_DATA);
+        toOffHeap(keySource, hashEntryAdr, ENTRY_OFF_DATA);
 
         if (valueSource != null)
             // serialize value
-            sourceToOffHeap(valueSource, hashEntryAdr, ENTRY_OFF_DATA + valueOff);
+            toOffHeap(valueSource, hashEntryAdr, ENTRY_OFF_DATA + valueOff);
 
         return hashEntryAdr;
     }
 
-    private static void sourceToOffHeap(BytesSource source, long hashEntryAdr, long blkOff)
+    private static void toOffHeap(BytesSource source, long hashEntryAdr, long blkOff)
     {
         long len = source.size();
         if (source.hasArray())
@@ -74,17 +74,17 @@ final class HashEntries implements Constants
         }
     }
 
-    private static void initHashEntry(long hash, long keyLen, long valueLen, long hashEntryAdr)
+    private static void init(long hash, long keyLen, long valueLen, long hashEntryAdr)
     {
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_HASH, hash);
-        setNextEntry(hashEntryAdr, 0L);
-        setPreviousEntry(hashEntryAdr, 0L);
+        setNext(hashEntryAdr, 0L);
+        setPrevious(hashEntryAdr, 0L);
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_KEY_LENGTH, keyLen);
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_VALUE_LENGTH, valueLen);
-        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_REFCOUNT, 0L);
+        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_REFCOUNT, 1L);
     }
 
-    static void writeValueToSink(long hashEntryAdr, BytesSink valueSink)
+    static void valueToSink(long hashEntryAdr, BytesSink valueSink)
     {
         if (hashEntryAdr == 0L)
             return;
@@ -157,37 +157,40 @@ final class HashEntries implements Constants
         return true;
     }
 
-    static long getEntryReplacement0(long hashEntryAdr)
+    // Replacement0 and replacement1 are values used by replacement strategies and stored with each hash entry.
+    // For example LRUReplacementStrategy requires a 'next' and a 'previous' pointer for its double-linked-LRU-list.
+
+    public static long getReplacement0(long hashEntryAdr)
     {
         return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_REPLACEMENT0);
     }
 
-    static void setEntryReplacement0(long hashEntryAdr, long replacement)
+    public static void setReplacement0(long hashEntryAdr, long replacement)
     {
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_REPLACEMENT0, replacement);
     }
 
-    static long getEntryReplacement1(long hashEntryAdr)
+    public static long getReplacement1(long hashEntryAdr)
     {
         return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_REPLACEMENT1);
     }
 
-    static void setEntryReplacement1(long hashEntryAdr, long replacement)
+    public static void setReplacement1(long hashEntryAdr, long replacement)
     {
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_REPLACEMENT1, replacement);
     }
 
-    static long getEntryHash(long hashEntryAdr)
+    static long getHash(long hashEntryAdr)
     {
         return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_HASH);
     }
 
-    static long getNextEntry(long hashEntryAdr)
+    static long getNext(long hashEntryAdr)
     {
         return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_NEXT) : 0L;
     }
 
-    static void setNextEntry(long hashEntryAdr, long nextAdr)
+    static void setNext(long hashEntryAdr, long nextAdr)
     {
         if (hashEntryAdr == nextAdr)
             throw new IllegalArgumentException();
@@ -195,12 +198,12 @@ final class HashEntries implements Constants
             Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_NEXT, nextAdr);
     }
 
-    static long getPreviousEntry(long hashEntryAdr)
+    static long getPrevious(long hashEntryAdr)
     {
         return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_PREVIOUS) : 0L;
     }
 
-    static void setPreviousEntry(long hashEntryAdr, long prevAdr)
+    static void setPrevious(long hashEntryAdr, long prevAdr)
     {
         if (hashEntryAdr == prevAdr)
             throw new IllegalArgumentException();
@@ -220,31 +223,26 @@ final class HashEntries implements Constants
 
     static DataInput readKeyFrom(long hashEntryAdr)
     {
-        return newHashEntryInput(hashEntryAdr, false);
+        return newInput(hashEntryAdr, false);
     }
 
     static DataInput readValueFrom(long hashEntryAdr)
     {
-        return newHashEntryInput(hashEntryAdr, true);
+        return newInput(hashEntryAdr, true);
     }
 
-    private static HashEntryInput newHashEntryInput(long hashEntryAdr, boolean value)
+    private static HashEntryInput newInput(long hashEntryAdr, boolean value)
     {
         return new HashEntryInput(hashEntryAdr, value, getHashKeyLen(hashEntryAdr), getValueLen(hashEntryAdr));
     }
 
-    static void referenceEntry(long hashEntryAdr)
+    static void reference(long hashEntryAdr)
     {
         Uns.increment(hashEntryAdr, ENTRY_OFF_REFCOUNT);
     }
 
-    static void dereferenceEntry(long hashEntryAdr)
+    static boolean dereference(long hashEntryAdr)
     {
-        Uns.decrement(hashEntryAdr, ENTRY_OFF_REFCOUNT);
-    }
-
-    static void awaitEntryUnreferenced(long hashEntryAdr)
-    {
-        Uns.awaitValue(hashEntryAdr, ENTRY_OFF_REFCOUNT, 0);
+        return Uns.decrement(hashEntryAdr, ENTRY_OFF_REFCOUNT);
     }
 }

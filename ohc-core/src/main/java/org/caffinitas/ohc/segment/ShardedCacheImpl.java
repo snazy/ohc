@@ -38,11 +38,12 @@ import org.caffinitas.ohc.api.OHCacheBuilder;
 import org.caffinitas.ohc.api.OHCacheStats;
 import org.caffinitas.ohc.api.PutResult;
 import org.caffinitas.ohc.internal.Util;
+import org.caffinitas.ohc.segment.replacement.ReplacementStrategy;
 
-public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
+public final class ShardedCacheImpl<K, V> implements OHCache<K, V>
 {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(SegmentCacheImpl.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(ShardedCacheImpl.class);
 
     public static final int ONE_GIGABYTE = 1024 * 1024 * 1024;
 
@@ -50,8 +51,8 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
     private final CacheSerializer<V> valueSerializer;
 
     private final OffHeapMap[] maps;
-    private final long segmentMask;
-    private final int segmentShift;
+    private final long shardMask;
+    private final int shardShift;
     private final DataMemory dataMemory;
     private final long capacity;
     private final long cleanUpTriggerMinFree;
@@ -74,7 +75,7 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
 
     volatile boolean closed;
 
-    public SegmentCacheImpl(OHCacheBuilder<K, V> builder)
+    public ShardedCacheImpl(OHCacheBuilder<K, V> builder)
     {
         // inquire current replacement strategy
         String rs = builder.getReplacementStrategy();
@@ -83,9 +84,10 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         Class<? extends ReplacementStrategy> replacementStrategyClass;
         try
         {
+            Class<ReplacementStrategy> intf = ReplacementStrategy.class;
             String cls = rs.indexOf('.') != -1
                          ? rs
-                         : getClass().getName().substring(0, getClass().getName().lastIndexOf('.') + 1) + rs + ReplacementStrategy.class.getSimpleName();
+                         : intf.getName().substring(0, intf.getName().lastIndexOf('.') + 1) + rs + intf.getSimpleName();
             replacementStrategyClass = (Class<? extends ReplacementStrategy>) Class.forName(cls);
         }
         catch (ClassNotFoundException e)
@@ -97,13 +99,13 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         this.capacity = builder.getCapacity();
         this.dataMemory = new DataMemory(this.capacity);
 
-        // build segments
-        int segments = builder.getSegmentCount();
-        if (segments <= 0)
-            segments = Runtime.getRuntime().availableProcessors() * 2;
-        segments = Util.roundUpToPowerOf2(segments);
-        maps = new OffHeapMap[segments];
-        for (int i = 0; i < segments; i++)
+        // build shards
+        int shards = builder.getShardCount();
+        if (shards <= 0)
+            shards = Runtime.getRuntime().availableProcessors() * 2;
+        shards = Util.roundUpToPowerOf2(shards);
+        maps = new OffHeapMap[shards];
+        for (int i = 0; i < shards; i++)
             try
             {
                 maps[i] = new OffHeapMap(builder, dataMemory, replacementStrategyClass.newInstance());
@@ -117,10 +119,10 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
                 e.printStackTrace();
             }
 
-        // bit-mask for segment part of hash
-        int bitNum = Util.bitNum(segments) - 1;
-        this.segmentShift = 64 - bitNum;
-        this.segmentMask = ((long) segments - 1) << segmentShift;
+        // bit-mask for shard part of hash
+        int bitNum = Util.bitNum(shards) - 1;
+        this.shardShift = 64 - bitNum;
+        this.shardMask = ((long) shards - 1) << shardShift;
 
         // calculate trigger for cleanup/eviction/replacement
         double cut = builder.getCleanUpTriggerMinFree();
@@ -182,8 +184,6 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
     {
         try
         {
-            Uns.processOutstandingFree();
-
             if (dataMemory.freeCapacity() < cleanUpTriggerMinFree)
                 cleanUp();
 
@@ -220,14 +220,14 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
 
         long hashEntryAdr;
 
-        OffHeapMap map = segment(hash);
+        OffHeapMap map = shard(hash);
         long lock = map.lock();
         try
         {
             hashEntryAdr = map.getEntry(hash, keySource);
 
             if (hashEntryAdr != 0L)
-                HashEntries.referenceEntry(hashEntryAdr);
+                HashEntries.reference(hashEntryAdr);
         }
         finally
         {
@@ -254,7 +254,7 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            HashEntries.dereferenceEntry(hashEntryAdr);
+            dereference(hashEntryAdr);
         }
     }
 
@@ -262,14 +262,14 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
     {
         long hashEntryAdr;
 
-        OffHeapMap map = segment(hash);
+        OffHeapMap map = shard(hash);
         long lock = map.lock();
         try
         {
             hashEntryAdr = map.getEntry(hash, keySource);
 
             if (hashEntryAdr != 0L)
-                HashEntries.referenceEntry(hashEntryAdr);
+                HashEntries.reference(hashEntryAdr);
         }
         finally
         {
@@ -285,14 +285,14 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
 
         try
         {
-            HashEntries.writeValueToSink(hashEntryAdr, valueSink);
+            HashEntries.valueToSink(hashEntryAdr, valueSink);
             if (statisticsEnabled)
                 hitCount.increment();
             return true;
         }
         finally
         {
-            HashEntries.dereferenceEntry(hashEntryAdr);
+            dereference(hashEntryAdr);
         }
     }
 
@@ -307,8 +307,8 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
 //            cleanUp();
 
         // Allocate and fill new hash entry.
-        // Do this outside of the hash-partition lock to hold that lock no longer than necessary.
-        long newHashEntryAdr = HashEntries.createNewEntry(dataMemory, hash, keySource, null, valueLen);
+        // Do this outside of the shard lock to hold that lock no longer than necessary.
+        long newHashEntryAdr = HashEntries.createNew(dataMemory, hash, keySource, null, valueLen);
         if (newHashEntryAdr == 0L)
         {
             if (statisticsEnabled)
@@ -323,13 +323,13 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         }
         catch (IOException e)
         {
-            dataMemory.free(newHashEntryAdr, false);
+            dataMemory.free(newHashEntryAdr);
             throw new IOError(e);
         }
 
         long oldHashEntryAdr;
 
-        OffHeapMap map = segment(hash);
+        OffHeapMap map = shard(hash);
         long lock = map.lock();
         try
         {
@@ -347,7 +347,7 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
             return;
         }
 
-        freeHashEntry(oldHashEntryAdr);
+        dereference(oldHashEntryAdr);
 
         if (statisticsEnabled)
             putReplaceCount.increment();
@@ -356,8 +356,8 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
     public PutResult put(long hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink)
     {
         // Allocate and fill new hash entry.
-        // Do this outside of the hash-partition lock to hold that lock no longer than necessary.
-        long newHashEntryAdr = HashEntries.createNewEntry(dataMemory, hash, keySource, valueSource, -1L);
+        // Do this outside of the shard lock to hold that lock no longer than necessary.
+        long newHashEntryAdr = HashEntries.createNew(dataMemory, hash, keySource, valueSource, -1L);
         if (newHashEntryAdr == 0L)
         {
             if (statisticsEnabled)
@@ -368,7 +368,7 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
 
         long oldHashEntryAdr;
 
-        OffHeapMap map = segment(hash);
+        OffHeapMap map = shard(hash);
         long lock = map.lock();
         try
         {
@@ -387,9 +387,9 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         }
 
         if (oldValueSink != null)
-            HashEntries.writeValueToSink(oldHashEntryAdr, oldValueSink);
+            HashEntries.valueToSink(oldHashEntryAdr, oldValueSink);
 
-        freeHashEntry(oldHashEntryAdr);
+        dereference(oldHashEntryAdr);
 
         if (statisticsEnabled)
             putReplaceCount.increment();
@@ -401,7 +401,7 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
     {
         long hashEntryAdr;
 
-        OffHeapMap map = segment(hash);
+        OffHeapMap map = shard(hash);
         long lock = map.lock();
         try
         {
@@ -415,7 +415,7 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         if (hashEntryAdr == 0L)
             return false;
 
-        freeHashEntry(hashEntryAdr);
+        dereference(hashEntryAdr);
 
         if (statisticsEnabled)
             removeCount.increment();
@@ -423,10 +423,10 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         return true;
     }
 
-    private void freeHashEntry(long hashEntryAdr)
+    private void dereference(long hashEntryAdr)
     {
-        HashEntries.awaitEntryUnreferenced(hashEntryAdr);
-        dataMemory.free(hashEntryAdr, true);
+        if (HashEntries.dereference(hashEntryAdr))
+            dataMemory.free(hashEntryAdr);
     }
 
     public void invalidate(Object key)
@@ -437,9 +437,9 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         remove(hash, keySource);
     }
 
-    private OffHeapMap segment(long hash)
+    private OffHeapMap shard(long hash)
     {
-        int seg = (int) ((hash & segmentMask) >>> segmentShift);
+        int seg = (int) ((hash & shardMask) >>> shardShift);
         return maps[seg];
     }
 
@@ -549,8 +549,6 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
             {
                 Thread.currentThread().interrupt();
             }
-
-            Uns.processOutstandingFree();
         }
 
         invalidateAll();

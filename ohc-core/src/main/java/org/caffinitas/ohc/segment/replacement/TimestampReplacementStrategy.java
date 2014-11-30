@@ -13,27 +13,29 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.segment;
+package org.caffinitas.ohc.segment.replacement;
 
-public class NoneReplacementStrategy implements ReplacementStrategy
+import org.caffinitas.ohc.segment.HashEntries;
+
+public final class TimestampReplacementStrategy implements ReplacementStrategy
 {
     public void entryUsed(long hashEntryAdr)
     {
-
+        HashEntries.setReplacement0(hashEntryAdr, System.currentTimeMillis());
     }
 
     public void entryReplaced(long oldHashEntryAdr, long hashEntryAdr)
     {
-
+        HashEntries.setReplacement0(hashEntryAdr, System.currentTimeMillis());
     }
 
     public void entryRemoved(long hashEntryAdr)
     {
-
+        HashEntries.setReplacement0(hashEntryAdr, 0L);
     }
 
     public long cleanUp(long recycleGoal, ReplacementCallback cb)
     {
-        return 0;
+        throw new UnsupportedOperationException();
     }
 }

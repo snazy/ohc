@@ -23,12 +23,14 @@ import org.slf4j.LoggerFactory;
 import org.caffinitas.ohc.api.BytesSource;
 import org.caffinitas.ohc.api.OHCacheBuilder;
 import org.caffinitas.ohc.internal.Util;
+import org.caffinitas.ohc.segment.replacement.ReplacementCallback;
+import org.caffinitas.ohc.segment.replacement.ReplacementStrategy;
 
 final class OffHeapMap implements Constants
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(OffHeapMap.class);
 
-    private final double entriesPerPartitionTrigger;
+    private final double entriesPerSegmentTrigger;
 
     volatile long size;
 
@@ -40,15 +42,18 @@ final class OffHeapMap implements Constants
     private volatile boolean rehashTrigger;
     private ReplacementCallback replacementCallback = new ReplacementCallback()
     {
-        public void evict(long hashEntryAdr)
+        public long evict(long hashEntryAdr)
         {
-            long hash = HashEntries.getEntryHash(hashEntryAdr);
+            long bytes = DataMemory.getEntryBytes(hashEntryAdr);
+            long hash = HashEntries.getHash(hashEntryAdr);
             table.removeLink(hash, hashEntryAdr);
 
-            HashEntries.awaitEntryUnreferenced(hashEntryAdr);
-            dataMemory.free(hashEntryAdr, true);
+            if (HashEntries.dereference(hashEntryAdr))
+                dataMemory.free(hashEntryAdr);
 
             size--;
+
+            return bytes;
         }
     };
 
@@ -63,7 +68,7 @@ final class OffHeapMap implements Constants
             hts = 8192;
         table = new Table(Util.roundUpToPowerOf2(hts));
 
-        this.entriesPerPartitionTrigger = builder.getEntriesPerPartitionTrigger();
+        this.entriesPerSegmentTrigger = builder.getEntriesPerSegmentTrigger();
     }
 
     void release()
@@ -93,7 +98,7 @@ final class OffHeapMap implements Constants
         int loops = 0;
         for (long hashEntryAdr = firstHashEntryAdr;
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first = false)
+             hashEntryAdr = HashEntries.getNext(hashEntryAdr), loops++, first = false)
         {
             assertNotEndlessLoop(hash, firstHashEntryAdr, first, hashEntryAdr);
 
@@ -123,7 +128,7 @@ final class OffHeapMap implements Constants
         long hashEntryAdr;
         for (hashEntryAdr = firstHashEntryAdr;
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first = false)
+             hashEntryAdr = HashEntries.getNext(hashEntryAdr), loops++, first = false)
         {
             assertNotEndlessLoop(hash, firstHashEntryAdr, first, hashEntryAdr);
 
@@ -155,7 +160,7 @@ final class OffHeapMap implements Constants
         int loops = 0;
         for (long hashEntryAdr = firstHashEntryAdr;
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first = false)
+             hashEntryAdr = HashEntries.getNext(hashEntryAdr), loops++, first = false)
         {
             assertNotEndlessLoop(hash, firstHashEntryAdr, first, hashEntryAdr);
 
@@ -188,7 +193,7 @@ final class OffHeapMap implements Constants
     {
         maybeTriggerRehash(loops);
 
-        long hashEntryHash = HashEntries.getEntryHash(hashEntryAdr);
+        long hashEntryHash = HashEntries.getHash(hashEntryAdr);
         if (hashEntryHash != hash)
             return true;
 
@@ -199,10 +204,10 @@ final class OffHeapMap implements Constants
 
     private void maybeTriggerRehash(int loops)
     {
-        if (loops >= entriesPerPartitionTrigger && !rehashTrigger)
+        if (loops >= entriesPerSegmentTrigger && !rehashTrigger)
         {
             rehashTrigger = true;
-            LOGGER.warn("Degraded OHC performance! Partition linked list very long - rehash triggered");
+            LOGGER.warn("Degraded OHC performance! Segment linked list very long - rehash triggered");
         }
     }
 
@@ -236,10 +241,10 @@ final class OffHeapMap implements Constants
                  hashEntryAdr != 0L;
                  hashEntryAdr = next)
             {
-                next = HashEntries.getNextEntry(hashEntryAdr);
+                next = HashEntries.getNext(hashEntryAdr);
 
-                HashEntries.setNextEntry(hashEntryAdr, 0L);
-                hash = HashEntries.getEntryHash(hashEntryAdr);
+                HashEntries.setNext(hashEntryAdr, 0L);
+                hash = HashEntries.getHash(hashEntryAdr);
                 newTable.addLinkAsHead(hash, hashEntryAdr);
             }
 
@@ -252,48 +257,48 @@ final class OffHeapMap implements Constants
 
     static final class Table
     {
-        final int hashPartitionMask;
+        final int segmentMask;
         final long address;
 
         public Table(int hashTableSize)
         {
-            int msz = (int) PARTITION_ENTRY_LEN * hashTableSize;
+            int msz = (int) BUCKET_ENTRY_LEN * hashTableSize;
             this.address = Uns.allocate(msz);
-            hashPartitionMask = hashTableSize - 1;
-            // It's important to initialize the hash partition memory.
+            segmentMask = hashTableSize - 1;
+            // It's important to initialize the hash segment table memory.
             // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
             Uns.setMemory(address, 0L, msz, (byte) 0);
         }
 
         void release()
         {
-            Uns.asyncFree(address);
+            Uns.free(address);
         }
 
         long first(long hash)
         {
-            return Uns.getLongVolatile(address, partitionOffset(hash));
+            return Uns.getLongVolatile(address, bucketOffset(hash));
         }
 
         void first(long hash, long hashEntryAdr)
         {
-            Uns.putLongVolatile(address, partitionOffset(hash), hashEntryAdr);
+            Uns.putLongVolatile(address, bucketOffset(hash), hashEntryAdr);
         }
 
-        private long partitionOffset(long hash)
+        private long bucketOffset(long hash)
         {
-            return partitionForHash(hash) * PARTITION_ENTRY_LEN;
+            return bucketIndexForHash(hash) * BUCKET_ENTRY_LEN;
         }
 
-        private int partitionForHash(long hash)
+        private int bucketIndexForHash(long hash)
         {
-            return (int) (hash & hashPartitionMask);
+            return (int) (hash & segmentMask);
         }
 
         void removeLink(long hash, long hashEntryAdr)
         {
-            long prev = HashEntries.getPreviousEntry(hashEntryAdr);
-            long next = HashEntries.getNextEntry(hashEntryAdr);
+            long prev = HashEntries.getPrevious(hashEntryAdr);
+            long next = HashEntries.getNext(hashEntryAdr);
 
             long head = first(hash);
             if (head == hashEntryAdr)
@@ -304,28 +309,28 @@ final class OffHeapMap implements Constants
             }
 
             if (prev != 0L)
-                HashEntries.setNextEntry(prev, next);
+                HashEntries.setNext(prev, next);
             if (next != 0L)
-                HashEntries.setPreviousEntry(next, prev);
+                HashEntries.setPrevious(next, prev);
 
             // just for safety
-            HashEntries.setPreviousEntry(hashEntryAdr, 0L);
-            HashEntries.setNextEntry(hashEntryAdr, 0L);
+            HashEntries.setPrevious(hashEntryAdr, 0L);
+            HashEntries.setNext(hashEntryAdr, 0L);
         }
 
         void addLinkAsHead(long hash, long hashEntryAdr)
         {
             long head = first(hash);
-            HashEntries.setNextEntry(hashEntryAdr, head);
-            HashEntries.setPreviousEntry(hashEntryAdr, 0L); // just for safety
+            HashEntries.setNext(hashEntryAdr, head);
+            HashEntries.setPrevious(hashEntryAdr, 0L); // just for safety
             first(hash, hashEntryAdr);
             if (head != 0L)
-                HashEntries.setPreviousEntry(head, hashEntryAdr);
+                HashEntries.setPrevious(head, hashEntryAdr);
         }
 
         int size()
         {
-            return hashPartitionMask + 1;
+            return segmentMask + 1;
         }
     }
 }

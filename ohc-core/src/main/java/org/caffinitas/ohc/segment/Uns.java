@@ -31,10 +31,8 @@
 package org.caffinitas.ohc.segment;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,7 +66,7 @@ final class Uns
                 Throwable freedAt = ohFreeDebug.get(address);
                 throw new IllegalStateException("Free of unallocated region " + address, freedAt);
             }
-            ohFreeDebug.put(address, new Exception("free backtrace"));
+            ohFreeDebug.put(address, new Exception("free backtrace - t="+System.nanoTime()));
         }
     }
     private static void allocated(long address, long bytes)
@@ -88,7 +86,7 @@ final class Uns
             if (allocatedLen == null)
             {
                 Throwable freedAt = ohFreeDebug.get(address);
-                throw new IllegalStateException("Access to unallocated region " + address, freedAt);
+                throw new IllegalStateException("Access to unallocated region " + address +" - t="+System.nanoTime(), freedAt);
             }
             if (offset < 0L)
                 throw new IllegalArgumentException("Negative offset");
@@ -184,21 +182,20 @@ final class Uns
         return unsafe.getByte(null, address + offset);
     }
 
-    static void decrement(long address, long offset)
+    static boolean decrement(long address, long offset)
     {
         if (address == 0L)
             throw new NullPointerException();
         validate(address, offset, 8L);
         address += offset;
-        for (int spin = -1; ; )
+        long v;
+        while (true)
         {
-            long v = unsafe.getLongVolatile(null, address);
+            v = unsafe.getLongVolatile(null, address);
             if (v == 0)
                 throw new IllegalStateException("Must not decrement 0");
             if (unsafe.compareAndSwapLong(null, address, v, v - 1))
-                return;
-
-            spin = spinLock(spin);
+                return v == 1;
         }
     }
 
@@ -208,46 +205,11 @@ final class Uns
             throw new NullPointerException();
         validate(address, offset, 8L);
         address += offset;
-        for (int spin = -1; ; )
+        long v;
+        do
         {
-            long v = unsafe.getLongVolatile(null, address);
-            if (unsafe.compareAndSwapLong(null, address, v, v + 1))
-                return;
-
-            spin = spinLock(spin);
-        }
-    }
-
-    static void awaitValue(long address, long offset, long value)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        validate(address, offset, 8L);
-        address += offset;
-        for (int spin = -1; ; )
-        {
-            if (unsafe.getLongVolatile(null, address) == value)
-                return;
-
-            spin = spinLock(spin);
-        }
-    }
-
-    private static int spinLock(int spin)
-    {
-        if (spin == -1)
-            spin = (int) Thread.currentThread().getId();
-        // spin in 50ms units during rehash and 5us else
-        park(((spin & 3) + 1) * 5000);
-        return spin + 1;
-    }
-
-    static boolean compareAndSwap(long address, long offset, long expected, long value)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-        validate(address, offset, 8L);
-        return unsafe.compareAndSwapLong(null, address +  offset, expected, value);
+            v = unsafe.getLongVolatile(null, address);
+        } while (!unsafe.compareAndSwapLong(null, address, v, v + 1));
     }
 
     static void copyMemory(byte[] arr, int off, long address, long offset, long len)
@@ -278,11 +240,6 @@ final class Uns
         unsafe.setMemory(address + offset, len, val);
     }
 
-    static void park(long nanos)
-    {
-        unsafe.park(false, nanos);
-    }
-
     static long allocate(long bytes)
     {
         if (bytes <= 0)
@@ -301,41 +258,5 @@ final class Uns
             throw new NullPointerException();
         freed(address);
         allocator.free(address);
-    }
-
-    static final long[] asyncFree = new long[1024];
-    static final AtomicInteger asyncFreeIndex = new AtomicInteger();
-
-    static void asyncFree(long address)
-    {
-        if (address == 0L)
-            throw new NullPointerException();
-
-        // If the async-free-list has room (and is not locked), just add the address to free().
-        // Otherwise fall through to immediate free().
-//        if (asyncFreeIndex.get() < asyncFree.length - 1)
-//        {
-//            int idx = asyncFreeIndex.getAndIncrement();
-//            if (idx < asyncFree.length)
-//            {
-//                asyncFree[idx] = address;
-//                return;
-//            }
-//        }
-
-        free(address);
-    }
-
-    static void processOutstandingFree()
-    {
-        // This is basically a locked copy of the array containing the addresses to free()
-        asyncFreeIndex.set(asyncFree.length);
-        long[] lst = asyncFree.clone();
-        Arrays.fill(asyncFree, 0L);
-        asyncFreeIndex.set(0);
-
-        for (long adr : lst)
-            if (adr != 0L)
-                free(adr);
     }
 }

@@ -13,9 +13,15 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.segment;
+package org.caffinitas.ohc.segment.replacement;
 
-public interface ReplacementCallback
+public interface ReplacementStrategy
 {
-    void evict(long hashEntryAdr);
+    void entryUsed(long hashEntryAdr);
+
+    void entryReplaced(long oldHashEntryAdr, long hashEntryAdr);
+
+    void entryRemoved(long hashEntryAdr);
+
+    long cleanUp(long recycleGoal, ReplacementCallback cb);
 }

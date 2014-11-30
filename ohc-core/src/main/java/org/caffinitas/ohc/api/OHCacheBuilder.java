@@ -16,16 +16,16 @@
 package org.caffinitas.ohc.api;
 
 import org.caffinitas.ohc.mono.MonoCacheImpl;
-import org.caffinitas.ohc.segment.SegmentCacheImpl;
+import org.caffinitas.ohc.segment.ShardedCacheImpl;
 
 public class OHCacheBuilder<K, V>
 {
-    private int segmentCount;
+    private int shardCount;
     private int hashTableSize;
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
-    private int entriesPerPartitionTrigger = 10;
+    private int entriesPerSegmentTrigger = 10;
     private double cleanUpTriggerMinFree = -1d;
     private boolean statisticsEnabled;
     private boolean monoExperimental;
@@ -44,7 +44,7 @@ public class OHCacheBuilder<K, V>
     {
         if (monoExperimental)
             return new MonoCacheImpl<>(this);
-        return new SegmentCacheImpl<>(this);
+        return new ShardedCacheImpl<>(this);
     }
 
     public int getHashTableSize()
@@ -91,14 +91,14 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public int getEntriesPerPartitionTrigger()
+    public int getEntriesPerSegmentTrigger()
     {
-        return entriesPerPartitionTrigger;
+        return entriesPerSegmentTrigger;
     }
 
-    public OHCacheBuilder<K, V> entriesPerPartitionTrigger(int entriesPerPartitionTrigger)
+    public OHCacheBuilder<K, V> entriesPerSegmentTrigger(int entriesPerBucketTrigger)
     {
-        this.entriesPerPartitionTrigger = entriesPerPartitionTrigger;
+        this.entriesPerSegmentTrigger = entriesPerBucketTrigger;
         return this;
     }
 
@@ -124,14 +124,14 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public int getSegmentCount()
+    public int getShardCount()
     {
-        return segmentCount;
+        return shardCount;
     }
 
-    public OHCacheBuilder<K, V> segmentCount(int segmentCount)
+    public OHCacheBuilder<K, V> shardCount(int segmentCount)
     {
-        this.segmentCount = segmentCount;
+        this.shardCount = segmentCount;
         return this;
     }
 

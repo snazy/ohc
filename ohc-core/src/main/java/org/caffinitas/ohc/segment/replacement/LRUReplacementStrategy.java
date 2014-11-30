@@ -13,9 +13,11 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.segment;
+package org.caffinitas.ohc.segment.replacement;
 
-final class LRUReplacementStrategy implements ReplacementStrategy
+import org.caffinitas.ohc.segment.HashEntries;
+
+public final class LRUReplacementStrategy implements ReplacementStrategy
 {
     private volatile long head;
     private volatile long tail;
@@ -51,22 +53,22 @@ final class LRUReplacementStrategy implements ReplacementStrategy
 
     private long lruNext(long hashEntryAdr)
     {
-        return HashEntries.getEntryReplacement0(hashEntryAdr);
+        return HashEntries.getReplacement0(hashEntryAdr);
     }
 
     private long lruPrev(long hashEntryAdr)
     {
-        return HashEntries.getEntryReplacement1(hashEntryAdr);
+        return HashEntries.getReplacement1(hashEntryAdr);
     }
 
     private void lruNext(long hashEntryAdr, long next)
     {
-        HashEntries.setEntryReplacement0(hashEntryAdr, next);
+        HashEntries.setReplacement0(hashEntryAdr, next);
     }
 
     private void lruPrev(long hashEntryAdr, long prev)
     {
-        HashEntries.setEntryReplacement1(hashEntryAdr, prev);
+        HashEntries.setReplacement1(hashEntryAdr, prev);
     }
 
     public void entryUsed(long hashEntryAdr)
@@ -97,10 +99,9 @@ final class LRUReplacementStrategy implements ReplacementStrategy
         {
             prev = lruPrev(hashEntryAdr);
 
-            long bytes = DataMemory.getEntryBytes(hashEntryAdr);
             removeLRU(hashEntryAdr);
 
-            cb.evict(hashEntryAdr);
+            long bytes = cb.evict(hashEntryAdr);
 
             recycleGoal -= bytes;
 

@@ -1,0 +1,16 @@
+Shard :
+    The whole cache is split into multiple shards.
+    Each shard consists of one OffHeapMap instance.
+    All accesses to critical sections of a shard are guarded by an exclusive lock.
+
+Segment :
+    OffHeapMap basically consists of a table and a lock.
+    Each entry in that table references the whole segment indirectly via a double-linked-list rooted in one
+    bucket.
+
+Bucket :
+    Element in the hash table of OffHeapMap. Currently just contains a pointer to the first element.
+
+Entry :
+    Key + value + some metadata. A bucket points to one entry. Each entry has references to its two
+    neighbors ("next" + "previous").

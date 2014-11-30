@@ -13,23 +13,25 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.segment;
+package org.caffinitas.ohc.segment.replacement;
 
-final class TwoQReplacementStrategy implements ReplacementStrategy
+import org.caffinitas.ohc.segment.HashEntries;
+
+public final class TwoQReplacementStrategy implements ReplacementStrategy
 {
     public void entryUsed(long hashEntryAdr)
     {
-        HashEntries.setEntryReplacement0(hashEntryAdr, HashEntries.getEntryReplacement0(hashEntryAdr) + 1);
+        HashEntries.setReplacement0(hashEntryAdr, HashEntries.getReplacement0(hashEntryAdr) + 1);
     }
 
     public void entryReplaced(long oldHashEntryAdr, long hashEntryAdr)
     {
-        HashEntries.setEntryReplacement0(hashEntryAdr, HashEntries.getEntryReplacement0(hashEntryAdr) + 1);
+        HashEntries.setReplacement0(hashEntryAdr, HashEntries.getReplacement0(hashEntryAdr) + 1);
     }
 
     public void entryRemoved(long hashEntryAdr)
     {
-        HashEntries.setEntryReplacement0(hashEntryAdr, 0L);
+        HashEntries.setReplacement0(hashEntryAdr, 0L);
     }
 
     public long cleanUp(long recycleGoal, ReplacementCallback cb)

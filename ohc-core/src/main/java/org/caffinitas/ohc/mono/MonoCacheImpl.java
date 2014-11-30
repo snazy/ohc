@@ -131,7 +131,7 @@ public final class MonoCacheImpl<K, V> implements OHCache<K, V>
                 hts = (int) (cap / 4096);
         }
 
-        int entriesPerPartitionTrigger = builder.getEntriesPerPartitionTrigger();
+        int entriesPerPartitionTrigger = builder.getEntriesPerSegmentTrigger();
         if (entriesPerPartitionTrigger < 1)
             entriesPerPartitionTrigger = 1;
         this.entriesPerPartitionTrigger = entriesPerPartitionTrigger;

@@ -56,7 +56,7 @@ final class DataMemory implements Constants
         return 0L;
     }
 
-    long free(long address, boolean async)
+    long free(long address)
     {
         if (address == 0L)
             throw new NullPointerException();
@@ -64,10 +64,7 @@ final class DataMemory implements Constants
         long bytes = getEntryBytes(address);
         if (bytes == 0L)
             throw new IllegalStateException();
-        if (async)
-            Uns.asyncFree(address);
-        else
-            Uns.free(address);
+        Uns.free(address);
         freeCapacity.add(bytes);
         return bytes;
     }
