@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.Future;
 
-import org.caffinitas.ohc.api.CacheSerializer;
+import org.caffinitas.ohc.CacheSerializer;
 
 public class BenchmarkUtils {
     public static final CacheSerializer<byte[]> serializer = new CacheSerializer<byte[]>() {

@@ -13,30 +13,13 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc;
+package org.caffinitas.ohc.replacement;
 
-public class ThirteenSource extends BytesSource.AbstractSource
+/**
+ * Instance of this interface is passed to {@link org.caffinitas.ohc.replacement.ReplacementStrategy#cleanUp(long, ReplacementCallback)}
+ * to remove an entry.
+ */
+public interface ReplacementCallback
 {
-
-    private final int len;
-
-    public ThirteenSource(int len)
-    {
-        this.len = len;
-    }
-
-    public int size()
-    {
-        return len;
-    }
-
-    public byte getByte(int pos)
-    {
-        return (byte) (pos % 13);
-    }
-
-    public long hash()
-    {
-        return len;
-    }
+    long evict(long hashEntryAdr);
 }

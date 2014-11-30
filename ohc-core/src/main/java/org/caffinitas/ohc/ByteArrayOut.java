@@ -15,28 +15,24 @@
  */
 package org.caffinitas.ohc;
 
-public class ThirteenSource extends BytesSource.AbstractSource
+final class ByteArrayOut extends AbstractDataOutput
 {
+    private final byte[] buffer;
+    private int pos;
 
-    private final int len;
-
-    public ThirteenSource(int len)
+    ByteArrayOut(byte[] buffer)
     {
-        this.len = len;
+        this.buffer = buffer;
     }
 
-    public int size()
+    public void write(int b)
     {
-        return len;
+        buffer[pos++] = (byte) b;
     }
 
-    public byte getByte(int pos)
+    public void write(byte[] b, int off, int len)
     {
-        return (byte) (pos % 13);
-    }
-
-    public long hash()
-    {
-        return len;
+        System.arraycopy(b, off, buffer, pos, len);
+        pos += len;
     }
 }

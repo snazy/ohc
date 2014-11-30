@@ -15,28 +15,13 @@
  */
 package org.caffinitas.ohc;
 
-public class ThirteenSource extends BytesSource.AbstractSource
+public enum PutResult
 {
+    ADD,
 
-    private final int len;
+    REPLACE,
 
-    public ThirteenSource(int len)
-    {
-        this.len = len;
-    }
+    NO_MORE_FREE_CAPACITY,
 
-    public int size()
-    {
-        return len;
-    }
-
-    public byte getByte(int pos)
-    {
-        return (byte) (pos % 13);
-    }
-
-    public long hash()
-    {
-        return len;
-    }
+    ALLOCATION_FAILED
 }

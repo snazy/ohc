@@ -46,8 +46,8 @@ import org.apache.commons.io.FileUtils;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Timer;
 import com.yammer.metrics.stats.Snapshot;
-import org.caffinitas.ohc.api.OHCache;
-import org.caffinitas.ohc.api.OHCacheBuilder;
+import org.caffinitas.ohc.OHCache;
+import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.benchmark.distribution.Distribution;
 import org.caffinitas.ohc.benchmark.distribution.FasterRandom;
 import org.caffinitas.ohc.benchmark.distribution.OptionDistribution;
@@ -150,7 +150,6 @@ public class BenchmarkOHC
                                   .valueSerializer(BenchmarkUtils.serializer)
                                   .hashTableSize(hashTableSize)
                                   .capacity(size)
-                                  .monoExperimental(false)
                                   .statisticsEnabled(true)
                                   .build();
 

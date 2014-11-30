@@ -15,8 +15,6 @@
  */
 package org.caffinitas.ohc;
 
-import org.caffinitas.ohc.api.BytesSource;
-
 public class ThirteenBytesSource extends BytesSource.ByteArraySource
 {
     public ThirteenBytesSource(int len)
