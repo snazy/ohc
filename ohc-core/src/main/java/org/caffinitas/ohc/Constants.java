@@ -20,10 +20,10 @@ abstract class Constants
 
 // Hash entries
 
-    // offset of value0 for replacement strategy (meaning depends on replacement strategy)
-    static final long ENTRY_OFF_REPLACEMENT0 = 0;
-    // offset of value1 for replacement strategy (meaning depends on replacement strategy)
-    static final long ENTRY_OFF_REPLACEMENT1 = 8;
+    // offset of LRU replacement strategy next pointer
+    static final long ENTRY_OFF_LRU_NEXT = 0;
+    // offset of LRU replacement strategy previous pointer
+    static final long ENTRY_OFF_LRU_PREV = 8;
     // offset of total length
     static final long ENTRY_OFF_ALLOC_LEN = 16;
     // offset of serialized hash value

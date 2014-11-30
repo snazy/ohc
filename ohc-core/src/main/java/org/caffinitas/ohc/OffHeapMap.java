@@ -20,12 +20,9 @@ import java.util.concurrent.locks.StampedLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.caffinitas.ohc.replacement.ReplacementCallback;
-import org.caffinitas.ohc.replacement.ReplacementStrategy;
-
 import static org.caffinitas.ohc.Constants.*;
 
-final class OffHeapMap implements ReplacementCallback
+final class OffHeapMap
 {
     // maximum hash table size
     private static final int MAX_TABLE_SIZE = 1 << 27;
@@ -36,18 +33,19 @@ final class OffHeapMap implements ReplacementCallback
     private volatile long size;
 
     // not nice to have a cyclic ref with ShardCacheImpl - but using an interface just for the sake of it feels too heavy
-    private final ShardCacheImpl shardCache;
-    private final ReplacementStrategy replacementStrategy;
+    private final MultiTableCacheImpl shardCache;
     private final StampedLock lock;
 
     private volatile Table table;
 
+    private volatile long lruHead;
+    private volatile long lruTail;
+
     private long rehashes;
 
-    OffHeapMap(OHCacheBuilder builder, ShardCacheImpl shardCache, ReplacementStrategy replacementStrategy)
+    OffHeapMap(OHCacheBuilder builder, MultiTableCacheImpl shardCache)
     {
         this.shardCache = shardCache;
-        this.replacementStrategy = replacementStrategy;
         lock = new StampedLock();
 
         int hts = builder.getHashTableSize();
@@ -103,7 +101,7 @@ final class OffHeapMap implements ReplacementCallback
             table.removeLink(hash, hashEntryAdr);
             table.addLinkAsHead(hash, hashEntryAdr);
 
-            replacementStrategy.entryUsed(hashEntryAdr);
+            entryUsed(hashEntryAdr);
 
             return hashEntryAdr;
         }
@@ -135,7 +133,7 @@ final class OffHeapMap implements ReplacementCallback
             size++;
 
         table.addLinkAsHead(hash, newHashEntryAdr);
-        replacementStrategy.entryReplaced(hashEntryAdr, newHashEntryAdr);
+        entryReplaced(hashEntryAdr, newHashEntryAdr);
 
         return hashEntryAdr;
     }
@@ -154,7 +152,7 @@ final class OffHeapMap implements ReplacementCallback
 
             table.removeLink(hash, hashEntryAdr);
 
-            replacementStrategy.entryRemoved(hashEntryAdr);
+            entryRemoved(hashEntryAdr);
 
             size--;
 
@@ -181,26 +179,6 @@ final class OffHeapMap implements ReplacementCallback
         long serKeyLen = HashEntries.getHashKeyLen(hashEntryAdr);
         return serKeyLen != keySource.size()
                || !HashEntries.compareKey(hashEntryAdr, keySource, serKeyLen);
-    }
-
-    long cleanUp(long recycleGoal)
-    {
-        return replacementStrategy.cleanUp(recycleGoal, this);
-    }
-
-    // this method implements ReplacementCallback.evict(long)
-    public long evict(long hashEntryAdr)
-    {
-        long bytes = HashEntries.getAllocLen(hashEntryAdr);
-        long hash = HashEntries.getHash(hashEntryAdr);
-        table.removeLink(hash, hashEntryAdr);
-
-        if (HashEntries.dereference(hashEntryAdr))
-            shardCache.free(hashEntryAdr);
-
-        size--;
-
-        return bytes;
     }
 
     private void rehash()
@@ -322,4 +300,112 @@ final class OffHeapMap implements ReplacementCallback
             return segmentMask + 1;
         }
     }
+
+    //
+    // eviction/replacement/cleanup
+    //
+
+    private void removeLRU(long hashEntryAdr)
+    {
+        long next = lruNext(hashEntryAdr);
+        long prev = lruPrev(hashEntryAdr);
+
+        if (lruHead == hashEntryAdr)
+            lruHead = next;
+        if (lruTail == hashEntryAdr)
+            lruTail = prev;
+
+        if (next != 0L)
+            lruPrev(next, prev);
+        if (prev != 0L)
+            lruNext(prev, next);
+    }
+
+    private void addLRU(long hashEntryAdr)
+    {
+        long h = lruHead;
+        lruNext(hashEntryAdr, h);
+        if (h != 0L)
+            lruPrev(h, hashEntryAdr);
+        lruPrev(hashEntryAdr, 0L);
+        lruHead = hashEntryAdr;
+
+        if (lruTail == 0L)
+            lruTail = hashEntryAdr;
+    }
+
+    private long lruNext(long hashEntryAdr)
+    {
+        return HashEntries.getReplacement0(hashEntryAdr);
+    }
+
+    private long lruPrev(long hashEntryAdr)
+    {
+        return HashEntries.getReplacement1(hashEntryAdr);
+    }
+
+    private void lruNext(long hashEntryAdr, long next)
+    {
+        HashEntries.setReplacement0(hashEntryAdr, next);
+    }
+
+    private void lruPrev(long hashEntryAdr, long prev)
+    {
+        HashEntries.setReplacement1(hashEntryAdr, prev);
+    }
+
+    public void entryUsed(long hashEntryAdr)
+    {
+        removeLRU(hashEntryAdr);
+        addLRU(hashEntryAdr);
+    }
+
+    public void entryReplaced(long oldHashEntryAdr, long hashEntryAdr)
+    {
+        if (oldHashEntryAdr != 0L)
+            removeLRU(oldHashEntryAdr);
+        addLRU(hashEntryAdr);
+    }
+
+    public void entryRemoved(long hashEntryAdr)
+    {
+        removeLRU(hashEntryAdr);
+    }
+
+    long cleanUp(long recycleGoal)
+    {
+        long prev;
+        long evicted = 0L;
+        for (long hashEntryAdr = lruTail;
+             hashEntryAdr != 0L && recycleGoal > 0L;
+             hashEntryAdr = prev)
+        {
+            prev = lruPrev(hashEntryAdr);
+
+            removeLRU(hashEntryAdr);
+
+            long bytes = evict(hashEntryAdr);
+
+            recycleGoal -= bytes;
+
+            evicted ++;
+        }
+
+        return evicted;
+    }
+
+    private long evict(long hashEntryAdr)
+    {
+        long bytes = HashEntries.getAllocLen(hashEntryAdr);
+        long hash = HashEntries.getHash(hashEntryAdr);
+        table.removeLink(hash, hashEntryAdr);
+
+        if (HashEntries.dereference(hashEntryAdr))
+            shardCache.free(hashEntryAdr);
+
+        size--;
+
+        return bytes;
+    }
+
 }

@@ -132,22 +132,22 @@ public final class HashEntries
 
     public static long getReplacement0(long hashEntryAdr)
     {
-        return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_REPLACEMENT0);
+        return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_NEXT);
     }
 
     public static void setReplacement0(long hashEntryAdr, long replacement)
     {
-        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_REPLACEMENT0, replacement);
+        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_NEXT, replacement);
     }
 
     public static long getReplacement1(long hashEntryAdr)
     {
-        return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_REPLACEMENT1);
+        return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_PREV);
     }
 
     public static void setReplacement1(long hashEntryAdr, long replacement)
     {
-        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_REPLACEMENT1, replacement);
+        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_PREV, replacement);
     }
 
     static long getHash(long hashEntryAdr)

@@ -29,13 +29,12 @@ import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.caffinitas.ohc.replacement.ReplacementStrategy;
 import static org.caffinitas.ohc.Constants.*;
 
-public final class ShardCacheImpl<K, V> implements OHCache<K, V>
+public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
 {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ShardCacheImpl.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(MultiTableCacheImpl.class);
 
     public static final int ONE_GIGABYTE = 1024 * 1024 * 1024;
 
@@ -66,45 +65,20 @@ public final class ShardCacheImpl<K, V> implements OHCache<K, V>
 
     private volatile boolean closed;
 
-    public ShardCacheImpl(OHCacheBuilder<K, V> builder)
+    public MultiTableCacheImpl(OHCacheBuilder<K, V> builder)
     {
-        // inquire current replacement strategy
-        String rs = builder.getReplacementStrategy();
-        if (rs == null)
-            rs = "LRU";
-        Class<? extends ReplacementStrategy> replacementStrategyClass;
-        try
-        {
-            Class<ReplacementStrategy> intf = ReplacementStrategy.class;
-            String cls = rs.indexOf('.') != -1
-                         ? rs
-                         : intf.getName().substring(0, intf.getName().lastIndexOf('.') + 1) + rs + intf.getSimpleName();
-            replacementStrategyClass = (Class<? extends ReplacementStrategy>) Class.forName(cls);
-        }
-        catch (ClassNotFoundException e)
-        {
-            throw new RuntimeException(e);
-        }
-
         // off-heap allocation
         this.capacity = builder.getCapacity();
         this.freeCapacity.add(capacity);
 
         // build shards
-        int shards = builder.getShardCount();
+        int shards = builder.getSubTableCount();
         if (shards <= 0)
             shards = Runtime.getRuntime().availableProcessors() * 2;
         shards = OffHeapMap.roundUpToPowerOf2(shards);
         maps = new OffHeapMap[shards];
         for (int i = 0; i < shards; i++)
-            try
-            {
-                maps[i] = new OffHeapMap(builder, this, replacementStrategyClass.newInstance());
-            }
-            catch (InstantiationException | IllegalAccessException e)
-            {
-                throw new RuntimeException(e);
-            }
+            maps[i] = new OffHeapMap(builder, this);
 
         // bit-mask for shard part of hash
         int bitNum = bitNum(shards) - 1;

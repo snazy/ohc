@@ -17,7 +17,7 @@ package org.caffinitas.ohc;
 
 public class OHCacheBuilder<K, V>
 {
-    private int shardCount;
+    private int subTableCount;
     private int hashTableSize;
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
@@ -25,7 +25,6 @@ public class OHCacheBuilder<K, V>
     private int entriesPerSegmentTrigger = 10;
     private double cleanUpTriggerMinFree = -1d;
     private boolean statisticsEnabled;
-    private String replacementStrategy;
 
     private OHCacheBuilder()
     {
@@ -38,7 +37,7 @@ public class OHCacheBuilder<K, V>
 
     public OHCache<K, V> build()
     {
-        return new ShardCacheImpl<>(this);
+        return new MultiTableCacheImpl<>(this);
     }
 
     public int getHashTableSize()
@@ -118,25 +117,14 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public int getShardCount()
+    public int getSubTableCount()
     {
-        return shardCount;
+        return subTableCount;
     }
 
-    public OHCacheBuilder<K, V> shardCount(int segmentCount)
+    public OHCacheBuilder<K, V> subTableCount(int subTableCount)
     {
-        this.shardCount = segmentCount;
-        return this;
-    }
-
-    public String getReplacementStrategy()
-    {
-        return replacementStrategy;
-    }
-
-    public OHCacheBuilder<K, V> replacementStrategy(String replacementStrategy)
-    {
-        this.replacementStrategy = replacementStrategy;
+        this.subTableCount = subTableCount;
         return this;
     }
 }
