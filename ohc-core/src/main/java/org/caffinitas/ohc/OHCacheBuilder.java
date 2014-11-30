@@ -17,7 +17,7 @@ package org.caffinitas.ohc;
 
 public class OHCacheBuilder<K, V>
 {
-    private int subTableCount;
+    private int segmentCount;
     private int hashTableSize;
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
@@ -37,7 +37,7 @@ public class OHCacheBuilder<K, V>
 
     public OHCache<K, V> build()
     {
-        return new MultiTableCacheImpl<>(this);
+        return new SegmentedCacheImpl<>(this);
     }
 
     public int getHashTableSize()
@@ -117,14 +117,14 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public int getSubTableCount()
+    public int getSegmentCount()
     {
-        return subTableCount;
+        return segmentCount;
     }
 
-    public OHCacheBuilder<K, V> subTableCount(int subTableCount)
+    public OHCacheBuilder<K, V> segmentCount(int segmentCount)
     {
-        this.subTableCount = subTableCount;
+        this.segmentCount = segmentCount;
         return this;
     }
 }

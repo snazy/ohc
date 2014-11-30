@@ -15,8 +15,6 @@
  */
 package org.caffinitas.ohc;
 
-import java.util.concurrent.locks.StampedLock;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,13 +26,12 @@ final class OffHeapMap
     private static final int MAX_TABLE_SIZE = 1 << 27;
     private static final Logger LOGGER = LoggerFactory.getLogger(OffHeapMap.class);
 
-    private final double entriesPerSegmentTrigger;
+    private final double entriesPerBucketTrigger;
 
     private volatile long size;
 
     // not nice to have a cyclic ref with ShardCacheImpl - but using an interface just for the sake of it feels too heavy
-    private final MultiTableCacheImpl shardCache;
-    private final StampedLock lock;
+    private final SegmentedCacheImpl cache;
 
     private volatile Table table;
 
@@ -43,17 +40,16 @@ final class OffHeapMap
 
     private long rehashes;
 
-    OffHeapMap(OHCacheBuilder builder, MultiTableCacheImpl shardCache)
+    OffHeapMap(OHCacheBuilder builder, SegmentedCacheImpl cache)
     {
-        this.shardCache = shardCache;
-        lock = new StampedLock();
+        this.cache = cache;
 
         int hts = builder.getHashTableSize();
         if (hts < 8192)
             hts = 8192;
         table = new Table(roundUpToPowerOf2(hts));
 
-        this.entriesPerSegmentTrigger = builder.getEntriesPerSegmentTrigger();
+        this.entriesPerBucketTrigger = builder.getEntriesPerSegmentTrigger();
     }
 
     void release()
@@ -76,17 +72,7 @@ final class OffHeapMap
         return rehashes;
     }
 
-    long lock()
-    {
-        return lock.writeLock();
-    }
-
-    void unlock(long stamp)
-    {
-        lock.unlockWrite(stamp);
-    }
-
-    long getEntry(long hash, BytesSource keySource)
+    synchronized long getEntry(long hash, BytesSource keySource)
     {
         int loops = 0;
         for (long hashEntryAdr = table.first(hash);
@@ -98,10 +84,9 @@ final class OffHeapMap
 
             // return existing entry
 
-            table.removeLink(hash, hashEntryAdr);
-            table.addLinkAsHead(hash, hashEntryAdr);
+            touch(hashEntryAdr);
 
-            entryUsed(hashEntryAdr);
+            HashEntries.reference(hashEntryAdr);
 
             return hashEntryAdr;
         }
@@ -111,7 +96,7 @@ final class OffHeapMap
         return 0L;
     }
 
-    long replaceEntry(long hash, BytesSource keySource, long newHashEntryAdr)
+    synchronized long replaceEntry(long hash, BytesSource keySource, long newHashEntryAdr)
     {
         int loops = 0;
         long hashEntryAdr;
@@ -124,7 +109,7 @@ final class OffHeapMap
 
             // replace existing entry
 
-            table.removeLink(hash, hashEntryAdr);
+            remove(hash, hashEntryAdr);
 
             break;
         }
@@ -132,13 +117,31 @@ final class OffHeapMap
         if (hashEntryAdr == 0L)
             size++;
 
-        table.addLinkAsHead(hash, newHashEntryAdr);
-        entryReplaced(hashEntryAdr, newHashEntryAdr);
+        add(hash, newHashEntryAdr);
 
         return hashEntryAdr;
     }
 
-    long removeEntry(long hash, BytesSource keySource)
+    synchronized void clear()
+    {
+        lruHead = lruTail = 0L;
+        size = 0L;
+
+        long next;
+        for (int p = 0; p < table.size(); p++)
+            for (long hashEntryAdr = table.first(p);
+                 hashEntryAdr != 0L;
+                 hashEntryAdr = next)
+            {
+                next = HashEntries.getNext(hashEntryAdr);
+
+                dereference(hashEntryAdr);
+            }
+
+        table.clear();
+    }
+
+    synchronized long removeEntry(long hash, BytesSource keySource)
     {
         int loops = 0;
         for (long hashEntryAdr = table.first(hash);
@@ -150,9 +153,7 @@ final class OffHeapMap
 
             // remove existing entry
 
-            table.removeLink(hash, hashEntryAdr);
-
-            entryRemoved(hashEntryAdr);
+            remove(hash, hashEntryAdr);
 
             size--;
 
@@ -166,7 +167,7 @@ final class OffHeapMap
 
     private boolean notSameKey(long hash, BytesSource keySource, int loops, long hashEntryAdr)
     {
-        if (loops >= entriesPerSegmentTrigger)
+        if (loops >= entriesPerBucketTrigger)
         {
             LOGGER.warn("Degraded OHC performance! Segment linked list very long - rehash triggered");
             rehash();
@@ -176,7 +177,7 @@ final class OffHeapMap
         if (hashEntryHash != hash)
             return true;
 
-        long serKeyLen = HashEntries.getHashKeyLen(hashEntryAdr);
+        long serKeyLen = HashEntries.getKeyLen(hashEntryAdr);
         return serKeyLen != keySource.size()
                || !HashEntries.compareKey(hashEntryAdr, keySource, serKeyLen);
     }
@@ -191,10 +192,8 @@ final class OffHeapMap
             return;
         }
 
-        long t0 = System.currentTimeMillis();
-
         Table newTable = new Table(tableSize * 2);
-        long next, hash;
+        long next;
 
         for (int part = 0; part < tableSize; part++)
             for (long hashEntryAdr = tab.first(part);
@@ -204,12 +203,9 @@ final class OffHeapMap
                 next = HashEntries.getNext(hashEntryAdr);
 
                 HashEntries.setNext(hashEntryAdr, 0L);
-                hash = HashEntries.getHash(hashEntryAdr);
-                newTable.addLinkAsHead(hash, hashEntryAdr);
-            }
 
-        long t = System.currentTimeMillis() - t0;
-        LOGGER.debug("Rehashed table - increased table size from {} to {} in {}ms", tableSize, tableSize * 2, t);
+                newTable.addLinkAsHead(HashEntries.getHash(hashEntryAdr), hashEntryAdr);
+            }
 
         table = newTable;
         rehashes++;
@@ -224,17 +220,22 @@ final class OffHeapMap
 
     static final class Table
     {
-        final int segmentMask;
+        final int mask;
         final long address;
 
         public Table(int hashTableSize)
         {
             int msz = (int) BUCKET_ENTRY_LEN * hashTableSize;
             this.address = Uns.allocate(msz);
-            segmentMask = hashTableSize - 1;
-            // It's important to initialize the hash segment table memory.
+            mask = hashTableSize - 1;
+            clear();
+        }
+
+        void clear()
+        {
+            // It's important to initialize the hash table memory.
             // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
-            Uns.setMemory(address, 0L, msz, (byte) 0);
+            Uns.setMemory(address, 0L, BUCKET_ENTRY_LEN * size(), (byte) 0);
         }
 
         void release()
@@ -259,7 +260,7 @@ final class OffHeapMap
 
         private int bucketIndexForHash(long hash)
         {
-            return (int) (hash & segmentMask);
+            return (int) (hash & mask);
         }
 
         void removeLink(long hash, long hashEntryAdr)
@@ -297,7 +298,7 @@ final class OffHeapMap
 
         int size()
         {
-            return segmentMask + 1;
+            return mask + 1;
         }
     }
 
@@ -305,8 +306,12 @@ final class OffHeapMap
     // eviction/replacement/cleanup
     //
 
-    private void removeLRU(long hashEntryAdr)
+    private void remove(long hash, long hashEntryAdr)
     {
+        table.removeLink(hash, hashEntryAdr);
+
+        // LRU stuff
+
         long next = lruNext(hashEntryAdr);
         long prev = lruPrev(hashEntryAdr);
 
@@ -321,8 +326,12 @@ final class OffHeapMap
             lruNext(prev, next);
     }
 
-    private void addLRU(long hashEntryAdr)
+    private void add(long hash, long hashEntryAdr)
     {
+        table.addLinkAsHead(hash, hashEntryAdr);
+
+        // LRU stuff
+
         long h = lruHead;
         lruNext(hashEntryAdr, h);
         if (h != 0L)
@@ -334,45 +343,59 @@ final class OffHeapMap
             lruTail = hashEntryAdr;
     }
 
+    private void touch(long hashEntryAdr)
+    {
+        if (lruHead == hashEntryAdr)
+            // short-cut - entry already at LRU head
+            return;
+
+        // LRU stuff (basically a remove from LRU linked list)
+
+        long next = lruNext(hashEntryAdr);
+        long prev = lruPrev(hashEntryAdr);
+
+        if (lruTail == hashEntryAdr)
+            lruTail = prev;
+
+        if (next != 0L)
+            lruPrev(next, prev);
+        if (prev != 0L)
+            lruNext(prev, next);
+
+        // LRU stuff (basically an add to LRU linked list)
+
+        long head = lruHead;
+        lruNext(hashEntryAdr, head);
+        if (head != 0L)
+            lruPrev(head, hashEntryAdr);
+        lruPrev(hashEntryAdr, 0L);
+        lruHead = hashEntryAdr;
+
+        if (lruTail == 0L)
+            lruTail = hashEntryAdr;
+    }
+
     private long lruNext(long hashEntryAdr)
     {
-        return HashEntries.getReplacement0(hashEntryAdr);
+        return HashEntries.getLRUNext(hashEntryAdr);
     }
 
     private long lruPrev(long hashEntryAdr)
     {
-        return HashEntries.getReplacement1(hashEntryAdr);
+        return HashEntries.getLRUPrev(hashEntryAdr);
     }
 
     private void lruNext(long hashEntryAdr, long next)
     {
-        HashEntries.setReplacement0(hashEntryAdr, next);
+        HashEntries.setLRUNext(hashEntryAdr, next);
     }
 
     private void lruPrev(long hashEntryAdr, long prev)
     {
-        HashEntries.setReplacement1(hashEntryAdr, prev);
+        HashEntries.setLRUPrev(hashEntryAdr, prev);
     }
 
-    public void entryUsed(long hashEntryAdr)
-    {
-        removeLRU(hashEntryAdr);
-        addLRU(hashEntryAdr);
-    }
-
-    public void entryReplaced(long oldHashEntryAdr, long hashEntryAdr)
-    {
-        if (oldHashEntryAdr != 0L)
-            removeLRU(oldHashEntryAdr);
-        addLRU(hashEntryAdr);
-    }
-
-    public void entryRemoved(long hashEntryAdr)
-    {
-        removeLRU(hashEntryAdr);
-    }
-
-    long cleanUp(long recycleGoal)
+    synchronized long cleanUp(long recycleGoal)
     {
         long prev;
         long evicted = 0L;
@@ -382,30 +405,25 @@ final class OffHeapMap
         {
             prev = lruPrev(hashEntryAdr);
 
-            removeLRU(hashEntryAdr);
+            long bytes = HashEntries.getAllocLen(hashEntryAdr);
+            long hash = HashEntries.getHash(hashEntryAdr);
+            remove(hash, hashEntryAdr);
 
-            long bytes = evict(hashEntryAdr);
+            dereference(hashEntryAdr);
+
+            size--;
 
             recycleGoal -= bytes;
 
-            evicted ++;
+            evicted++;
         }
 
         return evicted;
     }
 
-    private long evict(long hashEntryAdr)
+    private void dereference(long hashEntryAdr)
     {
-        long bytes = HashEntries.getAllocLen(hashEntryAdr);
-        long hash = HashEntries.getHash(hashEntryAdr);
-        table.removeLink(hash, hashEntryAdr);
-
         if (HashEntries.dereference(hashEntryAdr))
-            shardCache.free(hashEntryAdr);
-
-        size--;
-
-        return bytes;
+            cache.free(hashEntryAdr);
     }
-
 }

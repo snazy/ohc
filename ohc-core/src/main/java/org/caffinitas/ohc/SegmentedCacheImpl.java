@@ -31,10 +31,10 @@ import org.slf4j.LoggerFactory;
 
 import static org.caffinitas.ohc.Constants.*;
 
-public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
+public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MultiTableCacheImpl.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(SegmentedCacheImpl.class);
 
     public static final int ONE_GIGABYTE = 1024 * 1024 * 1024;
 
@@ -42,8 +42,8 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
     private final CacheSerializer<V> valueSerializer;
 
     private final OffHeapMap[] maps;
-    private final long shardMask;
-    private final int shardShift;
+    private final long segmentMask;
+    private final int segmentShift;
     private final long capacity;
     private final LongAdder freeCapacity = new LongAdder();
     private final long cleanUpTriggerMinFree;
@@ -51,39 +51,37 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
     private final Thread maintenance;
 
     private boolean statisticsEnabled;
-    private final LongAdder hitCount = new LongAdder();
-    private final LongAdder missCount = new LongAdder();
-    private final LongAdder loadSuccessCount = new LongAdder();
-    private final LongAdder loadExceptionCount = new LongAdder();
-    private final LongAdder totalLoadTime = new LongAdder();
-    private final LongAdder evictedEntries = new LongAdder();
-    private final LongAdder putFailCount = new LongAdder();
-    private final LongAdder putAddCount = new LongAdder();
-    private final LongAdder putReplaceCount = new LongAdder();
-    private final LongAdder removeCount = new LongAdder();
-    private final LongAdder cleanUpCount = new LongAdder();
+    private volatile long hitCount;
+    private volatile long missCount;
+    private volatile long loadSuccessCount;
+    private volatile long loadExceptionCount;
+    private volatile long totalLoadTime;
+    private volatile long evictedEntries;
+    private volatile long putFailCount;
+    private volatile long putAddCount;
+    private volatile long putReplaceCount;
+    private volatile long removeCount;
+    private volatile long cleanUpCount;
 
-    private volatile boolean closed;
-
-    public MultiTableCacheImpl(OHCacheBuilder<K, V> builder)
+    public SegmentedCacheImpl(OHCacheBuilder<K, V> builder)
     {
         // off-heap allocation
         this.capacity = builder.getCapacity();
         this.freeCapacity.add(capacity);
 
-        // build shards
-        int shards = builder.getSubTableCount();
-        if (shards <= 0)
-            shards = Runtime.getRuntime().availableProcessors() * 2;
-        shards = OffHeapMap.roundUpToPowerOf2(shards);
-        maps = new OffHeapMap[shards];
-        for (int i = 0; i < shards; i++)
+        // build segments
+        int segments = builder.getSegmentCount();
+        if (segments <= 0)
+            segments = Runtime.getRuntime().availableProcessors() * 2;
+        segments = OffHeapMap.roundUpToPowerOf2(segments);
+        maps = new OffHeapMap[segments];
+        for (int i = 0; i < segments; i++)
             maps[i] = new OffHeapMap(builder, this);
 
-        // bit-mask for shard part of hash
-        int bitNum = bitNum(shards) - 1;
-        this.shardShift = 64 - bitNum;
-        this.shardMask = ((long) shards - 1) << shardShift;
+        // bit-mask for segment part of hash
+        int bitNum = bitNum(segments) - 1;
+        this.segmentShift = 64 - bitNum;
+        this.segmentMask = ((long) segments - 1) << segmentShift;
 
         // calculate trigger for cleanup/eviction/replacement
         double cut = builder.getCleanUpTriggerMinFree();
@@ -131,9 +129,6 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
                         break;
                     }
 
-                    if (closed)
-                        return;
-
                     maintenance();
                 }
             }
@@ -171,31 +166,17 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         BytesSource.ByteArraySource keySource = keySource((K) key);
         long hash = keySource.hash();
 
-        long hashEntryAdr;
-
-        OffHeapMap map = shard(hash);
-        long lock = map.lock();
-        try
-        {
-            hashEntryAdr = map.getEntry(hash, keySource);
-
-            if (hashEntryAdr != 0L)
-                HashEntries.reference(hashEntryAdr);
-        }
-        finally
-        {
-            map.unlock(lock);
-        }
+        long hashEntryAdr = segment(hash).getEntry(hash, keySource);
 
         if (hashEntryAdr == 0L)
         {
             if (statisticsEnabled)
-                missCount.increment();
+                missCount++;
             return null;
         }
 
         if (statisticsEnabled)
-            hitCount.increment();
+            hitCount++;
 
         try
         {
@@ -213,26 +194,12 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
 
     public boolean get(long hash, BytesSource keySource, BytesSink valueSink)
     {
-        long hashEntryAdr;
-
-        OffHeapMap map = shard(hash);
-        long lock = map.lock();
-        try
-        {
-            hashEntryAdr = map.getEntry(hash, keySource);
-
-            if (hashEntryAdr != 0L)
-                HashEntries.reference(hashEntryAdr);
-        }
-        finally
-        {
-            map.unlock(lock);
-        }
+        long hashEntryAdr = segment(hash).getEntry(hash, keySource);
 
         if (hashEntryAdr == 0L)
         {
             if (statisticsEnabled)
-                missCount.increment();
+                missCount++;
             return false;
         }
 
@@ -240,7 +207,7 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         {
             HashEntries.valueToSink(hashEntryAdr, valueSink);
             if (statisticsEnabled)
-                hitCount.increment();
+                hitCount++;
             return true;
         }
         finally
@@ -254,20 +221,17 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         BytesSource.ByteArraySource keySource = keySource(key);
         long keyLen = keySource.size();
         long valueLen = valueSerializer.serializedSize(value);
-        if (keyLen < 0 || valueLen < 0)
-            throw new IllegalArgumentException();
         long hash = keySource.hash();
 
 //        if (dataMemory.freeCapacity() <= Util.roundUpTo8(keySource.size()) + valueLen + Constants.ENTRY_OFF_DATA)
 //            cleanUp();
 
         // Allocate and fill new hash entry.
-        // Do this outside of the shard lock to hold that lock no longer than necessary.
         long newHashEntryAdr = allocate(keyLen, valueLen);
         if (newHashEntryAdr == 0L)
         {
             if (statisticsEnabled)
-                putFailCount.increment();
+                putFailCount++;
             remove(keySource.hash(), keySource);
             return;
         }
@@ -289,46 +253,32 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
             throw new IOError(e);
         }
 
-        long oldHashEntryAdr;
-
-        OffHeapMap map = shard(hash);
-        long lock = map.lock();
-        try
-        {
-            oldHashEntryAdr = map.replaceEntry(hash, keySource, newHashEntryAdr);
-        }
-        finally
-        {
-            map.unlock(lock);
-        }
+        long oldHashEntryAdr = segment(hash).replaceEntry(hash, keySource, newHashEntryAdr);
 
         if (oldHashEntryAdr == 0L)
         {
             if (statisticsEnabled)
-                putAddCount.increment();
+                putAddCount++;
             return;
         }
 
         dereference(oldHashEntryAdr);
 
         if (statisticsEnabled)
-            putReplaceCount.increment();
+            putReplaceCount++;
     }
 
     public PutResult put(long hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink)
     {
         long keyLen = keySource.size();
         long valueLen = valueSource.size();
-        if (keyLen < 0 || valueLen < 0)
-            throw new IllegalArgumentException();
 
         // Allocate and fill new hash entry.
-        // Do this outside of the shard lock to hold that lock no longer than necessary.
         long newHashEntryAdr = allocate(keyLen, valueLen);
         if (newHashEntryAdr == 0L)
         {
             if (statisticsEnabled)
-                putFailCount.increment();
+                putFailCount++;
             remove(keySource.hash(), keySource);
             return PutResult.ALLOCATION_FAILED;
         }
@@ -337,23 +287,12 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         HashEntries.toOffHeap(keySource, newHashEntryAdr, ENTRY_OFF_DATA);
         HashEntries.toOffHeap(valueSource, newHashEntryAdr, ENTRY_OFF_DATA + roundUpTo8(keyLen));
 
-        long oldHashEntryAdr;
-
-        OffHeapMap map = shard(hash);
-        long lock = map.lock();
-        try
-        {
-            oldHashEntryAdr = map.replaceEntry(hash, keySource, newHashEntryAdr);
-        }
-        finally
-        {
-            map.unlock(lock);
-        }
+        long oldHashEntryAdr = segment(hash).replaceEntry(hash, keySource, newHashEntryAdr);
 
         if (oldHashEntryAdr == 0L)
         {
             if (statisticsEnabled)
-                putAddCount.increment();
+                putAddCount++;
             return PutResult.ADD;
         }
 
@@ -363,25 +302,14 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         dereference(oldHashEntryAdr);
 
         if (statisticsEnabled)
-            putReplaceCount.increment();
+            putReplaceCount++;
 
         return PutResult.REPLACE;
     }
 
     public boolean remove(long hash, BytesSource keySource)
     {
-        long hashEntryAdr;
-
-        OffHeapMap map = shard(hash);
-        long lock = map.lock();
-        try
-        {
-            hashEntryAdr = map.removeEntry(hash, keySource);
-        }
-        finally
-        {
-            map.unlock(lock);
-        }
+        long hashEntryAdr = segment(hash).removeEntry(hash, keySource);
 
         if (hashEntryAdr == 0L)
             return false;
@@ -389,7 +317,7 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         dereference(hashEntryAdr);
 
         if (statisticsEnabled)
-            removeCount.increment();
+            removeCount++;
 
         return true;
     }
@@ -402,9 +330,9 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         remove(hash, keySource);
     }
 
-    private OffHeapMap shard(long hash)
+    private OffHeapMap segment(long hash)
     {
-        int seg = (int) ((hash & shardMask) >>> shardShift);
+        int seg = (int) ((hash & segmentMask) >>> segmentShift);
         return maps[seg];
     }
 
@@ -413,10 +341,8 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         if (keySerializer == null)
             throw new NullPointerException("no keySerializer configured");
         long size = keySerializer.serializedSize(o);
-        if (size < 0)
+        if (size < 0 || size >= Integer.MAX_VALUE)
             throw new IllegalArgumentException();
-        if (size >= Integer.MAX_VALUE)
-            throw new IllegalArgumentException("serialized size of key too large (>2GB)");
 
         byte[] tmp = new byte[(int) size];
         try
@@ -436,12 +362,14 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
 
     public Iterator<K> hotN(int n)
     {
+        // TODO implement
         return null;
     }
 
     public void invalidateAll()
     {
-
+        for (OffHeapMap map : maps)
+            map.clear();
     }
 
     public void cleanUp()
@@ -452,61 +380,30 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         if (freeCapacity > cleanUpTriggerMinFree)
             return;
 
-        if (LOGGER.isDebugEnabled())
-            LOGGER.debug("Clean up triggered on {} bytes free ({} below trigger {}) (capacity: {})",
-                         freeCapacity, cleanUpTriggerMinFree - freeCapacity, cleanUpTriggerMinFree, capacity);
-
         long recycleGoal = cleanUpTriggerMinFree - freeCapacity;
         long perMapRecycleGoal = recycleGoal / maps.length;
         if (perMapRecycleGoal <= 0L)
             perMapRecycleGoal = 1L;
-        long t0 = System.currentTimeMillis();
 
         long evicted = 0L;
         for (OffHeapMap map : maps)
-        {
-            long stamp = map.lock();
-            try
-            {
-                evicted += map.cleanUp(perMapRecycleGoal);
-            }
-            finally
-            {
-                map.unlock(stamp);
-            }
-        }
+            evicted += map.cleanUp(perMapRecycleGoal);
 
-        evictedEntries.add(evicted);
-        cleanUpCount.increment();
-
-        if (LOGGER.isDebugEnabled())
-        {
-            long t = System.currentTimeMillis() - t0;
-            LOGGER.debug("Clean up finished after {}ms - now {} bytes free (capacity: {})", t, freeCapacity, capacity);
-        }
+        evictedEntries += evicted;
+        cleanUpCount++;
     }
 
     //
     // state
     //
 
-    private void assertNotClosed()
-    {
-        if (closed)
-            throw new IllegalStateException("OHCache instance already closed");
-    }
-
     public void close() throws IOException
     {
-        if (closed)
-            return;
-
-        closed = true;
-
         if (maintenance != null)
         {
             try
             {
+                maintenance.interrupt();
                 maintenance.join(60000);
                 maintenance.interrupt();
                 if (maintenance.isAlive())
@@ -545,17 +442,17 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
     {
         for (OffHeapMap map : maps)
             map.resetStatistics();
-        cleanUpCount.reset();
-        putAddCount.reset();
-        putReplaceCount.reset();
-        putFailCount.reset();
-        removeCount.reset();
-        hitCount.reset();
-        missCount.reset();
-        loadSuccessCount.reset();
-        loadExceptionCount.reset();
-        totalLoadTime.reset();
-        evictedEntries.reset();
+        cleanUpCount = 0;
+        putAddCount = 0;
+        putReplaceCount = 0;
+        putFailCount = 0;
+        removeCount = 0;
+        hitCount = 0;
+        missCount = 0;
+        loadSuccessCount = 0;
+        loadExceptionCount = 0;
+        totalLoadTime = 0;
+        evictedEntries = 0;
     }
 
     public OHCacheStats extendedStats()
@@ -573,25 +470,23 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
                                 size(),
                                 capacity,
                                 freeCapacity(),
-                                cleanUpCount.longValue(),
+                                cleanUpCount,
                                 rehashes,
-                                putAddCount.longValue(),
-                                putReplaceCount.longValue(),
-                                putFailCount.longValue(),
-                                removeCount.longValue());
+                                putAddCount,
+                                putReplaceCount,
+                                putFailCount,
+                                removeCount);
     }
 
     public CacheStats stats()
     {
-        assertNotClosed();
-
         return new CacheStats(
-                             hitCount.longValue(),
-                             missCount.longValue(),
-                             loadSuccessCount.longValue(),
-                             loadExceptionCount.longValue(),
-                             totalLoadTime.longValue(),
-                             evictedEntries.longValue()
+                             hitCount,
+                             missCount,
+                             loadSuccessCount,
+                             loadExceptionCount,
+                             totalLoadTime,
+                             evictedEntries
         );
     }
 
@@ -631,16 +526,16 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
             try
             {
                 v = valueLoader.call();
-                loadSuccessCount.increment();
+                loadSuccessCount++;
             }
             catch (Exception e)
             {
-                loadExceptionCount.increment();
+                loadExceptionCount++;
                 throw new ExecutionException(e);
             }
             finally
             {
-                totalLoadTime.add(System.currentTimeMillis() - t0);
+                totalLoadTime += System.currentTimeMillis() - t0;
             }
             put(key, v);
         }
@@ -649,6 +544,7 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
 
     public ImmutableMap<K, V> getAllPresent(Iterable<?> keys)
     {
+        // TODO implement
         return null;
     }
 
@@ -689,6 +585,9 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
 
     private long allocate(long keyLen, long valueLen)
     {
+        if (keyLen < 0 || valueLen < 0)
+            throw new IllegalArgumentException();
+
         // allocate memory for whole hash-entry block-chain
         long bytes = ENTRY_OFF_DATA + roundUpTo8(keyLen) + valueLen;
 
@@ -728,5 +627,4 @@ public final class MultiTableCacheImpl<K, V> implements OHCache<K, V>
         freeCapacity.add(bytes);
         return bytes;
     }
-
 }

@@ -28,10 +28,8 @@ final class HashEntryInput implements DataInput
 
     HashEntryInput(long hashEntryAdr, boolean value, long serKeyLen, long valueLen)
     {
-        if (hashEntryAdr == 0L)
-            throw new NullPointerException();
-        if (serKeyLen < 0L || valueLen < 0L)
-            throw new InternalError();
+        if (hashEntryAdr == 0L || serKeyLen < 0L || valueLen < 0L)
+            throw new IllegalArgumentException();
         long blkOff = Constants.ENTRY_OFF_DATA;
 
         if (value)
@@ -64,10 +62,8 @@ final class HashEntryInput implements DataInput
 
     public void readFully(byte[] b, int off, int len) throws IOException
     {
-        if (b == null)
-            throw new NullPointerException();
-        if (off < 0 || off + len > b.length || len < 0)
-            throw new ArrayIndexOutOfBoundsException();
+        if (b == null || off < 0 || off + len > b.length || len < 0)
+            throw new IllegalArgumentException();
 
         assertAvail(len);
 

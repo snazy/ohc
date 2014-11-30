@@ -19,7 +19,7 @@ import java.nio.charset.Charset;
 
 public interface BytesSink
 {
-    void setSize(int size);
+    void setSize(long size);
 
     void putByte(int pos, byte value);
 
@@ -67,11 +67,11 @@ public interface BytesSink
             return true;
         }
 
-        public void setSize(int size)
+        public void setSize(long size)
         {
-            if (size < 0)
+            if (size < 0 || size > Integer.MAX_VALUE)
                 throw new IllegalArgumentException();
-            this.array = new byte[size];
+            this.array = new byte[(int) size];
         }
 
         public void putByte(int pos, byte value)

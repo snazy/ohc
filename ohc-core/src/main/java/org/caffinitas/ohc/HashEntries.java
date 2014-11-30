@@ -59,20 +59,12 @@ public final class HashEntries
         if (hashEntryAdr == 0L)
             return;
 
-        long serKeyLen = getHashKeyLen(hashEntryAdr);
-        if (serKeyLen < 0L)
-            throw new InternalError();
-        long valueLen = Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_VALUE_LENGTH);
-        if (valueLen < 0L)
-            throw new InternalError();
-        long blkOff;
-
         // skip key
-        blkOff = ENTRY_OFF_DATA + roundUpTo8(serKeyLen);
+        long blkOff = ENTRY_OFF_DATA + roundUpTo8(getKeyLen(hashEntryAdr));
 
-        if (valueLen > Integer.MAX_VALUE)
-            throw new IllegalStateException("integer overflow");
-        valueSink.setSize((int) valueLen);
+        long valueLen = getValueLen(hashEntryAdr);
+
+        valueSink.setSize(valueLen);
 
         if (valueSink.hasArray())
         {
@@ -106,46 +98,34 @@ public final class HashEntries
             byte[] arr = keySource.array();
             int arrOff = keySource.arrayOffset();
             for (; p <= serKeyLen - 8; p += 8, blkOff += 8)
-            {
-                long lSer = Uns.getLong(hashEntryAdr, blkOff);
-                long lKey = Uns.getLongFromByteArray(arr, arrOff + p);
-                if (lSer != lKey)
+                if (Uns.getLong(hashEntryAdr, blkOff) != Uns.getLongFromByteArray(arr, arrOff + p))
                     return false;
-            }
         }
 
         // last-resort byte-by-byte compare
         for (; p < serKeyLen; p++)
-        {
-            byte bSer = Uns.getByte(hashEntryAdr, blkOff++);
-            byte bKey = keySource.getByte(p);
-
-            if (bSer != bKey)
+            if (Uns.getByte(hashEntryAdr, blkOff++) != keySource.getByte(p))
                 return false;
-        }
 
         return true;
     }
 
-    // Replacement0 and replacement1 are values used by replacement strategies and stored with each hash entry.
-    // For example LRUReplacementStrategy requires a 'next' and a 'previous' pointer for its double-linked-LRU-list.
-
-    public static long getReplacement0(long hashEntryAdr)
+    public static long getLRUNext(long hashEntryAdr)
     {
         return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_NEXT);
     }
 
-    public static void setReplacement0(long hashEntryAdr, long replacement)
+    public static void setLRUNext(long hashEntryAdr, long replacement)
     {
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_NEXT, replacement);
     }
 
-    public static long getReplacement1(long hashEntryAdr)
+    public static long getLRUPrev(long hashEntryAdr)
     {
         return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_PREV);
     }
 
-    public static void setReplacement1(long hashEntryAdr, long replacement)
+    public static void setLRUPrev(long hashEntryAdr, long replacement)
     {
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_PREV, replacement);
     }
@@ -181,19 +161,19 @@ public final class HashEntries
             Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_PREVIOUS, prevAdr);
     }
 
-    static long getHashKeyLen(long hashEntryAdr)
+    static long getKeyLen(long hashEntryAdr)
     {
         return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_KEY_LENGTH);
-    }
-
-    static long getAllocLen(long address)
-    {
-        return Uns.getLongVolatile(address, ENTRY_OFF_ALLOC_LEN);
     }
 
     static long getValueLen(long hashEntryAdr)
     {
         return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_VALUE_LENGTH);
+    }
+
+    static long getAllocLen(long address)
+    {
+        return Uns.getLongVolatile(address, ENTRY_OFF_ALLOC_LEN);
     }
 
     static DataInput readKeyFrom(long hashEntryAdr)
@@ -208,7 +188,7 @@ public final class HashEntries
 
     private static HashEntryInput newInput(long hashEntryAdr, boolean value)
     {
-        return new HashEntryInput(hashEntryAdr, value, getHashKeyLen(hashEntryAdr), getValueLen(hashEntryAdr));
+        return new HashEntryInput(hashEntryAdr, value, getKeyLen(hashEntryAdr), getValueLen(hashEntryAdr));
     }
 
     static void reference(long hashEntryAdr)

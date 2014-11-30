@@ -26,12 +26,8 @@ final class HashEntryOutput extends AbstractDataOutput
 
     HashEntryOutput(long hashEntryAdr, long keyLen, long valueLen)
     {
-        if (hashEntryAdr == 0L)
-            throw new NullPointerException();
-        if (keyLen < 0L || valueLen < 0L)
+        if (hashEntryAdr == 0L || keyLen < 0L || valueLen < 0L || valueLen > Integer.MAX_VALUE)
             throw new IllegalArgumentException();
-        if (valueLen > Integer.MAX_VALUE)
-            throw new IllegalStateException("integer overflow");
 
         this.blkAdr = hashEntryAdr;
         this.blkOff = Constants.ENTRY_OFF_DATA + Constants.roundUpTo8(keyLen);
@@ -51,10 +47,8 @@ final class HashEntryOutput extends AbstractDataOutput
 
     public void write(byte[] b, int off, int len) throws IOException
     {
-        if (b == null)
-            throw new NullPointerException();
-        if (off < 0 || off + len > b.length || len < 0)
-            throw new ArrayIndexOutOfBoundsException();
+        if (b == null || off < 0 || off + len > b.length || len < 0)
+            throw new IllegalArgumentException();
 
         assertAvail(len);
 
