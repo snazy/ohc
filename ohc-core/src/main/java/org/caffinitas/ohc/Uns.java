@@ -82,6 +82,8 @@ final class Uns
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
         {
+            if (address == 0L)
+                throw new NullPointerException();
             Long allocatedLen = ohDebug.get(address);
             if (allocatedLen == null)
             {
@@ -135,57 +137,41 @@ final class Uns
 
     static void putLongVolatile(long address, long offset, long value)
     {
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, 8L);
         unsafe.putLongVolatile(null, address + offset, value);
     }
 
     static long getLongFromByteArray(byte[] array, int offset)
     {
-        if (array == null)
-            throw new NullPointerException();
-        if (offset < 0 || offset > array.length - 8)
-            throw new ArrayIndexOutOfBoundsException();
         return unsafe.getLong(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
     }
 
     static long getLong(long address, long offset)
     {
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, 8L);
         return unsafe.getLong(null, address + offset);
     }
 
     static long getLongVolatile(long address, long offset)
     {
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, 8L);
         return unsafe.getLongVolatile(null, address + offset);
     }
 
     static void putByte(long address, long offset, byte value)
     {
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, 1L);
         unsafe.putByte(null, address + offset, value);
     }
 
     static byte getByte(long address, long offset)
     {
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, 1L);
         return unsafe.getByte(null, address + offset);
     }
 
     static boolean decrement(long address, long offset)
     {
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, 8L);
         address += offset;
         long v;
@@ -201,8 +187,6 @@ final class Uns
 
     static void increment(long address, long offset)
     {
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, 8L);
         address += offset;
         long v;
@@ -214,38 +198,25 @@ final class Uns
 
     static void copyMemory(byte[] arr, int off, long address, long offset, long len)
     {
-        if (arr == null)
-            throw new NullPointerException();
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, len);
         unsafe.copyMemory(arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, null, address + offset, len);
     }
 
     static void copyMemory(long address, long offset, byte[] arr, int off, long len)
     {
-        if (arr == null)
-            throw new NullPointerException();
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, len);
         unsafe.copyMemory(null, address + offset, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len);
     }
 
     static void setMemory(long address, long offset, long len, byte val)
     {
-        if (address == 0L)
-            throw new NullPointerException();
         validate(address, offset, len);
         unsafe.setMemory(address + offset, len, val);
     }
 
     static long allocate(long bytes)
     {
-        if (bytes <= 0)
-            throw new IllegalArgumentException();
-
-        // TODO any chance to pin the memory to RAM (never swap to disk) ?
+        // TODO any chance to pin the memory to RAM (i.e. never swap to disk) ?
 
         long address = allocator.allocate(bytes);
         allocated(address, bytes);
@@ -254,8 +225,6 @@ final class Uns
 
     static void free(long address)
     {
-        if (address == 0L)
-            throw new NullPointerException();
         freed(address);
         allocator.free(address);
     }

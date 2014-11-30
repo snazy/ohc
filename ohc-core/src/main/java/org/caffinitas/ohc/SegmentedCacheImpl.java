@@ -153,7 +153,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         }
         catch (Throwable t)
         {
-            LOGGER.error("Failure during triggered cleanup or rehash", t);
+            LOGGER.error("Failure during cleanup", t);
         }
     }
 

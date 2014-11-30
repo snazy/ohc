@@ -18,6 +18,9 @@ package org.caffinitas.ohc;
 import java.io.EOFException;
 import java.io.IOException;
 
+/**
+ * Instances of this class are passed to {@link org.caffinitas.ohc.CacheSerializer#serialize(Object, java.io.DataOutput)}.
+ */
 final class HashEntryOutput extends AbstractDataOutput
 {
     private long blkAdr;

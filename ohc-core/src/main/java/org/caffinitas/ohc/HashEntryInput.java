@@ -20,6 +20,9 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.UTFDataFormatException;
 
+/**
+ * Instances of this class are passed to {@link org.caffinitas.ohc.CacheSerializer#deserialize(java.io.DataInput)}.
+ */
 final class HashEntryInput implements DataInput
 {
     private long blkAdr;
