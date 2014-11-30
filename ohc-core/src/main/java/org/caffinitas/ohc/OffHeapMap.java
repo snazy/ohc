@@ -16,29 +16,35 @@
 package org.caffinitas.ohc;
 
 import static org.caffinitas.ohc.Constants.BUCKET_ENTRY_LEN;
+import static org.caffinitas.ohc.Constants.allocLen;
 
 final class OffHeapMap
 {
     // maximum hash table size
     private static final int MAX_TABLE_SIZE = 1 << 27;
 
-    private volatile long size;
+    private final long capacity;
+    private long freeCapacity;
+    private final long cleanUpTriggerFree;
+    private final long cleanUpTargetFree;
+
+    private Table table;
+    private long size;
     private long threshold;
     private final double loadFactor;
 
-    // not nice to have a cyclic ref with ShardCacheImpl - but using an interface just for the sake of it feels too heavy
-    private final SegmentedCacheImpl cache;
-
-    private volatile Table table;
-
-    private volatile long lruHead;
-    private volatile long lruTail;
+    private long lruHead;
+    private long lruTail;
 
     private long rehashes;
+    private long cleanUpCount;
 
-    OffHeapMap(OHCacheBuilder builder, SegmentedCacheImpl cache)
+    OffHeapMap(OHCacheBuilder builder, long capacity, long cleanUpTriggerFree, long cleanUpTargetFree)
     {
-        this.cache = cache;
+        this.capacity = capacity;
+        this.freeCapacity = capacity;
+        this.cleanUpTriggerFree = cleanUpTriggerFree;
+        this.cleanUpTargetFree = cleanUpTargetFree;
 
         int hts = builder.getHashTableSize();
         if (hts <= 0)
@@ -64,14 +70,30 @@ final class OffHeapMap
         return size;
     }
 
+    long capacity()
+    {
+        return capacity;
+    }
+
+    long freeCapacity()
+    {
+        return freeCapacity;
+    }
+
     void resetStatistics()
     {
         rehashes = 0L;
+        cleanUpCount = 0L;
     }
 
     long rehashes()
     {
         return rehashes;
+    }
+
+    long cleanUpCount()
+    {
+        return cleanUpCount;
     }
 
     synchronized long getEntry(KeyBuffer key)
@@ -97,7 +119,7 @@ final class OffHeapMap
         return 0L;
     }
 
-    synchronized long replaceEntry(KeyBuffer key, long newHashEntryAdr)
+    synchronized boolean replaceEntry(KeyBuffer key, long newHashEntryAdr)
     {
         long hashEntryAdr;
         for (hashEntryAdr = table.first(key.hash());
@@ -110,6 +132,7 @@ final class OffHeapMap
             // replace existing entry
 
             remove(hashEntryAdr);
+            dereference(hashEntryAdr);
 
             break;
         }
@@ -124,7 +147,7 @@ final class OffHeapMap
 
         add(newHashEntryAdr);
 
-        return hashEntryAdr;
+        return hashEntryAdr == 0L;
     }
 
     synchronized void clear()
@@ -146,7 +169,7 @@ final class OffHeapMap
         table.clear();
     }
 
-    synchronized long removeEntry(KeyBuffer key)
+    synchronized boolean removeEntry(KeyBuffer key)
     {
         for (long hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
@@ -158,15 +181,16 @@ final class OffHeapMap
             // remove existing entry
 
             remove(hashEntryAdr);
+            dereference(hashEntryAdr);
 
             size--;
 
-            return hashEntryAdr;
+            return true;
         }
 
         // no entry to remove
 
-        return 0L;
+        return false;
     }
 
     private boolean notSameKey(KeyBuffer key, long hashEntryAdr)
@@ -422,8 +446,43 @@ final class OffHeapMap
         HashEntries.setLRUPrev(hashEntryAdr, prev);
     }
 
-    synchronized long cleanUp(long recycleGoal)
+    synchronized void freed(long bytes)
     {
+        freeCapacity += bytes;
+    }
+
+    synchronized long allocate(long keyLen, long valueLen)
+    {
+        if (keyLen < 0 || valueLen < 0)
+            throw new IllegalArgumentException();
+
+        // allocate memory for whole hash-entry block-chain
+        long bytes = allocLen(keyLen, valueLen);
+
+        if (freeCapacity - bytes < cleanUpTriggerFree)
+            cleanUp();
+
+        freeCapacity-=bytes;
+        if (freeCapacity < 0L)
+        {
+            freeCapacity+=bytes;
+            return 0L;
+        }
+
+        long adr = Uns.allocate(bytes);
+        if (adr != 0L)
+            return adr;
+
+        freeCapacity+=bytes;
+        return 0L;
+    }
+
+    synchronized long cleanUp()
+    {
+        long recycleGoal = cleanUpTargetFree - freeCapacity;
+        if (recycleGoal <= 0L)
+            recycleGoal = 1L;
+
         long prev;
         long evicted = 0L;
         for (long hashEntryAdr = lruTail;
@@ -433,8 +492,8 @@ final class OffHeapMap
             prev = lruPrev(hashEntryAdr);
 
             long bytes = HashEntries.getAllocLen(hashEntryAdr);
-            remove(hashEntryAdr);
 
+            remove(hashEntryAdr);
             dereference(hashEntryAdr);
 
             size--;
@@ -444,12 +503,22 @@ final class OffHeapMap
             evicted++;
         }
 
+        cleanUpCount++;
+
         return evicted;
     }
 
     private void dereference(long hashEntryAdr)
     {
         if (HashEntries.dereference(hashEntryAdr))
-            cache.free(hashEntryAdr);
+        {
+            long bytes = HashEntries.getAllocLen(hashEntryAdr);
+            if (bytes == 0L)
+                throw new IllegalStateException();
+
+            Uns.free(hashEntryAdr);
+
+            freeCapacity += bytes;
+        }
     }
 }

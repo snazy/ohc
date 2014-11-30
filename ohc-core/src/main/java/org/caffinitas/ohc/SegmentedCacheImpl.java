@@ -22,8 +22,6 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.cache.CacheStats;
 import com.google.common.collect.AbstractIterator;
@@ -46,12 +44,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private final OffHeapMap[] maps;
     private final long segmentMask;
     private final int segmentShift;
-    private final long capacity;
-    private final AtomicLong freeCapacity = new AtomicLong();
-    private final long cleanUpTriggerFree;
-    private final long cleanUpTargetFree;
-
-    private final AtomicBoolean cleanupActive = new AtomicBoolean();
 
     private boolean statisticsEnabled;
     private volatile long hitCount;
@@ -64,27 +56,10 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private volatile long putAddCount;
     private volatile long putReplaceCount;
     private volatile long removeCount;
-    private volatile long cleanUpCount;
 
     public SegmentedCacheImpl(OHCacheBuilder<K, V> builder)
     {
-        // off-heap allocation
-        this.capacity = builder.getCapacity();
-        this.freeCapacity.set(capacity);
-
-        // build segments
-        int segments = builder.getSegmentCount();
-        if (segments <= 0)
-            segments = Runtime.getRuntime().availableProcessors() * 2;
-        segments = OffHeapMap.roundUpToPowerOf2(segments);
-        maps = new OffHeapMap[segments];
-        for (int i = 0; i < segments; i++)
-            maps[i] = new OffHeapMap(builder, this);
-
-        // bit-mask for segment part of hash
-        int bitNum = bitNum(segments) - 1;
-        this.segmentShift = 64 - bitNum;
-        this.segmentMask = ((long) segments - 1) << segmentShift;
+        long capacity = builder.getCapacity();
 
         // calculate trigger for cleanup/eviction/replacement
         double cuTrigger = builder.getCleanUpTriggerFree();
@@ -110,8 +85,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             cuTrigger *= capacity;
             cleanUpTriggerFree = (long) cuTrigger;
         }
-        this.cleanUpTriggerFree = cleanUpTriggerFree;
 
+        // calculate target for cleanup/eviction/replacement
         double cuTarget = builder.getCleanUpTargetFree();
         if (cuTarget < cuTrigger)
             cuTarget = cuTrigger;
@@ -120,7 +95,23 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             cleanUpTargetFree = 2 * cleanUpTriggerFree;
         if (cuTarget > .9d || cleanUpTargetFree > capacity)
             cleanUpTargetFree = (long) (.9d * capacity);
-        this.cleanUpTargetFree = cleanUpTargetFree;
+
+        // build segments
+        int segments = builder.getSegmentCount();
+        if (segments <= 0)
+            segments = Runtime.getRuntime().availableProcessors() * 2;
+        segments = OffHeapMap.roundUpToPowerOf2(segments);
+        maps = new OffHeapMap[segments];
+        for (int i = 0; i < segments; i++)
+            maps[i] = new OffHeapMap(builder,
+                                     capacity / segments,
+                                     cleanUpTriggerFree / segments,
+                                     cleanUpTargetFree / segments);
+
+        // bit-mask for segment part of hash
+        int bitNum = bitNum(segments) - 1;
+        this.segmentShift = 64 - bitNum;
+        this.segmentMask = ((long) segments - 1) << segmentShift;
 
         this.statisticsEnabled = builder.isStatisticsEnabled();
 
@@ -177,12 +168,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long valueLen = valueSerializer.serializedSize(v);
         long hash = key.hash();
 
-        long dataSize = roundUpTo8(key.size()) + valueLen + Constants.ENTRY_OFF_DATA;
-        if (freeCapacity() - cleanUpTriggerFree <= dataSize)
-            cleanUpInternal();
-
         // Allocate and fill new hash entry.
-        long newHashEntryAdr = allocate(keyLen, valueLen);
+        long newHashEntryAdr = segment(hash).allocate(keyLen, valueLen);
         if (newHashEntryAdr == 0L)
         {
             if (statisticsEnabled)
@@ -210,16 +197,12 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             throw new IOError(e);
         }
 
-        long oldHashEntryAdr = segment(hash).replaceEntry(key, newHashEntryAdr);
-
-        if (oldHashEntryAdr == 0L)
+        if (segment(hash).replaceEntry(key, newHashEntryAdr))
         {
             if (statisticsEnabled)
                 putAddCount++;
             return;
         }
-
-        dereference(oldHashEntryAdr);
 
         if (statisticsEnabled)
             putReplaceCount++;
@@ -237,13 +220,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     private boolean removeInternal(KeyBuffer key)
     {
-        long hashEntryAdr = segment(key.hash()).removeEntry(key);
-
-        if (hashEntryAdr == 0L)
-            return false;
-
-        dereference(hashEntryAdr);
-        return true;
+        return segment(key.hash()).removeEntry(key);
     }
 
     private OffHeapMap segment(long hash)
@@ -331,30 +308,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public void cleanUp()
     {
-        if (freeCapacity() > cleanUpTriggerFree)
-            return;
-
-        cleanUpInternal();
-    }
-
-    private void cleanUpInternal()
-    {
-        if (cleanupActive.compareAndSet(false, true))
-        {
-            long recycleGoal = cleanUpTargetFree - freeCapacity();
-            long perMapRecycleGoal = recycleGoal / maps.length;
-            if (perMapRecycleGoal <= 0L)
-                perMapRecycleGoal = 1L;
-
-            long evicted = 0L;
-            for (OffHeapMap map : maps)
-                evicted += map.cleanUp(perMapRecycleGoal);
-
-            evictedEntries += evicted;
-            cleanUpCount++;
-
-            cleanupActive.set(false);
-        }
+        for (OffHeapMap map : maps)
+            map.cleanUp();
     }
 
     //
@@ -390,7 +345,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     {
         for (OffHeapMap map : maps)
             map.resetStatistics();
-        cleanUpCount = 0;
         putAddCount = 0;
         putReplaceCount = 0;
         putFailCount = 0;
@@ -416,9 +370,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return new OHCacheStats(stats(),
                                 mapSizes,
                                 size(),
-                                capacity,
+                                getCapacity(),
                                 freeCapacity(),
-                                cleanUpCount,
+                                cleanUpCount(),
                                 rehashes,
                                 putAddCount,
                                 putReplaceCount,
@@ -440,12 +394,26 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public long getCapacity()
     {
+        long capacity = 0L;
+        for (OffHeapMap map : maps)
+            capacity += map.capacity();
         return capacity;
     }
 
     public long freeCapacity()
     {
-        return freeCapacity.longValue();
+        long capacity = 0L;
+        for (OffHeapMap map : maps)
+            capacity += map.freeCapacity();
+        return capacity;
+    }
+
+    public long cleanUpCount()
+    {
+        long cleanUpCount = 0L;
+        for (OffHeapMap map : maps)
+            cleanUpCount += map.cleanUpCount();
+        return cleanUpCount;
     }
 
     public long size()
@@ -539,29 +507,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     // alloc/free
     //
 
-    private long allocate(long keyLen, long valueLen)
-    {
-        if (keyLen < 0 || valueLen < 0)
-            throw new IllegalArgumentException();
-
-        // allocate memory for whole hash-entry block-chain
-        long bytes = allocLen(keyLen, valueLen);
-
-        freeCapacity.addAndGet(-bytes);
-        if (freeCapacity.longValue() < 0L)
-        {
-            freeCapacity.addAndGet(bytes);
-            return 0L;
-        }
-
-        long adr = Uns.allocate(bytes);
-        if (adr != 0L)
-            return adr;
-
-        freeCapacity.addAndGet(bytes);
-        return 0L;
-    }
-
     private void dereference(long hashEntryAdr)
     {
         if (HashEntries.dereference(hashEntryAdr))
@@ -576,8 +521,11 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long bytes = HashEntries.getAllocLen(address);
         if (bytes == 0L)
             throw new IllegalStateException();
+
+        long hash = HashEntries.getHash(address);
+
         Uns.free(address);
-        freeCapacity.addAndGet(bytes);
+        segment(hash).freed(bytes);
         return bytes;
     }
 }

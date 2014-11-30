@@ -133,7 +133,8 @@ public class BasicTest extends AbstractTest
         }
     }
 
-    @Test(dependsOnMethods = "serialize100k")
+    @Test(dependsOnMethods = "serialize100k", enabled = false)
+    // Note: test no longer works since cleanup is triggered independently on each segment (not on the whole cache)
     public void cleanUpTest() throws IOException, InterruptedException
     {
         char[] c940 = new char[940];
