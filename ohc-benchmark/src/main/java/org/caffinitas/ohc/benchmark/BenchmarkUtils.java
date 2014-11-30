@@ -36,7 +36,7 @@ public class BenchmarkUtils {
             return bytes;
         }
 
-        public long serializedSize(byte[] t) {
+        public int serializedSize(byte[] t) {
             return t.length + 4;
         }
     };
@@ -52,7 +52,7 @@ public class BenchmarkUtils {
             return in.readLong();
         }
 
-        public long serializedSize(Long aLong)
+        public int serializedSize(Long aLong)
         {
             return 8;
         }

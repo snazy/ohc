@@ -4,11 +4,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-import org.caffinitas.ohc.AbstractDataOutput;
-import org.caffinitas.ohc.CacheSerializer;
-import org.caffinitas.ohc.OHCache;
-import org.caffinitas.ohc.OHCacheBuilder;
-
 public abstract class AbstractTest
 {
 
@@ -24,7 +19,7 @@ public abstract class AbstractTest
             return in.readUTF();
         }
 
-        public long serializedSize(String s)
+        public int serializedSize(String s)
         {
             return AbstractDataOutput.writeUTFLen(s);
         }

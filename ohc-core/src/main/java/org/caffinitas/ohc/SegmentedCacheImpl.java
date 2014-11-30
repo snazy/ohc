@@ -163,10 +163,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public V getIfPresent(Object key)
     {
-        BytesSource.ByteArraySource keySource = keySource((K) key);
-        long hash = keySource.hash();
+        KeyBuffer keySource = keySource((K) key);
 
-        long hashEntryAdr = segment(hash).getEntry(hash, keySource);
+        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource);
 
         if (hashEntryAdr == 0L)
         {
@@ -192,36 +191,12 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
-    public boolean get(long hash, BytesSource keySource, BytesSink valueSink)
+    public void put(K k, V v)
     {
-        long hashEntryAdr = segment(hash).getEntry(hash, keySource);
-
-        if (hashEntryAdr == 0L)
-        {
-            if (statisticsEnabled)
-                missCount++;
-            return false;
-        }
-
-        try
-        {
-            HashEntries.valueToSink(hashEntryAdr, valueSink);
-            if (statisticsEnabled)
-                hitCount++;
-            return true;
-        }
-        finally
-        {
-            dereference(hashEntryAdr);
-        }
-    }
-
-    public void put(K key, V value)
-    {
-        BytesSource.ByteArraySource keySource = keySource(key);
-        long keyLen = keySource.size();
-        long valueLen = valueSerializer.serializedSize(value);
-        long hash = keySource.hash();
+        KeyBuffer key = keySource(k);
+        long keyLen = key.size();
+        long valueLen = valueSerializer.serializedSize(v);
+        long hash = key.hash();
 
 //        if (dataMemory.freeCapacity() <= Util.roundUpTo8(keySource.size()) + valueLen + Constants.ENTRY_OFF_DATA)
 //            cleanUp();
@@ -232,15 +207,17 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         {
             if (statisticsEnabled)
                 putFailCount++;
-            remove(keySource.hash(), keySource);
+
+            removeInternal(key);
+
             return;
         }
         // initialize hash entry
         HashEntries.init(hash, keyLen, valueLen, newHashEntryAdr);
-        HashEntries.toOffHeap(keySource, newHashEntryAdr, ENTRY_OFF_DATA);
+        HashEntries.toOffHeap(key, newHashEntryAdr, ENTRY_OFF_DATA);
         try
         {
-            valueSerializer.serialize(value, new HashEntryOutput(newHashEntryAdr, keySource.size(), valueLen));
+            valueSerializer.serialize(v, new HashEntryOutput(newHashEntryAdr, key.size(), valueLen));
         }
         catch (VirtualMachineError e)
         {
@@ -253,7 +230,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             throw new IOError(e);
         }
 
-        long oldHashEntryAdr = segment(hash).replaceEntry(hash, keySource, newHashEntryAdr);
+        long oldHashEntryAdr = segment(hash).replaceEntry(key, newHashEntryAdr);
 
         if (oldHashEntryAdr == 0L)
         {
@@ -268,66 +245,25 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             putReplaceCount++;
     }
 
-    public PutResult put(long hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink)
+    public void invalidate(Object k)
     {
-        long keyLen = keySource.size();
-        long valueLen = valueSource.size();
+        KeyBuffer key = keySource((K) k);
 
-        // Allocate and fill new hash entry.
-        long newHashEntryAdr = allocate(keyLen, valueLen);
-        if (newHashEntryAdr == 0L)
-        {
-            if (statisticsEnabled)
-                putFailCount++;
-            remove(keySource.hash(), keySource);
-            return PutResult.ALLOCATION_FAILED;
-        }
-        // initialize hash entry
-        HashEntries.init(hash, keyLen, valueLen, newHashEntryAdr);
-        HashEntries.toOffHeap(keySource, newHashEntryAdr, ENTRY_OFF_DATA);
-        HashEntries.toOffHeap(valueSource, newHashEntryAdr, ENTRY_OFF_DATA + roundUpTo8(keyLen));
-
-        long oldHashEntryAdr = segment(hash).replaceEntry(hash, keySource, newHashEntryAdr);
-
-        if (oldHashEntryAdr == 0L)
-        {
-            if (statisticsEnabled)
-                putAddCount++;
-            return PutResult.ADD;
-        }
-
-        if (oldValueSink != null)
-            HashEntries.valueToSink(oldHashEntryAdr, oldValueSink);
-
-        dereference(oldHashEntryAdr);
+        if (!removeInternal(key)) return;
 
         if (statisticsEnabled)
-            putReplaceCount++;
-
-        return PutResult.REPLACE;
+            removeCount++;
     }
 
-    public boolean remove(long hash, BytesSource keySource)
+    private boolean removeInternal(KeyBuffer key)
     {
-        long hashEntryAdr = segment(hash).removeEntry(hash, keySource);
+        long hashEntryAdr = segment(key.hash()).removeEntry(key);
 
         if (hashEntryAdr == 0L)
             return false;
 
         dereference(hashEntryAdr);
-
-        if (statisticsEnabled)
-            removeCount++;
-
         return true;
-    }
-
-    public void invalidate(Object key)
-    {
-        BytesSource.ByteArraySource keySource = keySource((K) key);
-        long hash = keySource.hash();
-
-        remove(hash, keySource);
     }
 
     private OffHeapMap segment(long hash)
@@ -336,24 +272,22 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return maps[seg];
     }
 
-    private BytesSource.ByteArraySource keySource(K o)
+    private KeyBuffer keySource(K o)
     {
         if (keySerializer == null)
             throw new NullPointerException("no keySerializer configured");
-        long size = keySerializer.serializedSize(o);
-        if (size < 0 || size >= Integer.MAX_VALUE)
-            throw new IllegalArgumentException();
+        int size = keySerializer.serializedSize(o);
 
-        byte[] tmp = new byte[(int) size];
+        KeyBuffer key = new KeyBuffer(size);
         try
         {
-            keySerializer.serialize(o, new ByteArrayOut(tmp));
+            keySerializer.serialize(o, key);
         }
         catch (IOException e)
         {
             throw new IOError(e);
         }
-        return new BytesSource.ByteArraySource(tmp);
+        return key.finish();
     }
 
     //
@@ -546,11 +480,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     {
         // TODO implement
         return null;
-    }
-
-    public PutResult put(long hash, BytesSource keySource, BytesSource valueSource)
-    {
-        return put(hash, keySource, valueSource, null);
     }
 
     public void putAll(Map<? extends K, ? extends V> m)

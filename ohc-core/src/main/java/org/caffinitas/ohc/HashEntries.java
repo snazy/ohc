@@ -23,25 +23,12 @@ import static org.caffinitas.ohc.Constants.*;
  */
 public final class HashEntries
 {
-    static void toOffHeap(BytesSource source, long hashEntryAdr, long blkOff)
+    static void toOffHeap(KeyBuffer key, long hashEntryAdr, long blkOff)
     {
-        long len = source.size();
-        if (source.hasArray())
-        {
-            // keySource provides array access (can use Unsafe.copyMemory)
-            byte[] arr = source.array();
-            int arrOff = source.arrayOffset();
-            Uns.copyMemory(arr, arrOff, hashEntryAdr, blkOff, len);
-        }
-        else
-        {
-            // keySource has no array
-            for (int p = 0; p < len; )
-            {
-                byte b = source.getByte(p++);
-                Uns.putByte(hashEntryAdr, blkOff++, b);
-            }
-        }
+        long len = key.size();
+
+        byte[] arr = key.array();
+        Uns.copyMemory(arr, 0, hashEntryAdr, blkOff, len);
     }
 
     static void init(long hash, long keyLen, long valueLen, long hashEntryAdr)
@@ -54,57 +41,16 @@ public final class HashEntries
         Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_REFCOUNT, 1L);
     }
 
-    static void valueToSink(long hashEntryAdr, BytesSink valueSink)
-    {
-        if (hashEntryAdr == 0L)
-            return;
-
-        // skip key
-        long blkOff = ENTRY_OFF_DATA + roundUpTo8(getKeyLen(hashEntryAdr));
-
-        long valueLen = getValueLen(hashEntryAdr);
-
-        valueSink.setSize(valueLen);
-
-        if (valueSink.hasArray())
-        {
-            // valueSink provides array access (can use Unsafe.copyMemory)
-            byte[] arr = valueSink.array();
-            int arrOff = valueSink.arrayOffset();
-            Uns.copyMemory(hashEntryAdr, blkOff, arr, arrOff, valueLen);
-        }
-        else
-        {
-            // last-resort byte-by-byte copy
-            for (int p = 0; p < valueLen; p++)
-            {
-                byte b = Uns.getByte(hashEntryAdr, blkOff++);
-                valueSink.putByte(p, b);
-            }
-        }
-    }
-
-    static boolean compareKey(long hashEntryAdr, BytesSource keySource, long serKeyLen)
+    static boolean compareKey(long hashEntryAdr, KeyBuffer key, long serKeyLen)
     {
         if (hashEntryAdr == 0L)
             return false;
 
         long blkOff = ENTRY_OFF_DATA;
         int p = 0;
-
-        // array optimized version
-        if (keySource.hasArray())
-        {
-            byte[] arr = keySource.array();
-            int arrOff = keySource.arrayOffset();
-            for (; p <= serKeyLen - 8; p += 8, blkOff += 8)
-                if (Uns.getLong(hashEntryAdr, blkOff) != Uns.getLongFromByteArray(arr, arrOff + p))
-                    return false;
-        }
-
-        // last-resort byte-by-byte compare
-        for (; p < serKeyLen; p++)
-            if (Uns.getByte(hashEntryAdr, blkOff++) != keySource.getByte(p))
+        byte[] arr = key.array();
+        for (; p <= serKeyLen - 8; p += 8, blkOff += 8)
+            if (Uns.getLong(hashEntryAdr, blkOff) != Uns.getLongFromByteArray(arr, p))
                 return false;
 
         return true;

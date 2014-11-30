@@ -25,30 +25,7 @@ public class BasicTest extends AbstractTest
 
     public static final long ONE_MB = 1024 * 1024;
 
-    @Test
-    public void basic() throws IOException, InterruptedException
-    {
-        try (OHCache cache = nonEvicting())
-        {
-            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
-
-            String k = "123";
-            cache.put(k.hashCode(), new BytesSource.StringSource(k), new BytesSource.StringSource("hello world"));
-
-            BytesSink.ByteArraySink valueSink = new BytesSink.ByteArraySink();
-            cache.get(k.hashCode(), new BytesSource.StringSource(k), valueSink);
-            String v = valueSink.toString();
-            Assert.assertEquals(v, "hello world");
-
-            cache.remove(k.hashCode(), new BytesSource.StringSource(k));
-
-            Thread.sleep(300L);
-
-            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
-        }
-    }
-
-    @Test(dependsOnMethods = "basic")
+    @Test()
     public void serializing() throws IOException, InterruptedException
     {
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()

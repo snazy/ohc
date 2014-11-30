@@ -72,14 +72,14 @@ final class OffHeapMap
         return rehashes;
     }
 
-    synchronized long getEntry(long hash, BytesSource keySource)
+    synchronized long getEntry(KeyBuffer key)
     {
         int loops = 0;
-        for (long hashEntryAdr = table.first(hash);
+        for (long hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
              hashEntryAdr = HashEntries.getNext(hashEntryAdr), loops++)
         {
-            if (notSameKey(hash, keySource, loops, hashEntryAdr))
+            if (notSameKey(key, loops, hashEntryAdr))
                 continue;
 
             // return existing entry
@@ -96,20 +96,20 @@ final class OffHeapMap
         return 0L;
     }
 
-    synchronized long replaceEntry(long hash, BytesSource keySource, long newHashEntryAdr)
+    synchronized long replaceEntry(KeyBuffer key, long newHashEntryAdr)
     {
         int loops = 0;
         long hashEntryAdr;
-        for (hashEntryAdr = table.first(hash);
+        for (hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
              hashEntryAdr = HashEntries.getNext(hashEntryAdr), loops++)
         {
-            if (notSameKey(hash, keySource, loops, hashEntryAdr))
+            if (notSameKey(key, loops, hashEntryAdr))
                 continue;
 
             // replace existing entry
 
-            remove(hash, hashEntryAdr);
+            remove(hashEntryAdr);
 
             break;
         }
@@ -117,7 +117,7 @@ final class OffHeapMap
         if (hashEntryAdr == 0L)
             size++;
 
-        add(hash, newHashEntryAdr);
+        add(newHashEntryAdr);
 
         return hashEntryAdr;
     }
@@ -141,19 +141,19 @@ final class OffHeapMap
         table.clear();
     }
 
-    synchronized long removeEntry(long hash, BytesSource keySource)
+    synchronized long removeEntry(KeyBuffer key)
     {
         int loops = 0;
-        for (long hashEntryAdr = table.first(hash);
+        for (long hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
              hashEntryAdr = HashEntries.getNext(hashEntryAdr), loops++)
         {
-            if (notSameKey(hash, keySource, loops, hashEntryAdr))
+            if (notSameKey(key, loops, hashEntryAdr))
                 continue;
 
             // remove existing entry
 
-            remove(hash, hashEntryAdr);
+            remove(hashEntryAdr);
 
             size--;
 
@@ -165,7 +165,7 @@ final class OffHeapMap
         return 0L;
     }
 
-    private boolean notSameKey(long hash, BytesSource keySource, int loops, long hashEntryAdr)
+    private boolean notSameKey(KeyBuffer key, int loops, long hashEntryAdr)
     {
         if (loops >= entriesPerBucketTrigger)
         {
@@ -174,12 +174,12 @@ final class OffHeapMap
         }
 
         long hashEntryHash = HashEntries.getHash(hashEntryAdr);
-        if (hashEntryHash != hash)
+        if (hashEntryHash != key.hash())
             return true;
 
         long serKeyLen = HashEntries.getKeyLen(hashEntryAdr);
-        return serKeyLen != keySource.size()
-               || !HashEntries.compareKey(hashEntryAdr, keySource, serKeyLen);
+        return serKeyLen != key.size()
+               || !HashEntries.compareKey(hashEntryAdr, key, serKeyLen);
     }
 
     private void rehash()
@@ -306,8 +306,10 @@ final class OffHeapMap
     // eviction/replacement/cleanup
     //
 
-    private void remove(long hash, long hashEntryAdr)
+    private void remove(long hashEntryAdr)
     {
+        long hash = HashEntries.getHash(hashEntryAdr);
+
         table.removeLink(hash, hashEntryAdr);
 
         // LRU stuff
@@ -326,8 +328,10 @@ final class OffHeapMap
             lruNext(prev, next);
     }
 
-    private void add(long hash, long hashEntryAdr)
+    private void add(long hashEntryAdr)
     {
+        long hash = HashEntries.getHash(hashEntryAdr);
+
         table.addLinkAsHead(hash, hashEntryAdr);
 
         // LRU stuff
@@ -406,8 +410,7 @@ final class OffHeapMap
             prev = lruPrev(hashEntryAdr);
 
             long bytes = HashEntries.getAllocLen(hashEntryAdr);
-            long hash = HashEntries.getHash(hashEntryAdr);
-            remove(hash, hashEntryAdr);
+            remove(hashEntryAdr);
 
             dereference(hashEntryAdr);
 

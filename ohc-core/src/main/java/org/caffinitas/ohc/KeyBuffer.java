@@ -15,24 +15,52 @@
  */
 package org.caffinitas.ohc;
 
-final class ByteArrayOut extends AbstractDataOutput
-{
-    private final byte[] buffer;
-    private int pos;
+import com.google.common.hash.Hasher;
+import com.google.common.hash.Hashing;
 
-    ByteArrayOut(byte[] buffer)
+final class KeyBuffer extends AbstractDataOutput
+{
+    private final Hasher hasher = Hashing.murmur3_128().newHasher();
+    private final byte[] array;
+    private int p;
+    private long hash;
+
+    KeyBuffer(int size)
     {
-        this.buffer = buffer;
+        array = new byte[size];
+    }
+
+    byte[] array()
+    {
+        return array;
+    }
+
+    int size()
+    {
+        return array.length;
+    }
+
+    long hash()
+    {
+        return hash;
+    }
+
+    KeyBuffer finish()
+    {
+        hash = hasher.hash().asLong();
+        return this;
     }
 
     public void write(int b)
     {
-        buffer[pos++] = (byte) b;
+        hasher.putByte((byte) b);
+        array[p++] = (byte) b;
     }
 
     public void write(byte[] b, int off, int len)
     {
-        System.arraycopy(b, off, buffer, pos, len);
-        pos += len;
+        hasher.putBytes(b, off, len);
+        System.arraycopy(b, off, array, p, len);
+        p += len;
     }
 }

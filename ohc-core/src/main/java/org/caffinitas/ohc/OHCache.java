@@ -39,14 +39,6 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
 
     long freeCapacity();
 
-    PutResult put(long hash, BytesSource keySource, BytesSource valueSource);
-
-    PutResult put(long hash, BytesSource keySource, BytesSource valueSource, BytesSink oldValueSink);
-
-    boolean get(long hash, BytesSource keySource, BytesSink valueSink);
-
-    boolean remove(long hash, BytesSource keySource);
-
     Iterator<K> hotN(int n);
 
     OHCacheStats extendedStats();

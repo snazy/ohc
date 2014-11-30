@@ -42,6 +42,6 @@ public interface CacheSerializer<T>
      */
     public T deserialize(DataInput in) throws IOException;
 
-    public long serializedSize(T t);
+    public int serializedSize(T t);
 }
 
