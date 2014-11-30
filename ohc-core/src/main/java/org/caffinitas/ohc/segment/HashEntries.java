@@ -43,12 +43,25 @@ public final class HashEntries implements Constants
         // initialize hash entry fields
         init(hash, keyLen, valueLen, hashEntryAdr);
 
-        // serialize key
-        toOffHeap(keySource, hashEntryAdr, ENTRY_OFF_DATA);
+        try
+        {
+            // serialize key
+            toOffHeap(keySource, hashEntryAdr, ENTRY_OFF_DATA);
 
-        if (valueSource != null)
-            // serialize value
-            toOffHeap(valueSource, hashEntryAdr, ENTRY_OFF_DATA + valueOff);
+            if (valueSource != null)
+                // serialize value
+                toOffHeap(valueSource, hashEntryAdr, ENTRY_OFF_DATA + valueOff);
+        }
+        catch (VirtualMachineError t)
+        {
+            dataMemory.free(hashEntryAdr);
+            throw t;
+        }
+        catch (Throwable t)
+        {
+            dataMemory.free(hashEntryAdr);
+            throw new RuntimeException(t);
+        }
 
         return hashEntryAdr;
     }

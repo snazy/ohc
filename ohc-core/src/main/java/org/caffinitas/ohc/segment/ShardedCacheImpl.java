@@ -110,13 +110,9 @@ public final class ShardedCacheImpl<K, V> implements OHCache<K, V>
             {
                 maps[i] = new OffHeapMap(builder, dataMemory, replacementStrategyClass.newInstance());
             }
-            catch (InstantiationException e)
+            catch (InstantiationException | IllegalAccessException e)
             {
                 throw new RuntimeException(e);
-            }
-            catch (IllegalAccessException e)
-            {
-                e.printStackTrace();
             }
 
         // bit-mask for shard part of hash
@@ -321,7 +317,12 @@ public final class ShardedCacheImpl<K, V> implements OHCache<K, V>
         {
             valueSerializer.serialize(value, new HashEntryOutput(newHashEntryAdr, keySource.size(), valueLen));
         }
-        catch (IOException e)
+        catch (VirtualMachineError e)
+        {
+            dataMemory.free(newHashEntryAdr);
+            throw e;
+        }
+        catch (Throwable e)
         {
             dataMemory.free(newHashEntryAdr);
             throw new IOError(e);
