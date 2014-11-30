@@ -51,7 +51,7 @@ final class Uns
     static final Unsafe unsafe;
     private static final IAllocator allocator;
 
-    private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty("DEBUG_OFF_HEAP_MEMORY_ACCESS", "true"));
+    private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty("DEBUG_OFF_HEAP_MEMORY_ACCESS", "false"));
 
     //
     // #ifdef __DEBUG_OFF_HEAP_MEMORY_ACCESS

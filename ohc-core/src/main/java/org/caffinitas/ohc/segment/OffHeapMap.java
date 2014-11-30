@@ -47,6 +47,8 @@ final class OffHeapMap implements Constants
 
             HashEntries.awaitEntryUnreferenced(hashEntryAdr);
             dataMemory.free(hashEntryAdr, true);
+
+            size--;
         }
     };
 
@@ -91,7 +93,7 @@ final class OffHeapMap implements Constants
         int loops = 0;
         for (long hashEntryAdr = firstHashEntryAdr;
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first=false)
+             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first = false)
         {
             assertNotEndlessLoop(hash, firstHashEntryAdr, first, hashEntryAdr);
 
@@ -121,7 +123,7 @@ final class OffHeapMap implements Constants
         long hashEntryAdr;
         for (hashEntryAdr = firstHashEntryAdr;
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first=false)
+             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first = false)
         {
             assertNotEndlessLoop(hash, firstHashEntryAdr, first, hashEntryAdr);
 
@@ -138,7 +140,7 @@ final class OffHeapMap implements Constants
         // add new entry
 
         if (hashEntryAdr == 0L)
-        size++;
+            size++;
 
         table.addLinkAsHead(hash, newHashEntryAdr);
         replacementStrategy.entryReplaced(hashEntryAdr, newHashEntryAdr);
@@ -153,7 +155,7 @@ final class OffHeapMap implements Constants
         int loops = 0;
         for (long hashEntryAdr = firstHashEntryAdr;
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first=false)
+             hashEntryAdr = HashEntries.getNextEntry(hashEntryAdr), loops++, first = false)
         {
             assertNotEndlessLoop(hash, firstHashEntryAdr, first, hashEntryAdr);
 
@@ -242,7 +244,7 @@ final class OffHeapMap implements Constants
             }
 
         long t = System.currentTimeMillis() - t0;
-        LOGGER.info("Rehashed table - increased table size from {} to {} in {}ms", tableSize, tableSize * 2, t);
+        LOGGER.debug("Rehashed table - increased table size from {} to {} in {}ms", tableSize, tableSize * 2, t);
 
         table = newTable;
         rehashTrigger = false;
@@ -255,7 +257,7 @@ final class OffHeapMap implements Constants
 
         public Table(int hashTableSize)
         {
-            int msz = (int)PARTITION_ENTRY_LEN * hashTableSize;
+            int msz = (int) PARTITION_ENTRY_LEN * hashTableSize;
             this.address = Uns.allocate(msz);
             hashPartitionMask = hashTableSize - 1;
             // It's important to initialize the hash partition memory.

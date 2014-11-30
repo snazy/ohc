@@ -303,6 +303,9 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
 
         long valueLen = valueSerializer.serializedSize(value);
 
+//        if (dataMemory.freeCapacity() <= Util.roundUpTo8(keySource.size()) + valueLen + Constants.ENTRY_OFF_DATA)
+//            cleanUp();
+
         // Allocate and fill new hash entry.
         // Do this outside of the hash-partition lock to hold that lock no longer than necessary.
         long newHashEntryAdr = HashEntries.createNewEntry(dataMemory, hash, keySource, null, valueLen);
@@ -482,8 +485,9 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         if (freeCapacity > cleanUpTriggerMinFree)
             return;
 
-        LOGGER.info("Clean up triggered on {} bytes free ({} below trigger {}) (capacity: {})",
-                    freeCapacity, cleanUpTriggerMinFree - freeCapacity, cleanUpTriggerMinFree, capacity);
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("Clean up triggered on {} bytes free ({} below trigger {}) (capacity: {})",
+                         freeCapacity, cleanUpTriggerMinFree - freeCapacity, cleanUpTriggerMinFree, capacity);
 
         long recycleGoal = cleanUpTriggerMinFree - freeCapacity;
         long perMapRecycleGoal = recycleGoal / maps.length;
@@ -508,8 +512,11 @@ public final class SegmentCacheImpl<K, V> implements OHCache<K, V>
         evictedEntries.add(evicted);
         cleanUpCount.increment();
 
-        long t = System.currentTimeMillis() - t0;
-        LOGGER.info("Clean up finished after {}ms - now {} bytes free (capacity: {})", t, freeCapacity, capacity);
+        if (LOGGER.isDebugEnabled())
+        {
+            long t = System.currentTimeMillis() - t0;
+            LOGGER.debug("Clean up finished after {}ms - now {} bytes free (capacity: {})", t, freeCapacity, capacity);
+        }
     }
 
     //
