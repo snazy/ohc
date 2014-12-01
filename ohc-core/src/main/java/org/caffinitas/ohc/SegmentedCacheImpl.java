@@ -45,6 +45,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private final long segmentMask;
     private final int segmentShift;
 
+    private final long maxEntrySize;
+
     private boolean statisticsEnabled;
     private volatile long hitCount;
     private volatile long missCount;
@@ -112,6 +114,15 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         this.segmentShift = 64 - bitNum;
         this.segmentMask = ((long) segments - 1) << segmentShift;
 
+        // calculate max entry size
+        double mes = builder.getMaxEntrySize();
+        long maxEntrySize;
+        if (mes <= 0d || mes >= 1d)
+            maxEntrySize = capacity / segments / 128;
+        else
+            maxEntrySize = (long) (mes * capacity / segments);
+        this.maxEntrySize = maxEntrySize;
+
         this.statisticsEnabled = builder.isStatisticsEnabled();
 
         this.keySerializer = builder.getKeySerializer();
@@ -168,6 +179,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long hash = key.hash();
 
         long bytes = allocLen(keyLen, valueLen);
+
+        if (bytes > maxEntrySize)
+            return;
 
         // Allocate and fill new hash entry.
         long hashEntryAdr = Uns.allocate(bytes);

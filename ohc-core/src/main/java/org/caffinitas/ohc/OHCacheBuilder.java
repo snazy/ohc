@@ -26,6 +26,7 @@ public class OHCacheBuilder<K, V>
     private double cleanUpTriggerFree = -1d;
     private double cleanUpTargetFree = -1d;
     private boolean statisticsEnabled;
+    private double maxEntrySize;
 
     private OHCacheBuilder()
     {
@@ -137,6 +138,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> loadFactor(double loadFactor)
     {
         this.loadFactor = loadFactor;
+        return this;
+    }
+
+    public double getMaxEntrySize()
+    {
+        return maxEntrySize;
+    }
+
+    public OHCacheBuilder<K, V> maxEntrySize(double maxEntrySize)
+    {
+        this.maxEntrySize = maxEntrySize;
         return this;
     }
 }
