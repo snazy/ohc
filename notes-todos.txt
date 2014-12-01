@@ -12,6 +12,13 @@ can be configured at runtime.
 I'd also like to "pin" row-cache memory to RAM (cache swapped out to disk is wasted effort :) )
 --> Pinning the row cache to RAM might be tricky though - we can easily pin the table, but not so easily the individual allocations.
 
+// Marker item added to row cache before actual load of row.
+--
+Honestly I cannot recall. I think it's simply to avoid duplicated work, but I think both end up performing the read.
+It would make sense if one simply waited on the result of the other, but I don't tihnk that's what happens.
+--
+It's nice - but we should not do more than adding a "marker" to the cache and regularly poll if it has been processed.
+But it will degrade performance for rows that are bigger than "maxEntrySize".
 
 
 Currently LRU is built in - but I'm not really sold on LRU as is. Alternatives could be
