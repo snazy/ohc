@@ -133,16 +133,17 @@ final class OffHeapMap
         freeCapacity -= bytes;
 
         long hashEntryAdr;
+        long prevEntryAdr = 0L;
         for (hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+             prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
             if (notSameKey(key, hashEntryAdr))
                 continue;
 
             // replace existing entry
 
-            remove(hashEntryAdr);
+            remove(hashEntryAdr, prevEntryAdr);
             dereference(hashEntryAdr);
 
             break;
@@ -182,16 +183,17 @@ final class OffHeapMap
 
     synchronized boolean removeEntry(KeyBuffer key)
     {
+        long prevEntryAdr = 0L;
         for (long hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+             prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
             if (notSameKey(key, hashEntryAdr))
                 continue;
 
             // remove existing entry
 
-            remove(hashEntryAdr);
+            remove(hashEntryAdr, prevEntryAdr);
             dereference(hashEntryAdr);
 
             size--;
@@ -303,12 +305,12 @@ final class OffHeapMap
 
         long first(long hash)
         {
-            return Uns.getLongVolatile(address, bucketOffset(hash));
+            return Uns.getLong(address, bucketOffset(hash));
         }
 
         void first(long hash, long hashEntryAdr)
         {
-            Uns.putLongVolatile(address, bucketOffset(hash), hashEntryAdr);
+            Uns.putLong(address, bucketOffset(hash), hashEntryAdr);
         }
 
         private long bucketOffset(long hash)
@@ -323,24 +325,38 @@ final class OffHeapMap
 
         void removeLink(long hash, long hashEntryAdr)
         {
-            long prev = HashEntries.getPrevious(hashEntryAdr);
+            long next = HashEntries.getNext(hashEntryAdr);
+            long head = first(hash);
+
+            if (head == hashEntryAdr)
+                first(hash, next);
+            else
+            {
+                long prevEntryAdr = 0L;
+                for (long adr = head;
+                     adr != 0L;
+                     prevEntryAdr = adr, adr = HashEntries.getNext(adr))
+                {
+                    if (adr == hashEntryAdr)
+                        HashEntries.setNext(prevEntryAdr, next);
+                }
+            }
+
+            // just for safety
+            HashEntries.setNext(hashEntryAdr, 0L);
+        }
+
+        void removeLink(long hash, long hashEntryAdr, long prevEntryAdr)
+        {
             long next = HashEntries.getNext(hashEntryAdr);
 
             long head = first(hash);
             if (head == hashEntryAdr)
-            {
-                if (prev != 0L)
-                    throw new IllegalStateException("head must not have a previous entry");
                 first(hash, next);
-            }
-
-            if (prev != 0L)
-                HashEntries.setNext(prev, next);
-            if (next != 0L)
-                HashEntries.setPrevious(next, prev);
+            else if (prevEntryAdr != 0L)
+                HashEntries.setNext(prevEntryAdr, next);
 
             // just for safety
-            HashEntries.setPrevious(hashEntryAdr, 0L);
             HashEntries.setNext(hashEntryAdr, 0L);
         }
 
@@ -348,10 +364,7 @@ final class OffHeapMap
         {
             long head = first(hash);
             HashEntries.setNext(hashEntryAdr, head);
-            HashEntries.setPrevious(hashEntryAdr, 0L); // just for safety
             first(hash, hashEntryAdr);
-            if (head != 0L)
-                HashEntries.setPrevious(head, hashEntryAdr);
         }
 
         int size()
@@ -364,7 +377,7 @@ final class OffHeapMap
     // eviction/replacement/cleanup
     //
 
-    private void remove(long hashEntryAdr)
+    private void remove(long hashEntryAdr, long prevEntryAdr)
     {
         long hash = HashEntries.getHash(hashEntryAdr);
 
@@ -478,7 +491,7 @@ final class OffHeapMap
 
             long bytes = HashEntries.getAllocLen(hashEntryAdr);
 
-            remove(hashEntryAdr);
+            remove(hashEntryAdr, -1L);
             dereference(hashEntryAdr);
 
             size--;

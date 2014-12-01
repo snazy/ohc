@@ -139,27 +139,21 @@ final class Uns
     {
     }
 
-    static void putLongVolatile(long address, long offset, long value)
-    {
-        validate(address, offset, 8L);
-        unsafe.putLongVolatile(null, address + offset, value);
-    }
-
     static long getLongFromByteArray(byte[] array, int offset)
     {
         return unsafe.getLong(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
+    }
+
+    static void putLong(long address, long offset, long value)
+    {
+        validate(address, offset, 8L);
+        unsafe.putLong(null, address + offset, value);
     }
 
     static long getLong(long address, long offset)
     {
         validate(address, offset, 8L);
         return unsafe.getLong(null, address + offset);
-    }
-
-    static long getLongVolatile(long address, long offset)
-    {
-        validate(address, offset, 8L);
-        return unsafe.getLongVolatile(null, address + offset);
     }
 
     static void putByte(long address, long offset, byte value)

@@ -34,12 +34,11 @@ public final class HashEntries
 
     static void init(long hash, long keyLen, long valueLen, long hashEntryAdr)
     {
-        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_HASH, hash);
+        Uns.putLong(hashEntryAdr, ENTRY_OFF_HASH, hash);
         setNext(hashEntryAdr, 0L);
-        setPrevious(hashEntryAdr, 0L);
-        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_KEY_LENGTH, keyLen);
-        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_VALUE_LENGTH, valueLen);
-        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_REFCOUNT, 1L);
+        Uns.putLong(hashEntryAdr, ENTRY_OFF_KEY_LENGTH, keyLen);
+        Uns.putLong(hashEntryAdr, ENTRY_OFF_VALUE_LENGTH, valueLen);
+        Uns.putLong(hashEntryAdr, ENTRY_OFF_REFCOUNT, 1L);
     }
 
     static boolean compareKey(long hashEntryAdr, KeyBuffer key, long serKeyLen)
@@ -59,32 +58,32 @@ public final class HashEntries
 
     public static long getLRUNext(long hashEntryAdr)
     {
-        return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_NEXT);
+        return Uns.getLong(hashEntryAdr, ENTRY_OFF_LRU_NEXT);
     }
 
     public static void setLRUNext(long hashEntryAdr, long replacement)
     {
-        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_NEXT, replacement);
+        Uns.putLong(hashEntryAdr, ENTRY_OFF_LRU_NEXT, replacement);
     }
 
     public static long getLRUPrev(long hashEntryAdr)
     {
-        return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_PREV);
+        return Uns.getLong(hashEntryAdr, ENTRY_OFF_LRU_PREV);
     }
 
     public static void setLRUPrev(long hashEntryAdr, long replacement)
     {
-        Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_LRU_PREV, replacement);
+        Uns.putLong(hashEntryAdr, ENTRY_OFF_LRU_PREV, replacement);
     }
 
     static long getHash(long hashEntryAdr)
     {
-        return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_HASH);
+        return Uns.getLong(hashEntryAdr, ENTRY_OFF_HASH);
     }
 
     static long getNext(long hashEntryAdr)
     {
-        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_NEXT) : 0L;
+        return hashEntryAdr != 0L ? Uns.getLong(hashEntryAdr, ENTRY_OFF_NEXT) : 0L;
     }
 
     static void setNext(long hashEntryAdr, long nextAdr)
@@ -92,30 +91,17 @@ public final class HashEntries
         if (hashEntryAdr == nextAdr)
             throw new IllegalArgumentException();
         if (hashEntryAdr != 0L)
-            Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_NEXT, nextAdr);
-    }
-
-    static long getPrevious(long hashEntryAdr)
-    {
-        return hashEntryAdr != 0L ? Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_PREVIOUS) : 0L;
-    }
-
-    static void setPrevious(long hashEntryAdr, long prevAdr)
-    {
-        if (hashEntryAdr == prevAdr)
-            throw new IllegalArgumentException();
-        if (hashEntryAdr != 0L)
-            Uns.putLongVolatile(hashEntryAdr, ENTRY_OFF_PREVIOUS, prevAdr);
+            Uns.putLong(hashEntryAdr, ENTRY_OFF_NEXT, nextAdr);
     }
 
     static long getKeyLen(long hashEntryAdr)
     {
-        return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_KEY_LENGTH);
+        return Uns.getLong(hashEntryAdr, ENTRY_OFF_KEY_LENGTH);
     }
 
     static long getValueLen(long hashEntryAdr)
     {
-        return Uns.getLongVolatile(hashEntryAdr, ENTRY_OFF_VALUE_LENGTH);
+        return Uns.getLong(hashEntryAdr, ENTRY_OFF_VALUE_LENGTH);
     }
 
     static long getAllocLen(long address)

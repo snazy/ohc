@@ -28,16 +28,14 @@ abstract class Constants
     static final long ENTRY_OFF_REFCOUNT = 16;
     // offset of next hash entry in a hash bucket
     static final long ENTRY_OFF_NEXT = 24;
-    // offset of previous hash entry in a hash bucket
-    static final long ENTRY_OFF_PREVIOUS = 32;
     // offset of serialized hash value
-    static final long ENTRY_OFF_HASH = 40;
+    static final long ENTRY_OFF_HASH = 32;
     // offset of serialized hash key length
-    static final long ENTRY_OFF_KEY_LENGTH = 48;
+    static final long ENTRY_OFF_KEY_LENGTH = 40;
     // offset of serialized value length
-    static final long ENTRY_OFF_VALUE_LENGTH = 56;
+    static final long ENTRY_OFF_VALUE_LENGTH = 48;
     // offset of data in first block
-    static final long ENTRY_OFF_DATA = 72;
+    static final long ENTRY_OFF_DATA = 56;
 
 // Hash bucket-table
 

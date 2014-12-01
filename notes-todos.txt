@@ -1,0 +1,36 @@
+
+THIS IS JUST AN UNORDERED LIST OF NOTES AND TODOS AND HINTS
+
+
+
+I haven't thoroughly been through it, but your use of cleanup thresholds could result in a bug if you insert
+something > cleanupthreshold in size (pretty unlikely, but still). Cleanup should really just take the delta between
+free space and the size of the item you're inserting. We should also fail if it isn't possible to free up enough room -
+perhaps we should even have a "max row size to cache" property which must be < total size / segments, and reject any
+insertions larger than this.
+
+Cleanup (or better: combination of entry size and trigger/target) may expose a bug. Definitely worth keeping an eye on it.
+It will just "do nothing" if there's not enough off-heap memory could be allocated.
+But if too many threads allocate new entries and the machine is near-to-full, the whole machine may fail (due to OOM).
+
+Eventually it is be possible to configure jemalloc to "limit" the memory. It has a lot of switches and variables that
+can be configured at runtime.
+
+I'd also like to "pin" row-cache memory to RAM (cache swapped out to disk is wasted effort :) )
+--> Pinning the row cache to RAM might be tricky though - we can easily pin the table, but not so easily the individual allocations.
+
+
+
+Currently LRU is built in - but I'm not really sold on LRU as is. Alternatives could be
+    timestamp (not sold on this either - basically the same as LRU)
+    LIRS (https://en.wikipedia.org/wiki/LIRS_caching_algorithm), big overhead (space)
+    2Q (counts accesses, divides counter regularly)
+    LRU+random (50/50) (may give the same result than LIRS, but without LIRS' overhead)
+But replacement of LRU with something else is out of scope of this ticket and should be done with real workloads in C* -
+although the last one is "just" a additional config parameter.
+
+IMO we should add a per-table option that configures whether the row cache receives data on reads+writes or just on reads.
+Might prevent garbage in the cache caused by write heavy tables.
+
+Unsafe.allocateMemory() gives about 5-10% performance improvement compared to jemalloc. Reason fot it might be that JNA
+library (which has some synchronized blocks in it).

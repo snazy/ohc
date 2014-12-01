@@ -41,7 +41,6 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
-import org.apache.commons.io.FileUtils;
 
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.Timer;
@@ -70,6 +69,7 @@ public class BenchmarkOHC
 
     public static final String DEFAULT_VALUE_SIZE_DIST = "fixed(512)";
     public static final String DEFAULT_KEY_DIST = "uniform(1..10000)";
+    public static final int ONE_MB = 1024 * 1024;
     static OHCache<Long, byte[]> cache;
     static AtomicBoolean fatal = new AtomicBoolean();
     static ThreadMXBean threadMXBean;
@@ -381,18 +381,27 @@ public class BenchmarkOHC
             sleep(100);
             printMessage("Memory consumed: %s / %s, size %d%n" +
                          "          stats: %s",
-                         FileUtils.byteCountToDisplaySize(((OHCache) cache).getMemUsed()),
-                         FileUtils.byteCountToDisplaySize(((OHCache) cache).getCapacity()),
+                         byteCountToDisplaySize(((OHCache) cache).getMemUsed()),
+                         byteCountToDisplaySize(((OHCache) cache).getCapacity()),
                          cache.size(),
                          ((OHCache) cache).extendedStats());
             printMessage("");
         }
-        printMessage("VM total:%s", FileUtils.byteCountToDisplaySize(Runtime.getRuntime().totalMemory()));
-        printMessage("VM free:%s", FileUtils.byteCountToDisplaySize(Runtime.getRuntime().freeMemory()));
+        printMessage("VM total:%s", byteCountToDisplaySize(Runtime.getRuntime().totalMemory()));
+        printMessage("VM free:%s", byteCountToDisplaySize(Runtime.getRuntime().freeMemory()));
         if (cache instanceof OHCache)
             printMessage("Cache stats:%s", ((OHCache) cache).extendedStats());
         else
             printMessage("Cache stats:%s", cache.stats());
+    }
+
+    private static String byteCountToDisplaySize(long l)
+    {
+        if (l > ONE_MB)
+            return Long.toString(l / ONE_MB)+" MB";
+        if (l > 1024)
+            return Long.toString(l / 1024)+" kB";
+        return Long.toString(l);
     }
 
     private static class ReadTask implements Runnable
