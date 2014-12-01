@@ -216,8 +216,12 @@ public class BenchmarkOHC
 
     static long ntime()
     {
-//        return threadMXBean.getCurrentThreadCpuTime();
-        return System.nanoTime();
+        // java.lang.management.ThreadMXBean.getCurrentThreadCpuTime() performs better
+        // (at least on OSX with single 8-core CPU). Seems that there's less contention/synchronization
+        // overhead.
+
+        return threadMXBean.getCurrentThreadCpuTime();
+//        return System.nanoTime();
     }
 
     private static void runFor(ThreadPoolExecutor exec, int duration,
