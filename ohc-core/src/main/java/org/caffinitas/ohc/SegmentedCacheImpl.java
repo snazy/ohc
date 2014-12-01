@@ -170,20 +170,17 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
         long bytes = allocLen(keyLen, valueLen);
 
-        if (bytes > maxEntrySize)
-            return;
-
-        // Allocate and fill new hash entry.
-        long hashEntryAdr = Uns.allocate(bytes);
-        if (hashEntryAdr == 0L)
+        long hashEntryAdr;
+        if (bytes > maxEntrySize || (hashEntryAdr = Uns.allocate(bytes))==0L)
         {
+            // entry too large to be inserted or OS is not able to provide enough memory
             if (statisticsEnabled)
                 putFailCount++;
 
             removeInternal(key);
-
             return;
         }
+
         // initialize hash entry
         HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
         HashEntries.toOffHeap(key, hashEntryAdr, ENTRY_OFF_DATA);
@@ -217,9 +214,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     {
         KeyBuffer key = keySource((K) k);
 
-        if (!removeInternal(key)) return;
-
-        if (statisticsEnabled)
+        if (removeInternal(key) && statisticsEnabled)
             removeCount++;
     }
 

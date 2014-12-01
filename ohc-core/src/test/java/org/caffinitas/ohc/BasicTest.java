@@ -164,4 +164,30 @@ public class BasicTest extends AbstractTest
             Assert.assertEquals(cache.stats().evictionCount(), 1L, "cleanup did not run");
         }
     }
+
+    @Test(dependsOnMethods = "serializing")
+    public void putTooLarge() throws IOException, InterruptedException
+    {
+        char[] c940 = new char[8192];
+        for (int i = 0; i < c940.length; i++)
+            c940[i] = (char) ('A' + i % 26);
+        String v = new String(c940);
+
+        // Build cache with 64MB capacity and trigger on less than 8 MB free capacity
+        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
+                                                           .keySerializer(stringSerializer)
+                                                           .valueSerializer(stringSerializer)
+                                                           .segmentCount(1)
+                                                           .capacity(ONE_MB)
+                                                           .maxEntrySize((double)ONE_MB / 128) // == 8kB
+                                                           .cleanUpTriggerFree(.125d)
+                                                           .build())
+        {
+            cache.put("foobar", v);
+
+            Assert.assertNull(cache.getIfPresent("foobar"));
+            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
+            Assert.assertEquals(cache.extendedStats().getCleanupCount(), 0L, "cleanup did run");
+        }
+    }
 }
