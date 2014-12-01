@@ -135,8 +135,7 @@ public class BasicTest extends AbstractTest
         }
     }
 
-    @Test(dependsOnMethods = "serialize100k", enabled = false)
-    // Note: test no longer works since cleanup is triggered independently on each segment (not on the whole cache)
+    @Test(dependsOnMethods = "serialize100k")
     public void cleanUpTest() throws IOException, InterruptedException
     {
         char[] c940 = new char[940];
@@ -148,22 +147,21 @@ public class BasicTest extends AbstractTest
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
                                                            .keySerializer(stringSerializer)
                                                            .valueSerializer(stringSerializer)
+                                                           .segmentCount(1)
                                                            .capacity(32 * ONE_MB)
                                                            .cleanUpTriggerFree(.125d)
                                                            .build())
         {
             int i;
-            for (i = 0; cache.freeCapacity() > 4 * ONE_MB + 1024; i++)
+            for (i = 0; cache.freeCapacity() > 4 * ONE_MB + 1000; i++)
                 cache.put(Integer.toString(i), v);
 
             Assert.assertEquals(cache.extendedStats().getCleanupCount(), 0L, "oops - cleanup triggered - fix the unit test!");
 
-            long free = cache.freeCapacity();
-
             cache.put(Integer.toString(i), v);
 
             Assert.assertEquals(cache.extendedStats().getCleanupCount(), 1L, "cleanup did not run");
-            Assert.assertTrue(free < cache.freeCapacity(), "free capacity did not increase");
+            Assert.assertEquals(cache.stats().evictionCount(), 1L, "cleanup did not run");
         }
     }
 }

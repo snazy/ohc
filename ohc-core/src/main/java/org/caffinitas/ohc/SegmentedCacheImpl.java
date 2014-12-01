@@ -87,16 +87,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             cleanUpTriggerFree = (long) cuTrigger;
         }
 
-        // calculate target for cleanup/eviction/replacement
-        double cuTarget = builder.getCleanUpTargetFree();
-        if (cuTarget < cuTrigger)
-            cuTarget = cuTrigger;
-        long cleanUpTargetFree = (long) (cuTarget * capacity);
-        if (cuTarget < 0)
-            cleanUpTargetFree = 2 * cleanUpTriggerFree;
-        if (cuTarget > .9d || cleanUpTargetFree > capacity)
-            cleanUpTargetFree = (long) (.9d * capacity);
-
         // build segments
         int segments = builder.getSegmentCount();
         if (segments <= 0)
@@ -106,8 +96,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         for (int i = 0; i < segments; i++)
             maps[i] = new OffHeapMap(builder,
                                      capacity / segments,
-                                     cleanUpTriggerFree / segments,
-                                     cleanUpTargetFree / segments);
+                                     cleanUpTriggerFree / segments
+            );
 
         // bit-mask for segment part of hash
         int bitNum = bitNum(segments) - 1;
@@ -212,7 +202,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             throw new IOError(e);
         }
 
-        if (segment(hash).replaceEntry(key, hashEntryAdr, bytes))
+        if (segment(hash).putEntry(key, hashEntryAdr, bytes))
         {
             if (statisticsEnabled)
                 putAddCount++;

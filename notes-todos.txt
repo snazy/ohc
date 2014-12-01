@@ -2,18 +2,11 @@
 THIS IS JUST AN UNORDERED LIST OF NOTES AND TODOS AND HINTS
 
 
-
-I haven't thoroughly been through it, but your use of cleanup thresholds could result in a bug if you insert
-something > cleanupthreshold in size (pretty unlikely, but still). Cleanup should really just take the delta between
-free space and the size of the item you're inserting. We should also fail if it isn't possible to free up enough room -
-perhaps we should even have a "max row size to cache" property which must be < total size / segments, and reject any
-insertions larger than this.
-
 Cleanup (or better: combination of entry size and trigger/target) may expose a bug. Definitely worth keeping an eye on it.
 It will just "do nothing" if there's not enough off-heap memory could be allocated.
 But if too many threads allocate new entries and the machine is near-to-full, the whole machine may fail (due to OOM).
 
-Eventually it is be possible to configure jemalloc to "limit" the memory. It has a lot of switches and variables that
+Eventually it is possible to configure jemalloc to "limit" the memory. It has a lot of switches and variables that
 can be configured at runtime.
 
 I'd also like to "pin" row-cache memory to RAM (cache swapped out to disk is wasted effort :) )

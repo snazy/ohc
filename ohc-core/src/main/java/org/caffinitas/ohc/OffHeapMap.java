@@ -25,7 +25,6 @@ final class OffHeapMap
     private final long capacity;
     private long freeCapacity;
     private final long cleanUpTriggerFree;
-    private final long cleanUpTargetFree;
 
     private Table table;
     private long size;
@@ -39,12 +38,11 @@ final class OffHeapMap
     private long cleanUpCount;
     private long evictedEntries;
 
-    OffHeapMap(OHCacheBuilder builder, long capacity, long cleanUpTriggerFree, long cleanUpTargetFree)
+    OffHeapMap(OHCacheBuilder builder, long capacity, long cleanUpTriggerFree)
     {
         this.capacity = capacity;
         this.freeCapacity = capacity;
         this.cleanUpTriggerFree = cleanUpTriggerFree;
-        this.cleanUpTargetFree = cleanUpTargetFree;
 
         int hts = builder.getHashTableSize();
         if (hts <= 0)
@@ -125,7 +123,7 @@ final class OffHeapMap
         return 0L;
     }
 
-    synchronized boolean replaceEntry(KeyBuffer key, long newHashEntryAdr, long bytes)
+    synchronized boolean putEntry(KeyBuffer key, long newHashEntryAdr, long bytes)
     {
         if (freeCapacity - bytes < cleanUpTriggerFree)
             cleanUp();
@@ -381,7 +379,12 @@ final class OffHeapMap
     {
         long hash = HashEntries.getHash(hashEntryAdr);
 
-        table.removeLink(hash, hashEntryAdr);
+        if (prevEntryAdr == -1L)
+            // cleanUp has no information about the previous hash-entry
+            table.removeLink(hash, hashEntryAdr);
+        else
+            // other operations know about the previous hash-entry (since they walk through the entry-chain)
+            table.removeLink(hash, hashEntryAdr, prevEntryAdr);
 
         // LRU stuff
 
@@ -477,7 +480,7 @@ final class OffHeapMap
 
     synchronized void cleanUp()
     {
-        long recycleGoal = cleanUpTargetFree - freeCapacity;
+        long recycleGoal = cleanUpTriggerFree - freeCapacity;
         if (recycleGoal <= 0L)
             recycleGoal = 1L;
 
