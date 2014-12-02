@@ -52,15 +52,10 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private final long maxEntrySize;
 
     private boolean statisticsEnabled;
-    private volatile long hitCount;
-    private volatile long missCount;
     private volatile long loadSuccessCount;
     private volatile long loadExceptionCount;
     private volatile long totalLoadTime;
     private volatile long putFailCount;
-    private volatile long putAddCount;
-    private volatile long putReplaceCount;
-    private volatile long removeCount;
 
     public SegmentedCacheImpl(OHCacheBuilder<K, V> builder)
     {
@@ -148,14 +143,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long hashEntryAdr = segment(keySource.hash()).getEntry(keySource);
 
         if (hashEntryAdr == 0L)
-        {
-            if (statisticsEnabled)
-                missCount++;
             return null;
-        }
-
-        if (statisticsEnabled)
-            hitCount++;
 
         try
         {
@@ -209,28 +197,19 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             throw new IOError(e);
         }
 
-        if (segment(hash).putEntry(key, hashEntryAdr, bytes))
-        {
-            if (statisticsEnabled)
-                putAddCount++;
-            return;
-        }
-
-        if (statisticsEnabled)
-            putReplaceCount++;
+        segment(hash).putEntry(key, hashEntryAdr, bytes);
     }
 
     public void invalidate(Object k)
     {
         KeyBuffer key = keySource((K) k);
 
-        if (removeInternal(key) && statisticsEnabled)
-            removeCount++;
+        removeInternal(key);
     }
 
-    private boolean removeInternal(KeyBuffer key)
+    private void removeInternal(KeyBuffer key)
     {
-        return segment(key.hash()).removeEntry(key);
+        segment(key.hash()).removeEntry(key);
     }
 
     private OffHeapMap segment(long hash)
@@ -355,12 +334,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     {
         for (OffHeapMap map : maps)
             map.resetStatistics();
-        putAddCount = 0;
-        putReplaceCount = 0;
         putFailCount = 0;
-        removeCount = 0;
-        hitCount = 0;
-        missCount = 0;
         loadSuccessCount = 0;
         loadExceptionCount = 0;
         totalLoadTime = 0;
@@ -383,22 +357,62 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                                 freeCapacity(),
                                 cleanUpCount(),
                                 rehashes,
-                                putAddCount,
-                                putReplaceCount,
+                                putAddCount(),
+                                putReplaceCount(),
                                 putFailCount,
-                                removeCount);
+                                removeCount());
     }
 
     public CacheStats stats()
     {
         return new CacheStats(
-                             hitCount,
-                             missCount,
+                             hitCount(),
+                             missCount(),
                              loadSuccessCount,
                              loadExceptionCount,
                              totalLoadTime,
                              evictedEntries()
         );
+    }
+
+    private long putAddCount()
+    {
+        long putAddCount = 0L;
+        for (OffHeapMap map : maps)
+            putAddCount += map.putAddCount();
+        return putAddCount;
+    }
+
+    private long putReplaceCount()
+    {
+        long putReplaceCount = 0L;
+        for (OffHeapMap map : maps)
+            putReplaceCount += map.putReplaceCount();
+        return putReplaceCount;
+    }
+
+    private long removeCount()
+    {
+        long removeCount = 0L;
+        for (OffHeapMap map : maps)
+            removeCount += map.removeCount();
+        return removeCount;
+    }
+
+    private long hitCount()
+    {
+        long hitCount = 0L;
+        for (OffHeapMap map : maps)
+            hitCount += map.hitCount();
+        return hitCount;
+    }
+
+    private long missCount()
+    {
+        long missCount = 0L;
+        for (OffHeapMap map : maps)
+            missCount += map.missCount();
+        return missCount;
     }
 
     public long getCapacity()

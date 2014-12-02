@@ -98,7 +98,7 @@ public class BasicTest extends AbstractTest
             Assert.assertEquals(cache.size(), 0);
 
             stats = cache.extendedStats();
-            Assert.assertEquals(stats.getUnlinkCount(), 100000);
+            Assert.assertEquals(stats.getRemoveCount(), 100000);
         }
     }
 

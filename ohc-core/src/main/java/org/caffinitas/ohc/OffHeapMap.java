@@ -22,17 +22,24 @@ final class OffHeapMap
     // maximum hash table size
     private static final int MAX_TABLE_SIZE = 1 << 30;
 
-    private final long capacity;
-    private long freeCapacity;
-    private final long cleanUpTriggerFree;
+    private long lruHead;
+    private long lruTail;
 
-    private Table table;
     private long size;
+    private Table table;
+
+    private long hitCount;
+    private long missCount;
+    private long putAddCount;
+    private long putReplaceCount;
+    private long removeCount;
+
     private long threshold;
     private final double loadFactor;
 
-    private long lruHead;
-    private long lruTail;
+    private final long capacity;
+    private long freeCapacity;
+    private final long cleanUpTriggerFree;
 
     private long rehashes;
     private long cleanUpCount;
@@ -79,11 +86,41 @@ final class OffHeapMap
         return freeCapacity;
     }
 
+    long hitCount()
+    {
+        return hitCount;
+    }
+
+    long missCount()
+    {
+        return missCount;
+    }
+
+    long putAddCount()
+    {
+        return putAddCount;
+    }
+
+    long putReplaceCount()
+    {
+        return putReplaceCount;
+    }
+
+    long removeCount()
+    {
+        return removeCount;
+    }
+
     void resetStatistics()
     {
         rehashes = 0L;
         cleanUpCount = 0L;
         evictedEntries = 0L;
+        hitCount = 0L;
+        missCount = 0L;
+        putAddCount = 0L;
+        putReplaceCount = 0L;
+        removeCount = 0L;
     }
 
     long rehashes()
@@ -116,15 +153,16 @@ final class OffHeapMap
 
             HashEntries.reference(hashEntryAdr);
 
+            hitCount++;
             return hashEntryAdr;
         }
 
         // not found
-
+        missCount++;
         return 0L;
     }
 
-    synchronized boolean putEntry(KeyBuffer key, long newHashEntryAdr, long bytes)
+    synchronized void putEntry(KeyBuffer key, long newHashEntryAdr, long bytes)
     {
         if (freeCapacity - bytes < cleanUpTriggerFree)
             cleanUp();
@@ -158,7 +196,10 @@ final class OffHeapMap
 
         add(newHashEntryAdr);
 
-        return hashEntryAdr == 0L;
+        if (hashEntryAdr == 0L)
+            putAddCount++;
+        else
+            putReplaceCount++;
     }
 
     synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes)
@@ -217,7 +258,7 @@ final class OffHeapMap
         table.clear();
     }
 
-    synchronized boolean removeEntry(KeyBuffer key)
+    synchronized void removeEntry(KeyBuffer key)
     {
         long prevEntryAdr = 0L;
         for (long hashEntryAdr = table.first(key.hash());
@@ -233,13 +274,10 @@ final class OffHeapMap
             dereference(hashEntryAdr);
 
             size--;
+            removeCount++;
 
-            return true;
+            return;
         }
-
-        // no entry to remove
-
-        return false;
     }
 
     private boolean notSameKey(KeyBuffer key, long hashEntryAdr)

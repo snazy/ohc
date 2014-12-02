@@ -21,7 +21,7 @@ import com.google.common.cache.CacheStats;
 public final class OHCacheStats
 {
     private final CacheStats cacheStats;
-    private final long[] hashPartitionLengths;
+    private final long[] segmentSizes;
     private final long capacity;
     private final long free;
     private final long size;
@@ -30,14 +30,14 @@ public final class OHCacheStats
     private final long putAddCount;
     private final long putReplaceCount;
     private final long putFailCount;
-    private final long unlinkCount;
+    private final long removeCount;
 
-    public OHCacheStats(CacheStats cacheStats, long[] hashPartitionLengths, long size, long capacity, long free,
+    public OHCacheStats(CacheStats cacheStats, long[] segmentSizes, long size, long capacity, long free,
                         long cleanupCount, long rehashCount,
-                        long putAddCount, long putReplaceCount, long putFailCount, long unlinkCount)
+                        long putAddCount, long putReplaceCount, long putFailCount, long removeCount)
     {
         this.cacheStats = cacheStats;
-        this.hashPartitionLengths = hashPartitionLengths;
+        this.segmentSizes = segmentSizes;
         this.size = size;
         this.capacity = capacity;
         this.free = free;
@@ -46,7 +46,7 @@ public final class OHCacheStats
         this.putAddCount = putAddCount;
         this.putReplaceCount = putReplaceCount;
         this.putFailCount = putFailCount;
-        this.unlinkCount = unlinkCount;
+        this.removeCount = removeCount;
     }
 
     public long getCapacity()
@@ -74,9 +74,9 @@ public final class OHCacheStats
         return cacheStats;
     }
 
-    public long[] getHashPartitionLengths()
+    public long[] getSegmentSizes()
     {
-        return hashPartitionLengths;
+        return segmentSizes;
     }
 
     public long getSize()
@@ -99,24 +99,24 @@ public final class OHCacheStats
         return putFailCount;
     }
 
-    public long getUnlinkCount()
+    public long getRemoveCount()
     {
-        return unlinkCount;
+        return removeCount;
     }
 
-    public double averageHashPartitionLength()
+    public double averageSegmentSize()
     {
-        return avgOf(hashPartitionLengths);
+        return avgOf(segmentSizes);
     }
 
-    public long minHashPartitionLength()
+    public long minSegmentSize()
     {
-        return minOf(hashPartitionLengths);
+        return minOf(segmentSizes);
     }
 
-    public long maxHashPartitionLength()
+    public long maxSegmentSize()
     {
-        return maxOf(hashPartitionLengths);
+        return maxOf(segmentSizes);
     }
 
     public String toString()
@@ -129,8 +129,8 @@ public final class OHCacheStats
                       .add("cleanupCount", cleanupCount)
                       .add("rehashCount", rehashCount)
                       .add("put(add/replace/fail)", Long.toString(putAddCount)+'/'+putReplaceCount+'/'+putFailCount)
-                      .add("unlinkCount", unlinkCount)
-                      .add("hashPartitionLengths(#/min/max/avg)", String.format("%d/%d/%d/%.2f", hashPartitionLengths.length, minHashPartitionLength(), maxHashPartitionLength(), averageHashPartitionLength()))
+                      .add("removeCount", removeCount)
+                      .add("segmentSizes(#/min/max/avg)", String.format("%d/%d/%d/%.2f", segmentSizes.length, minSegmentSize(), maxSegmentSize(), averageSegmentSize()))
                       .toString();
     }
 
