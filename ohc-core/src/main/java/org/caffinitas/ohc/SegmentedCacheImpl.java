@@ -17,6 +17,10 @@ package org.caffinitas.ohc;
 
 import java.io.IOError;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -61,6 +65,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     public SegmentedCacheImpl(OHCacheBuilder<K, V> builder)
     {
         long capacity = builder.getCapacity();
+        if (capacity <= 0L)
+            throw new IllegalArgumentException("capacity");
 
         // calculate trigger for cleanup/eviction/replacement
         double cuTrigger = builder.getCleanUpTriggerFree();
@@ -116,7 +122,11 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         this.statisticsEnabled = builder.isStatisticsEnabled();
 
         this.keySerializer = builder.getKeySerializer();
+        if (keySerializer == null)
+            throw new NullPointerException("keySerializer == null");
         this.valueSerializer = builder.getValueSerializer();
+        if (valueSerializer == null)
+            throw new NullPointerException("valueSerializer == null");
     }
 
     private static int bitNum(long val)
@@ -149,7 +159,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
         try
         {
-            return valueSerializer.deserialize(HashEntries.readValueFrom(hashEntryAdr));
+            return valueSerializer.deserialize(new HashEntryValueInput(hashEntryAdr));
         }
         catch (IOException e)
         {
@@ -171,7 +181,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long bytes = allocLen(keyLen, valueLen);
 
         long hashEntryAdr;
-        if (bytes > maxEntrySize || (hashEntryAdr = Uns.allocate(bytes))==0L)
+        if (bytes > maxEntrySize || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
         {
             // entry too large to be inserted or OS is not able to provide enough memory
             if (statisticsEnabled)
@@ -186,9 +196,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         HashEntries.toOffHeap(key, hashEntryAdr, ENTRY_OFF_DATA);
         try
         {
-            valueSerializer.serialize(v, new HashEntryOutput(hashEntryAdr, key.size(), valueLen));
+            valueSerializer.serialize(v, new HashEntryValueOutput(hashEntryAdr, key.size(), valueLen));
         }
-        catch (VirtualMachineError e)
+        catch (Error e)
         {
             Uns.free(hashEntryAdr);
             throw e;
@@ -277,7 +287,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                         if (hashEntryAdr != 0L)
                             try
                             {
-                                return keySerializer.deserialize(HashEntries.readKeyFrom(hashEntryAdr));
+                                return keySerializer.deserialize(new HashEntryKeyInput(hashEntryAdr));
                             }
                             catch (IOException e)
                             {
@@ -450,6 +460,118 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     }
 
     //
+    // serialization (serialized data cannot be ported between different CPU architectures, if endianess differs)
+    //
+
+    public boolean deserializeEntry(SeekableByteChannel channel) throws IOException
+    {
+        // read hash, keyLen, valueLen
+        byte[] hashKeyValueLen = new byte[3 * 8];
+        ByteBuffer bb = ByteBuffer.allocate(3 * 8);
+        readFully(channel, bb);
+
+        long hash = Uns.getLongFromByteArray(hashKeyValueLen, 0);
+        long keyLen = Uns.getLongFromByteArray(hashKeyValueLen, 8);
+        long valueLen = Uns.getLongFromByteArray(hashKeyValueLen, 16);
+
+        long kvLen = roundUpTo8(keyLen) + valueLen;
+        long totalLen = kvLen + ENTRY_OFF_DATA;
+        long hashEntryAdr;
+        if (totalLen > maxEntrySize || (hashEntryAdr = Uns.allocate(totalLen)) == 0L)
+        {
+            channel.position(channel.position() + kvLen);
+            return false;
+        }
+
+        HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
+
+        // read key + value
+        readFully(channel, HashEntries.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, kvLen));
+
+        segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen);
+
+        return true;
+    }
+
+    public boolean serializeEntry(K key, WritableByteChannel channel) throws IOException
+    {
+        KeyBuffer keySource = keySource(key);
+
+        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource);
+
+        return hashEntryAdr != 0L && serializeEntry(channel, hashEntryAdr);
+    }
+
+    public int serializeHotN(int n, WritableByteChannel channel) throws IOException
+    {
+        // hotN implementation does only return a (good) approximation - not necessarily the exact hotN
+        // since it iterates over the all segments and takes a fraction of 'n' from them.
+        // This implementation may also return more results than expected just to keep it simple
+        // (it does not really matter if you request 5000 keys and e.g. get 5015).
+
+        int perMap = n / maps.length + 1;
+        int cnt = 0;
+
+        for (OffHeapMap map : maps)
+        {
+            long[] hotPerMap = map.hotN(perMap);
+            try
+            {
+                for (int i = 0; i < hotPerMap.length; i++)
+                {
+                    long hashEntryAdr = hotPerMap[i];
+                    if (hashEntryAdr == 0L)
+                        continue;
+
+                    serializeEntry(channel, hashEntryAdr);
+                    dereference(hashEntryAdr);
+                    hotPerMap[i] = 0L;
+
+                    cnt++;
+                }
+            }
+            finally
+            {
+                for (long hashEntryAdr : hotPerMap)
+                    if (hashEntryAdr != 0L)
+                        dereference(hashEntryAdr);
+            }
+        }
+
+        return cnt;
+    }
+
+    private boolean serializeEntry(WritableByteChannel channel, long hashEntryAdr) throws IOException
+    {
+        try
+        {
+            long keyLen = HashEntries.getKeyLen(hashEntryAdr);
+            long valueLen = HashEntries.getValueLen(hashEntryAdr);
+
+            // write hash, keyLen, valueLen + key + value
+            writeFully(channel, HashEntries.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, 3 * 8L + roundUpTo8(keyLen) + valueLen));
+
+            return true;
+        }
+        finally
+        {
+            dereference(hashEntryAdr);
+        }
+    }
+
+    private void readFully(ReadableByteChannel channel, ByteBuffer buffer) throws IOException
+    {
+        while (buffer.remaining() > 0)
+            channel.read(buffer);
+    }
+
+    private void writeFully(WritableByteChannel channel, ByteBuffer buffer) throws IOException
+    {
+        while (buffer.remaining() > 0)
+            channel.write(buffer);
+    }
+
+    //
     // convenience methods
     //
 
@@ -480,8 +602,15 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public ImmutableMap<K, V> getAllPresent(Iterable<?> keys)
     {
-        // TODO implement
-        return null;
+        ImmutableMap.Builder<K, V> b = ImmutableMap.builder();
+        for (Object key : keys)
+        {
+            K k = (K) key;
+            V v = getIfPresent(k);
+            if (v != null)
+                b.put(k, v);
+        }
+        return b.build();
     }
 
     public void putAll(Map<? extends K, ? extends V> m)

@@ -16,6 +16,10 @@
 package org.caffinitas.ohc;
 
 import java.io.Closeable;
+import java.io.IOException;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.Iterator;
 
 import com.google.common.cache.Cache;
@@ -43,4 +47,10 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
     OHCacheStats extendedStats();
 
     double getLoadFactor();
+
+    boolean deserializeEntry(SeekableByteChannel channel) throws IOException;
+
+    boolean serializeEntry(K key, WritableByteChannel channel) throws IOException;
+
+    int serializeHotN(int n, WritableByteChannel channel) throws IOException;
 }

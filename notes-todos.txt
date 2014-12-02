@@ -20,6 +20,8 @@ It would make sense if one simply waited on the result of the other, but I don't
 It's nice - but we should not do more than adding a "marker" to the cache and regularly poll if it has been processed.
 But it will degrade performance for rows that are bigger than "maxEntrySize".
 
+Consider jemalloc "./configure --disable-tcache"
+
 
 Currently LRU is built in - but I'm not really sold on LRU as is. Alternatives could be
     timestamp (not sold on this either - basically the same as LRU)

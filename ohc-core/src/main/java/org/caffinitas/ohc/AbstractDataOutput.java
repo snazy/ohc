@@ -36,48 +36,6 @@ public abstract class AbstractDataOutput implements DataOutput
         write(v);
     }
 
-    public void writeShort(int v) throws IOException
-    {
-        write((v >>> 8) & 0xFF);
-        write(v & 0xFF);
-    }
-
-    public void writeChar(int v) throws IOException
-    {
-        write((v >>> 8) & 0xFF);
-        write(v & 0xFF);
-    }
-
-    public void writeInt(int v) throws IOException
-    {
-        write((v >>> 24) & 0xFF);
-        write((v >>> 16) & 0xFF);
-        write((v >>> 8) & 0xFF);
-        write(v & 0xFF);
-    }
-
-    public void writeLong(long v) throws IOException
-    {
-        write((int) ((v >>> 56) & 0xFF));
-        write((int) ((v >>> 48) & 0xFF));
-        write((int) ((v >>> 40) & 0xFF));
-        write((int) ((v >>> 32) & 0xFF));
-        write((int) ((v >>> 24) & 0xFF));
-        write((int) ((v >>> 16) & 0xFF));
-        write((int) ((v >>> 8) & 0xFF));
-        write((int) (v & 0xFF));
-    }
-
-    public void writeFloat(float v) throws IOException
-    {
-        writeInt(Float.floatToIntBits(v));
-    }
-
-    public void writeDouble(double v) throws IOException
-    {
-        writeLong(Double.doubleToLongBits(v));
-    }
-
     public void writeBytes(String s) throws IOException
     {
         int len = s.length();

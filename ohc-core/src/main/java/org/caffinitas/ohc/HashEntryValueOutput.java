@@ -21,13 +21,13 @@ import java.io.IOException;
 /**
  * Instances of this class are passed to {@link org.caffinitas.ohc.CacheSerializer#serialize(Object, java.io.DataOutput)}.
  */
-final class HashEntryOutput extends AbstractDataOutput
+final class HashEntryValueOutput extends AbstractDataOutput
 {
     private long blkAdr;
     private long blkOff;
     private final long blkEnd;
 
-    HashEntryOutput(long hashEntryAdr, long keyLen, long valueLen)
+    HashEntryValueOutput(long hashEntryAdr, long keyLen, long valueLen)
     {
         if (hashEntryAdr == 0L || keyLen < 0L || valueLen < 0L || valueLen > Integer.MAX_VALUE)
             throw new IllegalArgumentException();
@@ -68,4 +68,59 @@ final class HashEntryOutput extends AbstractDataOutput
 
     // Note: it is a very bad idea to override writeInt/Short/Long etc because the corresponding
     // sun.misc.Unsafe methods use CPU endian which usually differs from endian used by Java
+
+
+    public void writeBoolean(boolean v) throws IOException
+    {
+        assertAvail(1);
+        Uns.putBoolean(blkAdr, blkOff++, v);
+    }
+
+    public void writeByte(int v) throws IOException
+    {
+        assertAvail(1);
+        Uns.putByte(blkAdr, blkOff++, (byte) v);
+    }
+
+    public void writeShort(int v) throws IOException
+    {
+        assertAvail(2);
+        Uns.putShort(blkAdr, blkOff, (short) v);
+        blkOff += 2;
+    }
+
+    public void writeChar(int v) throws IOException
+    {
+        assertAvail(2);
+        Uns.putChar(blkAdr, blkOff, (char) v);
+        blkOff += 2;
+    }
+
+    public void writeInt(int v) throws IOException
+    {
+        assertAvail(4);
+        Uns.putInt(blkAdr, blkOff, v);
+        blkOff += 4;
+    }
+
+    public void writeLong(long v) throws IOException
+    {
+        assertAvail(8);
+        Uns.putLong(blkAdr, blkOff, v);
+        blkOff += 8;
+    }
+
+    public void writeFloat(float v) throws IOException
+    {
+        assertAvail(4);
+        Uns.putFloat(blkAdr, blkOff, v);
+        blkOff += 4;
+    }
+
+    public void writeDouble(double v) throws IOException
+    {
+        assertAvail(8);
+        Uns.putDouble(blkAdr, blkOff, v);
+        blkOff += 8;
+    }
 }

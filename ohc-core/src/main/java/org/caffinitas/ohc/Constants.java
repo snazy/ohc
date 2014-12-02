@@ -37,6 +37,10 @@ abstract class Constants
     // offset of data in first block
     static final long ENTRY_OFF_DATA = 56;
 
+    // Note: keep ENTRY_OFF_HASH, ENTRY_OFF_KEY_LENGTH, ENTRY_OFF_VALUE_LENGTH in exact that order
+    // and together and at the end of the header because
+    // org.caffinitas.ohc.SegmentedCacheImpl.(de)serializeEntry relies on it!
+
 // Hash bucket-table
 
     // reference to the first entry of segment

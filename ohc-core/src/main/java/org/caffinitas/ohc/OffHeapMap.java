@@ -20,7 +20,7 @@ import static org.caffinitas.ohc.Constants.BUCKET_ENTRY_LEN;
 final class OffHeapMap
 {
     // maximum hash table size
-    private static final int MAX_TABLE_SIZE = 1 << 27;
+    private static final int MAX_TABLE_SIZE = 1 << 30;
 
     private final long capacity;
     private long freeCapacity;
@@ -58,9 +58,10 @@ final class OffHeapMap
         threshold = (long) ((double) table.size() * loadFactor);
     }
 
-    void release()
+    synchronized void release()
     {
         table.release();
+        table = null;
     }
 
     long size()
@@ -160,6 +161,43 @@ final class OffHeapMap
         return hashEntryAdr == 0L;
     }
 
+    synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes)
+    {
+        if (freeCapacity - bytes < cleanUpTriggerFree)
+            cleanUp();
+
+        freeCapacity -= bytes;
+
+        long hashEntryAdr;
+        long prevEntryAdr = 0L;
+        for (hashEntryAdr = table.first(hash);
+             hashEntryAdr != 0L;
+             prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+        {
+            if (notSameKey(newHashEntryAdr, hash, keyLen, hashEntryAdr))
+                continue;
+
+            // replace existing entry
+
+            remove(hashEntryAdr, prevEntryAdr);
+            dereference(hashEntryAdr);
+
+            break;
+        }
+
+        if (hashEntryAdr == 0L)
+        {
+            if (size >= threshold)
+                rehash();
+
+            size++;
+        }
+
+        add(newHashEntryAdr);
+
+        return hashEntryAdr == 0L;
+    }
+
     synchronized void clear()
     {
         lruHead = lruTail = 0L;
@@ -215,11 +253,22 @@ final class OffHeapMap
                || !HashEntries.compareKey(hashEntryAdr, key, serKeyLen);
     }
 
+    private boolean notSameKey(long newHashEntryAdr, long newHash, long newKeyLen, long hashEntryAdr)
+    {
+        long hashEntryHash = HashEntries.getHash(hashEntryAdr);
+        if (hashEntryHash != newHash)
+            return true;
+
+        long serKeyLen = HashEntries.getKeyLen(hashEntryAdr);
+        return serKeyLen != newKeyLen
+               || !HashEntries.compareKey(hashEntryAdr, newHashEntryAdr, serKeyLen);
+    }
+
     private void rehash()
     {
         Table tab = table;
         int tableSize = tab.size();
-        if (tableSize > 1 << 24)
+        if (tableSize > MAX_TABLE_SIZE)
         {
             // already at max hash table size - keep rehashTrigger field true
             return;
@@ -258,7 +307,7 @@ final class OffHeapMap
         int i = 0;
         for (long hashEntryAdr = lruHead;
              hashEntryAdr != 0L;
-             hashEntryAdr = lruNext(hashEntryAdr))
+             hashEntryAdr = getLruNext(hashEntryAdr))
         {
             r[i++] = hashEntryAdr;
             HashEntries.reference(hashEntryAdr);
@@ -388,8 +437,8 @@ final class OffHeapMap
 
         // LRU stuff
 
-        long next = lruNext(hashEntryAdr);
-        long prev = lruPrev(hashEntryAdr);
+        long next = getLruNext(hashEntryAdr);
+        long prev = getLruPrev(hashEntryAdr);
 
         if (lruHead == hashEntryAdr)
             lruHead = next;
@@ -397,9 +446,9 @@ final class OffHeapMap
             lruTail = prev;
 
         if (next != 0L)
-            lruPrev(next, prev);
+            setLruPrev(next, prev);
         if (prev != 0L)
-            lruNext(prev, next);
+            setLruNext(prev, next);
     }
 
     private void add(long hashEntryAdr)
@@ -411,10 +460,10 @@ final class OffHeapMap
         // LRU stuff
 
         long h = lruHead;
-        lruNext(hashEntryAdr, h);
+        setLruNext(hashEntryAdr, h);
         if (h != 0L)
-            lruPrev(h, hashEntryAdr);
-        lruPrev(hashEntryAdr, 0L);
+            setLruPrev(h, hashEntryAdr);
+        setLruPrev(hashEntryAdr, 0L);
         lruHead = hashEntryAdr;
 
         if (lruTail == 0L)
@@ -429,46 +478,46 @@ final class OffHeapMap
 
         // LRU stuff (basically a remove from LRU linked list)
 
-        long next = lruNext(hashEntryAdr);
-        long prev = lruPrev(hashEntryAdr);
+        long next = getLruNext(hashEntryAdr);
+        long prev = getLruPrev(hashEntryAdr);
 
         if (lruTail == hashEntryAdr)
             lruTail = prev;
 
         if (next != 0L)
-            lruPrev(next, prev);
+            setLruPrev(next, prev);
         if (prev != 0L)
-            lruNext(prev, next);
+            setLruNext(prev, next);
 
         // LRU stuff (basically an add to LRU linked list)
 
         long head = lruHead;
-        lruNext(hashEntryAdr, head);
+        setLruNext(hashEntryAdr, head);
         if (head != 0L)
-            lruPrev(head, hashEntryAdr);
-        lruPrev(hashEntryAdr, 0L);
+            setLruPrev(head, hashEntryAdr);
+        setLruPrev(hashEntryAdr, 0L);
         lruHead = hashEntryAdr;
 
         if (lruTail == 0L)
             lruTail = hashEntryAdr;
     }
 
-    private long lruNext(long hashEntryAdr)
+    private long getLruNext(long hashEntryAdr)
     {
         return HashEntries.getLRUNext(hashEntryAdr);
     }
 
-    private long lruPrev(long hashEntryAdr)
+    private long getLruPrev(long hashEntryAdr)
     {
         return HashEntries.getLRUPrev(hashEntryAdr);
     }
 
-    private void lruNext(long hashEntryAdr, long next)
+    private void setLruNext(long hashEntryAdr, long next)
     {
         HashEntries.setLRUNext(hashEntryAdr, next);
     }
 
-    private void lruPrev(long hashEntryAdr, long prev)
+    private void setLruPrev(long hashEntryAdr, long prev)
     {
         HashEntries.setLRUPrev(hashEntryAdr, prev);
     }
@@ -490,7 +539,7 @@ final class OffHeapMap
              hashEntryAdr != 0L && recycleGoal > 0L;
              hashEntryAdr = prev)
         {
-            prev = lruPrev(hashEntryAdr);
+            prev = getLruPrev(hashEntryAdr);
 
             long bytes = HashEntries.getAllocLen(hashEntryAdr);
 
