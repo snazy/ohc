@@ -39,14 +39,15 @@ public abstract class AbstractDataOutput implements DataOutput
     public void writeBytes(String s) throws IOException
     {
         int len = s.length();
-        for (int i = 0 ; i < len ; i++)
+        for (int i = 0; i < len; i++)
             write((byte) s.charAt(i));
     }
 
     public void writeChars(String s) throws IOException
     {
         int len = s.length();
-        for (int i = 0 ; i < len ; i++) {
+        for (int i = 0; i < len; i++)
+        {
             int v = s.charAt(i);
             write((v >>> 8) & 0xFF);
             write(v & 0xFF);
@@ -60,15 +61,15 @@ public abstract class AbstractDataOutput implements DataOutput
         int c;
 
         /* use charAt instead of copying String to char array */
-        for (int i = 0; i < strlen; i++) {
+        for (int i = 0; i < strlen; i++)
+        {
             c = str.charAt(i);
-            if ((c >= 0x0001) && (c <= 0x007F)) {
+            if ((c >= 0x0001) && (c <= 0x007F))
                 utflen++;
-            } else if (c > 0x07FF) {
+            else if (c > 0x07FF)
                 utflen += 3;
-            } else {
+            else
                 utflen += 2;
-            }
         }
 
         if (utflen > 65535)
@@ -77,23 +78,27 @@ public abstract class AbstractDataOutput implements DataOutput
         writeShort(utflen);
 
         int i;
-        for (i=0; i<strlen; i++) {
+        for (i = 0; i < strlen; i++)
+        {
             c = str.charAt(i);
             if (!((c >= 0x0001) && (c <= 0x007F))) break;
             writeByte(c);
         }
 
-        for (;i < strlen; i++){
+        for (; i < strlen; i++)
+        {
             c = str.charAt(i);
-            if ((c >= 0x0001) && (c <= 0x007F)) {
+            if ((c >= 0x0001) && (c <= 0x007F))
                 writeByte(c);
-
-            } else if (c > 0x07FF) {
+            else if (c > 0x07FF)
+            {
                 writeByte(0xE0 | ((c >> 12) & 0x0F));
-                writeByte(0x80 | ((c >>  6) & 0x3F));
+                writeByte(0x80 | ((c >> 6) & 0x3F));
                 writeByte(0x80 | (c & 0x3F));
-            } else {
-                writeByte(0xC0 | ((c >>  6) & 0x1F));
+            }
+            else
+            {
+                writeByte(0xC0 | ((c >> 6) & 0x1F));
                 writeByte(0x80 | (c & 0x3F));
             }
         }
@@ -106,20 +111,20 @@ public abstract class AbstractDataOutput implements DataOutput
         int c;
 
         /* use charAt instead of copying String to char array */
-        for (int i = 0; i < strlen; i++) {
+        for (int i = 0; i < strlen; i++)
+        {
             c = str.charAt(i);
-            if ((c >= 0x0001) && (c <= 0x007F)) {
+            if ((c >= 0x0001) && (c <= 0x007F))
                 utflen++;
-            } else if (c > 0x07FF) {
+            else if (c > 0x07FF)
                 utflen += 3;
-            } else {
+            else
                 utflen += 2;
-            }
         }
 
         if (utflen > 65535)
             throw new RuntimeException("encoded string too long: " + utflen + " bytes");
 
-        return utflen+2;
+        return utflen + 2;
     }
 }
