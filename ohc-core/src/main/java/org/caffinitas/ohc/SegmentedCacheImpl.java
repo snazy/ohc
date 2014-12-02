@@ -23,17 +23,14 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
 
-import com.google.common.cache.CacheStats;
 import com.google.common.collect.AbstractIterator;
-import com.google.common.collect.ImmutableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.caffinitas.ohc.Constants.*;
+import static org.caffinitas.ohc.Constants.ENTRY_OFF_DATA;
+import static org.caffinitas.ohc.Constants.allocLen;
+import static org.caffinitas.ohc.Constants.roundUpTo8;
 
 public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 {
@@ -52,9 +49,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private final long maxEntrySize;
 
     private boolean statisticsEnabled;
-    private volatile long loadSuccessCount;
-    private volatile long loadExceptionCount;
-    private volatile long totalLoadTime;
     private volatile long putFailCount;
 
     public SegmentedCacheImpl(OHCacheBuilder<K, V> builder)
@@ -136,9 +130,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     // map stuff
     //
 
-    public V getIfPresent(Object key)
+    public V getIfPresent(K key)
     {
-        KeyBuffer keySource = keySource((K) key);
+        KeyBuffer keySource = keySource( key);
 
         long hashEntryAdr = segment(keySource.hash()).getEntry(keySource);
 
@@ -200,9 +194,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         segment(hash).putEntry(key, hashEntryAdr, bytes);
     }
 
-    public void invalidate(Object k)
+    public void invalidate(K k)
     {
-        KeyBuffer key = keySource((K) k);
+        KeyBuffer key = keySource(k);
 
         removeInternal(key);
     }
@@ -335,12 +329,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         for (OffHeapMap map : maps)
             map.resetStatistics();
         putFailCount = 0;
-        loadSuccessCount = 0;
-        loadExceptionCount = 0;
-        totalLoadTime = 0;
     }
 
-    public OHCacheStats extendedStats()
+    public OHCacheStats stats()
     {
         long[] mapSizes = new long[maps.length];
         long rehashes = 0L;
@@ -350,29 +341,20 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             rehashes += map.rehashes();
             mapSizes[i] = map.size();
         }
-        return new OHCacheStats(stats(),
-                                mapSizes,
+        return new OHCacheStats(
+                               hitCount(),
+                               missCount(),
+                               evictedEntries(),
+                               mapSizes,
                                 size(),
                                 getCapacity(),
-                                freeCapacity(),
+                                getFreeCapacity(),
                                 cleanUpCount(),
                                 rehashes,
                                 putAddCount(),
                                 putReplaceCount(),
                                 putFailCount,
                                 removeCount());
-    }
-
-    public CacheStats stats()
-    {
-        return new CacheStats(
-                             hitCount(),
-                             missCount(),
-                             loadSuccessCount,
-                             loadExceptionCount,
-                             totalLoadTime,
-                             evictedEntries()
-        );
     }
 
     private long putAddCount()
@@ -423,7 +405,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return capacity;
     }
 
-    public long freeCapacity()
+    public long getFreeCapacity()
     {
         long capacity = 0L;
         for (OffHeapMap map : maps)
@@ -589,68 +571,21 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     // convenience methods
     //
 
-    public V get(K key, Callable<? extends V> valueLoader) throws ExecutionException
-    {
-        V v = getIfPresent(key);
-        if (v == null)
-        {
-            long t0 = System.currentTimeMillis();
-            try
-            {
-                v = valueLoader.call();
-                loadSuccessCount++;
-            }
-            catch (Exception e)
-            {
-                loadExceptionCount++;
-                throw new ExecutionException(e);
-            }
-            finally
-            {
-                totalLoadTime += System.currentTimeMillis() - t0;
-            }
-            put(key, v);
-        }
-        return v;
-    }
-
-    public ImmutableMap<K, V> getAllPresent(Iterable<?> keys)
-    {
-        ImmutableMap.Builder<K, V> b = ImmutableMap.builder();
-        for (Object key : keys)
-        {
-            K k = (K) key;
-            V v = getIfPresent(k);
-            if (v != null)
-                b.put(k, v);
-        }
-        return b.build();
-    }
-
     public void putAll(Map<? extends K, ? extends V> m)
     {
         for (Map.Entry<? extends K, ? extends V> entry : m.entrySet())
             put(entry.getKey(), entry.getValue());
     }
 
-    public void invalidateAll(Iterable<?> iterable)
+    public void invalidateAll(Iterable<K> iterable)
     {
-        for (Object o : iterable)
+        for (K o : iterable)
             invalidate(o);
     }
 
     public long getMemUsed()
     {
-        return getCapacity() - freeCapacity();
-    }
-
-    //
-    // methods that don't make sense in this implementation
-    //
-
-    public ConcurrentMap<K, V> asMap()
-    {
-        throw new UnsupportedOperationException();
+        return getCapacity() - getFreeCapacity();
     }
 
     //

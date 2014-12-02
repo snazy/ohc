@@ -21,11 +21,29 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Iterator;
+import java.util.Map;
 
 import com.google.common.cache.Cache;
+import com.google.common.cache.CacheStats;
 
-public interface OHCache<K, V> extends Cache<K, V>, Closeable
+public interface OHCache<K, V> extends Closeable
 {
+    V getIfPresent(K key);
+
+    void put(K key, V value);
+
+    void putAll(Map<? extends K, ? extends V> m);
+
+    void invalidate(K key);
+
+    void invalidateAll(Iterable<K> keys);
+
+    void invalidateAll();
+
+    long size();
+
+    void cleanUp();
+
     boolean isStatisticsEnabled();
 
     void setStatisticsEnabled(boolean statisticsEnabled);
@@ -40,11 +58,11 @@ public interface OHCache<K, V> extends Cache<K, V>, Closeable
 
     long getMemUsed();
 
-    long freeCapacity();
+    long getFreeCapacity();
 
     Iterator<K> hotN(int n);
 
-    OHCacheStats extendedStats();
+    OHCacheStats stats();
 
     double getLoadFactor();
 

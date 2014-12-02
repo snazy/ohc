@@ -16,11 +16,12 @@
 package org.caffinitas.ohc;
 
 import com.google.common.base.Objects;
-import com.google.common.cache.CacheStats;
 
 public final class OHCacheStats
 {
-    private final CacheStats cacheStats;
+    private final long hitCount;
+    private final long missCount;
+    private final long evictionCount;
     private final long[] segmentSizes;
     private final long capacity;
     private final long free;
@@ -32,11 +33,14 @@ public final class OHCacheStats
     private final long putFailCount;
     private final long removeCount;
 
-    public OHCacheStats(CacheStats cacheStats, long[] segmentSizes, long size, long capacity, long free,
+    public OHCacheStats(long hitCount, long missCount, long evictionCount,
+                        long[] segmentSizes, long size, long capacity, long free,
                         long cleanupCount, long rehashCount,
                         long putAddCount, long putReplaceCount, long putFailCount, long removeCount)
     {
-        this.cacheStats = cacheStats;
+        this.hitCount = hitCount;
+        this.missCount = missCount;
+        this.evictionCount = evictionCount;
         this.segmentSizes = segmentSizes;
         this.size = size;
         this.capacity = capacity;
@@ -69,9 +73,19 @@ public final class OHCacheStats
         return rehashCount;
     }
 
-    public CacheStats getCacheStats()
+    public long getHitCount()
     {
-        return cacheStats;
+        return hitCount;
+    }
+
+    public long getMissCount()
+    {
+        return missCount;
+    }
+
+    public long getEvictionCount()
+    {
+        return evictionCount;
     }
 
     public long[] getSegmentSizes()
@@ -104,17 +118,17 @@ public final class OHCacheStats
         return removeCount;
     }
 
-    public double averageSegmentSize()
+    public double getAverageSegmentSize()
     {
         return avgOf(segmentSizes);
     }
 
-    public long minSegmentSize()
+    public long getMinSegmentSize()
     {
         return minOf(segmentSizes);
     }
 
-    public long maxSegmentSize()
+    public long getMaxSegmentSize()
     {
         return maxOf(segmentSizes);
     }
@@ -122,7 +136,9 @@ public final class OHCacheStats
     public String toString()
     {
         return Objects.toStringHelper(this)
-                      .add("cacheStats", cacheStats)
+                      .add("hitCount", hitCount)
+                      .add("missCount", missCount)
+                      .add("evictionCount", evictionCount)
                       .add("size", size)
                       .add("capacity", capacity)
                       .add("free", free)
@@ -130,7 +146,7 @@ public final class OHCacheStats
                       .add("rehashCount", rehashCount)
                       .add("put(add/replace/fail)", Long.toString(putAddCount)+'/'+putReplaceCount+'/'+putFailCount)
                       .add("removeCount", removeCount)
-                      .add("segmentSizes(#/min/max/avg)", String.format("%d/%d/%d/%.2f", segmentSizes.length, minSegmentSize(), maxSegmentSize(), averageSegmentSize()))
+                      .add("segmentSizes(#/min/max/avg)", String.format("%d/%d/%d/%.2f", segmentSizes.length, getMinSegmentSize(), getMaxSegmentSize(), getAverageSegmentSize()))
                       .toString();
     }
 

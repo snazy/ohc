@@ -34,7 +34,6 @@ import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import javax.management.openmbean.CompositeDataSupport;
 
-import com.google.common.cache.Cache;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -141,9 +140,9 @@ public class BenchmarkOHC
 
             printMessage("Starting benchmark with%n" +
                          "   threads     : %d%n" +
-                         "   runtime-secs: %d%n" +
                          "   warm-up-secs: %d%n" +
-                         "   idle-secs   : %d%n",
+                         "   idle-secs   : %d%n" +
+                         "   runtime-secs: %d%n",
                          threads,
                          duration,
                          warmUpSecs, coldSleepSecs);
@@ -153,8 +152,8 @@ public class BenchmarkOHC
                                   .keySerializer(BenchmarkUtils.longSerializer)
                                   .valueSerializer(BenchmarkUtils.serializer)
                                   .hashTableSize(hashTableSize)
-                    .loadFactor(loadFactor)
-                    .segmentCount(segmentCount)
+                                  .loadFactor(loadFactor)
+                                  .segmentCount(segmentCount)
                                   .capacity(capacity)
                                   .statisticsEnabled(true)
                                   .build();
@@ -279,13 +278,13 @@ public class BenchmarkOHC
 
     private static void printStats(String title)
     {
-        printMessage("%s%n     %s entries, %d/%d free, %s", title, cache.size(), cache.freeCapacity(), cache.getCapacity(), cache.extendedStats());
+        printMessage("%s%n     %s entries, %d/%d free, %s", title, cache.size(), cache.getFreeCapacity(), cache.getCapacity(), cache.stats());
         for (Map.Entry<String, GCStats> gcStat : gcStats.entrySet())
         {
             GCStats gs = gcStat.getValue();
             long count = gs.count.longValue();
             long duration = gs.duration.longValue();
-            double runtimeAvg = ((double)duration)/count;
+            double runtimeAvg = ((double) duration) / count;
             printMessage("     GC  %-15s : count: %8d    duration: %8dms (avg:%6.2fms)    cores: %d",
                          gcStat.getKey(),
                          count, duration, runtimeAvg, gs.cores);
@@ -378,33 +377,27 @@ public class BenchmarkOHC
         return cmd;
     }
 
-    private static void logMemoryUse(Cache<?, ?> cache) throws Exception
+    private static void logMemoryUse(OHCache<?, ?> cache) throws Exception
     {
-        if (cache instanceof OHCache)
-        {
-            sleep(100);
-            printMessage("Memory consumed: %s / %s, size %d%n" +
-                         "          stats: %s",
-                         byteCountToDisplaySize(((OHCache) cache).getMemUsed()),
-                         byteCountToDisplaySize(((OHCache) cache).getCapacity()),
-                         cache.size(),
-                         ((OHCache) cache).extendedStats());
-            printMessage("");
-        }
+        sleep(100);
+        printMessage("Memory consumed: %s / %s, size %d%n" +
+                     "          stats: %s",
+                     byteCountToDisplaySize(cache.getMemUsed()),
+                     byteCountToDisplaySize(cache.getCapacity()),
+                     cache.size(),
+                     cache.stats());
+        printMessage("");
         printMessage("VM total:%s", byteCountToDisplaySize(Runtime.getRuntime().totalMemory()));
         printMessage("VM free:%s", byteCountToDisplaySize(Runtime.getRuntime().freeMemory()));
-        if (cache instanceof OHCache)
-            printMessage("Cache stats:%s", ((OHCache) cache).extendedStats());
-        else
-            printMessage("Cache stats:%s", cache.stats());
+        printMessage("Cache stats:%s", cache.stats());
     }
 
     private static String byteCountToDisplaySize(long l)
     {
         if (l > ONE_MB)
-            return Long.toString(l / ONE_MB)+" MB";
+            return Long.toString(l / ONE_MB) + " MB";
         if (l > 1024)
-            return Long.toString(l / 1024)+" kB";
+            return Long.toString(l / 1024) + " kB";
         return Long.toString(l);
     }
 

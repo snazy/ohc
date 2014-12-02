@@ -33,12 +33,12 @@ public class BasicTest extends AbstractTest
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
-            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
+            Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
 
             String k = "123";
             cache.put(k, "hello world \u00e4\u00f6\u00fc\u00df");
 
-            Assert.assertTrue(cache.freeCapacity() < cache.getCapacity());
+            Assert.assertTrue(cache.getFreeCapacity() < cache.getCapacity());
 
             String v = cache.getIfPresent(k);
             Assert.assertEquals(v, "hello world \u00e4\u00f6\u00fc\u00df");
@@ -47,7 +47,7 @@ public class BasicTest extends AbstractTest
 
             Thread.sleep(300L);
 
-            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
+            Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
         }
     }
 
@@ -81,7 +81,7 @@ public class BasicTest extends AbstractTest
             for (int i = 0; i < 100000; i++)
                 cache.put("key-" + i, "" + i);
 
-            OHCacheStats stats = cache.extendedStats();
+            OHCacheStats stats = cache.stats();
             Assert.assertEquals(stats.getPutAddCount(), 100000);
 
             Assert.assertEquals(cache.size(), 100000);
@@ -89,15 +89,15 @@ public class BasicTest extends AbstractTest
             for (int i = 0; i < 100000; i++)
                 Assert.assertEquals(cache.getIfPresent("key-" + i), "" + i);
 
-            stats = cache.extendedStats();
-            Assert.assertEquals(stats.getCacheStats().hitCount(), 100000);
+            stats = cache.stats();
+            Assert.assertEquals(stats.getHitCount(), 100000);
 
             for (int i = 0; i < 100000; i++)
                 cache.invalidate("key-" + i);
 
             Assert.assertEquals(cache.size(), 0);
 
-            stats = cache.extendedStats();
+            stats = cache.stats();
             Assert.assertEquals(stats.getRemoveCount(), 100000);
         }
     }
@@ -153,15 +153,15 @@ public class BasicTest extends AbstractTest
                                                            .build())
         {
             int i;
-            for (i = 0; cache.freeCapacity() > 4 * ONE_MB + 1000; i++)
+            for (i = 0; cache.getFreeCapacity() > 4 * ONE_MB + 1000; i++)
                 cache.put(Integer.toString(i), v);
 
-            Assert.assertEquals(cache.extendedStats().getCleanupCount(), 0L, "oops - cleanup triggered - fix the unit test!");
+            Assert.assertEquals(cache.stats().getCleanupCount(), 0L, "oops - cleanup triggered - fix the unit test!");
 
             cache.put(Integer.toString(i), v);
 
-            Assert.assertEquals(cache.extendedStats().getCleanupCount(), 1L, "cleanup did not run");
-            Assert.assertEquals(cache.stats().evictionCount(), 1L, "cleanup did not run");
+            Assert.assertEquals(cache.stats().getCleanupCount(), 1L, "cleanup did not run");
+            Assert.assertEquals(cache.stats().getEvictionCount(), 1L, "cleanup did not run");
         }
     }
 
@@ -186,8 +186,8 @@ public class BasicTest extends AbstractTest
             cache.put("foobar", v);
 
             Assert.assertNull(cache.getIfPresent("foobar"));
-            Assert.assertEquals(cache.freeCapacity(), cache.getCapacity());
-            Assert.assertEquals(cache.extendedStats().getCleanupCount(), 0L, "cleanup did run");
+            Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
+            Assert.assertEquals(cache.stats().getCleanupCount(), 0L, "cleanup did run");
         }
     }
 }
