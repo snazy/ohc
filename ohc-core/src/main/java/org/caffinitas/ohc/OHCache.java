@@ -34,7 +34,7 @@ public interface OHCache<K, V> extends Closeable
 
     void putAll(Map<? extends K, ? extends V> m);
 
-    void invalidate(K key);
+    void remove(K key);
 
     void invalidateAll(Iterable<K> keys);
 
@@ -65,6 +65,8 @@ public interface OHCache<K, V> extends Closeable
     OHCacheStats stats();
 
     double getLoadFactor();
+
+    Iterator<K> keyIterator();
 
     boolean deserializeEntry(SeekableByteChannel channel) throws IOException;
 

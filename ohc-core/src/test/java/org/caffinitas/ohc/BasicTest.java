@@ -16,6 +16,9 @@
 package org.caffinitas.ohc;
 
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -25,7 +28,7 @@ public class BasicTest extends AbstractTest
 
     public static final long ONE_MB = 1024 * 1024;
 
-    @Test()
+    @Test
     public void serializing() throws IOException, InterruptedException
     {
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
@@ -43,11 +46,57 @@ public class BasicTest extends AbstractTest
             String v = cache.getIfPresent(k);
             Assert.assertEquals(v, "hello world \u00e4\u00f6\u00fc\u00df");
 
-            cache.invalidate(k);
+            cache.remove(k);
 
             Thread.sleep(300L);
 
             Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
+        }
+    }
+
+    @Test(dependsOnMethods = "serializing")
+    public void keyIterator() throws IOException, InterruptedException
+    {
+        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
+                                                           .keySerializer(stringSerializer)
+                                                           .valueSerializer(stringSerializer)
+                                                           .build())
+        {
+            cache.put("1", "one");
+            cache.put("2", "two");
+            cache.put("3", "three");
+            cache.put("4", "four");
+            cache.put("5", "five");
+
+            Set<String> returned = new TreeSet<>();
+            Iterator<String> iter = cache.keyIterator();
+            for (int i = 0; i < 5; i++)
+            {
+                Assert.assertTrue(iter.hasNext());
+                returned.add(iter.next());
+            }
+            Assert.assertFalse(iter.hasNext());
+            Assert.assertEquals(returned.size(), 5);
+
+            Assert.assertTrue(returned.contains("1"));
+            Assert.assertTrue(returned.contains("2"));
+            Assert.assertTrue(returned.contains("3"));
+            Assert.assertTrue(returned.contains("4"));
+            Assert.assertTrue(returned.contains("5"));
+
+            returned.clear();
+
+            iter = cache.keyIterator();
+            for (int i = 0; i < 5; i++)
+                returned.add(iter.next());
+            Assert.assertFalse(iter.hasNext());
+            Assert.assertEquals(returned.size(), 5);
+
+            Assert.assertTrue(returned.contains("1"));
+            Assert.assertTrue(returned.contains("2"));
+            Assert.assertTrue(returned.contains("3"));
+            Assert.assertTrue(returned.contains("4"));
+            Assert.assertTrue(returned.contains("5"));
         }
     }
 
@@ -61,9 +110,9 @@ public class BasicTest extends AbstractTest
         {
             cache.put("1", "one");
             cache.put("2", "two");
-            cache.put("3", "two");
-            cache.put("4", "two");
-            cache.put("5", "two");
+            cache.put("3", "three");
+            cache.put("4", "four");
+            cache.put("5", "five");
 
             Assert.assertNotNull(cache.hotN(1).next());
         }
@@ -93,7 +142,7 @@ public class BasicTest extends AbstractTest
             Assert.assertEquals(stats.getHitCount(), 100000);
 
             for (int i = 0; i < 100000; i++)
-                cache.invalidate("key-" + i);
+                cache.remove("key-" + i);
 
             Assert.assertEquals(cache.size(), 0);
 
@@ -129,7 +178,7 @@ public class BasicTest extends AbstractTest
                 Assert.assertEquals(cache.getIfPresent("key-" + i), "" + i);
 
             for (int i = 0; i < 100000; i++)
-                cache.invalidate("key-" + i);
+                cache.remove("key-" + i);
 
             Assert.assertEquals(cache.size(), 0);
         }
@@ -179,9 +228,9 @@ public class BasicTest extends AbstractTest
                                                            .valueSerializer(stringSerializer)
                                                            .segmentCount(1)
                                                            .capacity(ONE_MB)
-                                                           .maxEntrySize((double)ONE_MB / 128) // == 8kB
-                                                           .cleanUpTriggerFree(.125d)
-                                                           .build())
+                                             .maxEntrySize((double) ONE_MB / 128) // == 8kB
+                                             .cleanUpTriggerFree(.125d)
+                                             .build())
         {
             cache.put("foobar", v);
 

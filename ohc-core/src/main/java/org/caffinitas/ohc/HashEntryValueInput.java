@@ -16,6 +16,7 @@
 package org.caffinitas.ohc;
 
 import java.io.IOException;
+
 import static org.caffinitas.ohc.Constants.*;
 
 /**
@@ -37,7 +38,7 @@ final class HashEntryValueInput extends AbstractDataInput
     public int readUnsignedByte() throws IOException
     {
         assertAvail(1);
-        return Uns.getByte(blkAdr, blkOff++) & 0xff;
+        return (int) Uns.getByte(blkAdr, blkOff++) & 0xff;
     }
 
     public short readShort() throws IOException
@@ -51,7 +52,7 @@ final class HashEntryValueInput extends AbstractDataInput
     public int readUnsignedShort() throws IOException
     {
         assertAvail(2);
-        short r = Uns.getShort(blkAdr, blkOff);
+        int r = Uns.getShort(blkAdr, blkOff);
         blkOff += 2;
         return r & 0xffff;
     }

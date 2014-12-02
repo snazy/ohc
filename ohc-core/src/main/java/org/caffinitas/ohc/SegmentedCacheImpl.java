@@ -21,8 +21,11 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 import com.google.common.collect.AbstractIterator;
 import org.slf4j.Logger;
@@ -132,7 +135,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public V getIfPresent(K key)
     {
-        KeyBuffer keySource = keySource( key);
+        KeyBuffer keySource = keySource(key);
 
         long hashEntryAdr = segment(keySource.hash()).getEntry(keySource);
 
@@ -194,7 +197,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         segment(hash).putEntry(key, hashEntryAdr, bytes);
     }
 
-    public void invalidate(K k)
+    public void remove(K k)
     {
         KeyBuffer key = keySource(k);
 
@@ -346,15 +349,15 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                                missCount(),
                                evictedEntries(),
                                mapSizes,
-                                size(),
-                                getCapacity(),
-                                getFreeCapacity(),
-                                cleanUpCount(),
-                                rehashes,
-                                putAddCount(),
-                                putReplaceCount(),
-                                putFailCount,
-                                removeCount());
+                               size(),
+                               getCapacity(),
+                               getFreeCapacity(),
+                               cleanUpCount(),
+                               rehashes,
+                               putAddCount(),
+                               putReplaceCount(),
+                               putFailCount,
+                               removeCount());
     }
 
     private long putAddCount()
@@ -580,7 +583,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     public void invalidateAll(Iterable<K> iterable)
     {
         for (K o : iterable)
-            invalidate(o);
+            remove(o);
     }
 
     public long getMemUsed()
@@ -612,5 +615,97 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         Uns.free(hashEntryAdr);
         segment(hash).freed(bytes);
         return bytes;
+    }
+
+    //
+    // key iterator
+    //
+
+    public Iterator<K> keyIterator()
+    {
+        return new Iterator<K>()
+        {
+            private int segmentIndex;
+            private OffHeapMap segment;
+
+            private int mapSegmentCount;
+            private int mapSegmentIndex;
+
+            private final List<Long> hashEntryAdrs = new ArrayList<>(1024);
+            private int listIndex;
+
+            private boolean eod;
+            private K next;
+
+            public boolean hasNext()
+            {
+                if (eod)
+                    return false;
+
+                if (next == null)
+                    next = computeNext();
+
+                return next != null;
+            }
+
+            public K next()
+            {
+                if (eod)
+                    throw new NoSuchElementException();
+
+                if (next == null)
+                    next = computeNext();
+                K r = next;
+                next = null;
+                if (!eod)
+                    return r;
+                throw new NoSuchElementException();
+            }
+
+            public void remove()
+            {
+                if (eod)
+                    throw new NoSuchElementException();
+            }
+
+            private K computeNext()
+            {
+                while (true)
+                {
+                    if (mapSegmentIndex >= mapSegmentCount)
+                    {
+                        if (segmentIndex == maps.length)
+                        {
+                            eod = true;
+                            return null;
+                        }
+                        segment = maps[segmentIndex++];
+                        mapSegmentCount = segment.hashTableSize();
+                        mapSegmentIndex = 0;
+                    }
+
+                    if (listIndex == hashEntryAdrs.size())
+                    {
+                        hashEntryAdrs.clear();
+                        segment.getEntryAddresses(mapSegmentIndex, 1024, hashEntryAdrs);
+                        mapSegmentIndex += 1024;
+                        listIndex = 0;
+                    }
+
+                    if (listIndex < hashEntryAdrs.size())
+                    {
+                        long hashEntryAdr = hashEntryAdrs.get(listIndex++);
+                        try
+                        {
+                            return keySerializer.deserialize(new HashEntryKeyInput(hashEntryAdr));
+                        }
+                        catch (IOException e)
+                        {
+                            throw new IOError(e);
+                        }
+                    }
+                }
+            }
+        };
     }
 }

@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import java.util.List;
+
 import static org.caffinitas.ohc.Constants.BUCKET_ENTRY_LEN;
 
 final class OffHeapMap
@@ -361,6 +363,17 @@ final class OffHeapMap
     int hashTableSize()
     {
         return table.size();
+    }
+
+    synchronized void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
+    {
+        for (; nSegments-- > 0 && mapSegmentIndex < table.size(); mapSegmentIndex++)
+            for (long hashEntryAdr = table.first(mapSegmentIndex);
+                 hashEntryAdr != 0L;
+                 hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+            {
+                hashEntryAdrs.add(hashEntryAdr);
+            }
     }
 
     static final class Table

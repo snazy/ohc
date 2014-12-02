@@ -21,8 +21,31 @@ public abstract class AbstractTest
 
         public int serializedSize(String s)
         {
-            return AbstractDataOutput.writeUTFLen(s);
+            return writeUTFLen(s);
         }
     };
 
+    public static int writeUTFLen(String str)
+    {
+        int strlen = str.length();
+        int utflen = 0;
+        int c;
+
+        /* use charAt instead of copying String to char array */
+        for (int i = 0; i < strlen; i++)
+        {
+            c = str.charAt(i);
+            if ((c >= 0x0001) && (c <= 0x007F))
+                utflen++;
+            else if (c > 0x07FF)
+                utflen += 3;
+            else
+                utflen += 2;
+        }
+
+        if (utflen > 65535)
+            throw new RuntimeException("encoded string too long: " + utflen + " bytes");
+
+        return utflen + 2;
+    }
 }
