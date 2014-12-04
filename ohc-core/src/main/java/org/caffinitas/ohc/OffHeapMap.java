@@ -260,6 +260,30 @@ final class OffHeapMap
         table.clear();
     }
 
+    synchronized void removeEntry(long removeHashEntryAdr)
+    {
+        // TODO check this
+        long hash = HashEntries.getHash(removeHashEntryAdr);
+        long prevEntryAdr = 0L;
+        for (long hashEntryAdr = table.first(hash);
+             hashEntryAdr != 0L;
+             prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+        {
+            if (hashEntryAdr != removeHashEntryAdr)
+                continue;
+
+            // remove existing entry
+
+            remove(hashEntryAdr, prevEntryAdr);
+            dereference(hashEntryAdr);
+
+            size--;
+            removeCount++;
+
+            return;
+        }
+    }
+
     synchronized void removeEntry(KeyBuffer key)
     {
         long prevEntryAdr = 0L;

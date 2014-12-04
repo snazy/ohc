@@ -637,6 +637,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             private boolean eod;
             private K next;
 
+            private long lastHashEntryAdr;
+
             public boolean hasNext()
             {
                 if (eod)
@@ -666,10 +668,21 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             {
                 if (eod)
                     throw new NoSuchElementException();
+
+                // TODO check this
+                segment.removeEntry(lastHashEntryAdr);
+                dereference(lastHashEntryAdr);
+                lastHashEntryAdr = 0L;
             }
 
             private K computeNext()
             {
+                if (lastHashEntryAdr != 0L)
+                {
+                    dereference(lastHashEntryAdr);
+                    lastHashEntryAdr = 0L;
+                }
+
                 while (true)
                 {
                     if (mapSegmentIndex >= mapSegmentCount)
@@ -697,6 +710,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                         long hashEntryAdr = hashEntryAdrs.get(listIndex++);
                         try
                         {
+                            lastHashEntryAdr = hashEntryAdr;
                             return keySerializer.deserialize(new HashEntryKeyInput(hashEntryAdr));
                         }
                         catch (IOException e)

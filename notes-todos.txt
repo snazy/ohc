@@ -23,6 +23,9 @@ But it will degrade performance for rows that are bigger than "maxEntrySize".
 Consider jemalloc "./configure --disable-tcache"
 
 
+jemalloc + Unsafe allocation on Linux + Windows regarding fragmentation on long running systems.
+
+
 Currently LRU is built in - but I'm not really sold on LRU as is. Alternatives could be
     timestamp (not sold on this either - basically the same as LRU)
     LIRS (https://en.wikipedia.org/wiki/LIRS_caching_algorithm), big overhead (space)
