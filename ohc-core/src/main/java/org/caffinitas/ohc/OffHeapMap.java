@@ -164,6 +164,28 @@ final class OffHeapMap
         return 0L;
     }
 
+    synchronized boolean containsEntry(KeyBuffer key)
+    {
+        for (long hashEntryAdr = table.first(key.hash());
+             hashEntryAdr != 0L;
+             hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+        {
+            if (notSameKey(key, hashEntryAdr))
+                continue;
+
+            // return existing entry
+
+            touch(hashEntryAdr);
+
+            hitCount++;
+            return true;
+        }
+
+        // not found
+        missCount++;
+        return false;
+    }
+
     synchronized void putEntry(KeyBuffer key, long newHashEntryAdr, long bytes)
     {
         if (freeCapacity - bytes < cleanUpTriggerFree)

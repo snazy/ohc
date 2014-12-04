@@ -157,6 +157,13 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
+    public boolean contains(K key)
+    {
+        KeyBuffer keySource = keySource(key);
+
+        return segment(keySource.hash()).containsEntry(keySource);
+    }
+
     public void put(K k, V v)
     {
         KeyBuffer key = keySource(k);

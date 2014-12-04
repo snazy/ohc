@@ -30,6 +30,8 @@ public interface OHCache<K, V> extends Closeable
 {
     V getIfPresent(K key);
 
+    boolean contains(K key);
+
     void put(K key, V value);
 
     void putAll(Map<? extends K, ? extends V> m);
