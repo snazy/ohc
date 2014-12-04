@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.caffinitas.ohc.Constants.ENTRY_OFF_DATA;
+import static org.caffinitas.ohc.Constants.ENTRY_OFF_HASH;
 import static org.caffinitas.ohc.Constants.allocLen;
 import static org.caffinitas.ohc.Constants.roundUpTo8;
 
@@ -466,7 +467,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     {
         // read hash, keyLen, valueLen
         byte[] hashKeyValueLen = new byte[3 * 8];
-        ByteBuffer bb = ByteBuffer.allocate(3 * 8);
+        ByteBuffer bb = ByteBuffer.wrap(hashKeyValueLen);
         readFully(channel, bb);
 
         long hash = Uns.getLongFromByteArray(hashKeyValueLen, 0);
@@ -522,9 +523,14 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                     if (hashEntryAdr == 0L)
                         continue;
 
-                    serializeEntry(channel, hashEntryAdr);
-                    dereference(hashEntryAdr);
-                    hotPerMap[i] = 0L;
+                    try
+                    {
+                        serializeEntry(channel, hashEntryAdr);
+                    }
+                    finally
+                    {
+                        hotPerMap[i] = 0L;
+                    }
 
                     cnt++;
                 }
@@ -548,7 +554,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             long valueLen = HashEntries.getValueLen(hashEntryAdr);
 
             // write hash, keyLen, valueLen + key + value
-            writeFully(channel, HashEntries.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, 3 * 8L + roundUpTo8(keyLen) + valueLen));
+            writeFully(channel, HashEntries.directBufferFor(hashEntryAdr, ENTRY_OFF_HASH, 3 * 8L + roundUpTo8(keyLen) + valueLen));
 
             return true;
         }
@@ -669,7 +675,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                 if (eod)
                     throw new NoSuchElementException();
 
-                // TODO check this
                 segment.removeEntry(lastHashEntryAdr);
                 dereference(lastHashEntryAdr);
                 lastHashEntryAdr = 0L;

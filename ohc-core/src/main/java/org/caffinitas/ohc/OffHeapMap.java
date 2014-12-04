@@ -262,7 +262,6 @@ final class OffHeapMap
 
     synchronized void removeEntry(long removeHashEntryAdr)
     {
-        // TODO check this
         long hash = HashEntries.getHash(removeHashEntryAdr);
         long prevEntryAdr = 0L;
         for (long hashEntryAdr = table.first(hash);
@@ -397,6 +396,7 @@ final class OffHeapMap
                  hashEntryAdr = HashEntries.getNext(hashEntryAdr))
             {
                 hashEntryAdrs.add(hashEntryAdr);
+                HashEntries.reference(hashEntryAdr);
             }
     }
 

@@ -15,7 +15,10 @@
  */
 package org.caffinitas.ohc;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.TreeSet;
@@ -29,7 +32,7 @@ public class BasicTest extends AbstractTest
     public static final long ONE_MB = 1024 * 1024;
 
     @Test
-    public void serializing() throws IOException, InterruptedException
+    public void basic() throws IOException, InterruptedException
     {
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
                                                            .keySerializer(stringSerializer)
@@ -48,13 +51,23 @@ public class BasicTest extends AbstractTest
 
             cache.remove(k);
 
-            Thread.sleep(300L);
-
             Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
+
+            cache.put("1", "one");
+            cache.put("2", "two");
+            cache.put("3", "three");
+            cache.put("4", "four");
+            cache.put("5", "five");
+
+            Assert.assertEquals(cache.getIfPresent("1"), "one");
+            Assert.assertEquals(cache.getIfPresent("2"), "two");
+            Assert.assertEquals(cache.getIfPresent("3"), "three");
+            Assert.assertEquals(cache.getIfPresent("4"), "four");
+            Assert.assertEquals(cache.getIfPresent("5"), "five");
         }
     }
 
-    @Test(dependsOnMethods = "serializing")
+    @Test(dependsOnMethods = "basic")
     public void keyIterator() throws IOException, InterruptedException
     {
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
@@ -62,6 +75,9 @@ public class BasicTest extends AbstractTest
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
+            long capacity = cache.getCapacity();
+            Assert.assertEquals(cache.getFreeCapacity(), capacity);
+
             cache.put("1", "one");
             cache.put("2", "two");
             cache.put("3", "three");
@@ -97,10 +113,80 @@ public class BasicTest extends AbstractTest
             Assert.assertTrue(returned.contains("3"));
             Assert.assertTrue(returned.contains("4"));
             Assert.assertTrue(returned.contains("5"));
+
+            iter = cache.keyIterator();
+            for (int i = 0; i < 5; i++)
+            {
+                iter.next();
+                iter.remove();
+            }
+
+            Assert.assertEquals(cache.getFreeCapacity(), capacity);
+
+            Assert.assertEquals(0, cache.size());
+            Assert.assertNull(cache.getIfPresent("1"));
+            Assert.assertNull(cache.getIfPresent("2"));
+            Assert.assertNull(cache.getIfPresent("3"));
+            Assert.assertNull(cache.getIfPresent("4"));
+            Assert.assertNull(cache.getIfPresent("5"));
         }
     }
 
-    @Test(dependsOnMethods = "serializing")
+    @Test(dependsOnMethods = "basic")
+    public void directIO() throws IOException, InterruptedException
+    {
+        File f = File.createTempFile("OHCBasicTestDirectIO-", ".bin");
+
+        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
+                                                           .keySerializer(stringSerializer)
+                                                           .valueSerializer(stringSerializer)
+                                                           .build())
+        {
+            cache.put("1", "one");
+            cache.put("2", "two");
+            cache.put("3", "three");
+            cache.put("4", "four");
+            cache.put("5", "five");
+
+            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
+            {
+                try
+                {
+                    cache.serializeHotN(100, ch);
+                }
+                catch (Throwable t)
+                {
+                    t.printStackTrace();
+                    throw new Error(t);
+                }
+            }
+        }
+        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
+                                                           .keySerializer(stringSerializer)
+                                                           .valueSerializer(stringSerializer)
+                                                           .build())
+        {
+            int count = 0;
+            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
+            {
+                while (ch.position() < ch.size())
+                {
+                    cache.deserializeEntry(ch);
+                    count++;
+                }
+            }
+
+            Assert.assertEquals(5, count);
+
+            Assert.assertEquals(cache.getIfPresent("1"), "one");
+            Assert.assertEquals(cache.getIfPresent("2"), "two");
+            Assert.assertEquals(cache.getIfPresent("3"), "three");
+            Assert.assertEquals(cache.getIfPresent("4"), "four");
+            Assert.assertEquals(cache.getIfPresent("5"), "five");
+        }
+    }
+
+    @Test(dependsOnMethods = "basic")
     public void hotN() throws IOException, InterruptedException
     {
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
@@ -118,7 +204,7 @@ public class BasicTest extends AbstractTest
         }
     }
 
-    @Test(dependsOnMethods = "serializing")
+    @Test(dependsOnMethods = "basic")
     public void serialize100k() throws IOException, InterruptedException
     {
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
@@ -214,7 +300,7 @@ public class BasicTest extends AbstractTest
         }
     }
 
-    @Test(dependsOnMethods = "serializing")
+    @Test(dependsOnMethods = "basic")
     public void putTooLarge() throws IOException, InterruptedException
     {
         char[] c940 = new char[8192];
