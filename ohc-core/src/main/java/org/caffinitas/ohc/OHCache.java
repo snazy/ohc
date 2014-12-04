@@ -34,6 +34,8 @@ public interface OHCache<K, V> extends Closeable
 
     void put(K key, V value);
 
+    PutResult putIfAbsent(K k, V v);
+
     void putAll(Map<? extends K, ? extends V> m);
 
     void remove(K key);

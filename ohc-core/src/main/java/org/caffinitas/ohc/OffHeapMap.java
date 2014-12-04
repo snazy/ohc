@@ -186,7 +186,7 @@ final class OffHeapMap
         return false;
     }
 
-    synchronized void putEntry(KeyBuffer key, long newHashEntryAdr, long bytes)
+    synchronized boolean putEntry(KeyBuffer key, long newHashEntryAdr, long bytes, boolean ifAbsent)
     {
         if (freeCapacity - bytes < cleanUpTriggerFree)
             cleanUp();
@@ -203,6 +203,9 @@ final class OffHeapMap
                 continue;
 
             // replace existing entry
+
+            if (ifAbsent)
+                return false;
 
             remove(hashEntryAdr, prevEntryAdr);
             dereference(hashEntryAdr);
@@ -224,6 +227,8 @@ final class OffHeapMap
             putAddCount++;
         else
             putReplaceCount++;
+
+        return true;
     }
 
     synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes)

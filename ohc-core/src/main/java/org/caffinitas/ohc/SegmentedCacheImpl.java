@@ -166,6 +166,16 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public void put(K k, V v)
     {
+        put(k, v, false);
+    }
+
+    public PutResult putIfAbsent(K k, V v)
+    {
+        return put(k, v, true);
+    }
+
+    private PutResult put(K k, V v, boolean ifAbsent)
+    {
         KeyBuffer key = keySource(k);
         long keyLen = key.size();
         long valueLen = valueSerializer.serializedSize(v);
@@ -181,7 +191,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                 putFailCount++;
 
             removeInternal(key);
-            return;
+            return PutResult.FAIL;
         }
 
         // initialize hash entry
@@ -202,7 +212,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             throw new IOError(e);
         }
 
-        segment(hash).putEntry(key, hashEntryAdr, bytes);
+        return segment(hash).putEntry(key, hashEntryAdr, bytes, ifAbsent) ? PutResult.OK : PutResult.KEY_PRESENT;
     }
 
     public void remove(K k)
