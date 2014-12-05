@@ -15,12 +15,6 @@
  */
 package org.caffinitas.ohc;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.nio.ByteBuffer;
-
 import static org.caffinitas.ohc.Constants.*;
 
 /**
@@ -141,45 +135,5 @@ public final class HashEntries
     static boolean dereference(long hashEntryAdr)
     {
         return Uns.decrement(hashEntryAdr, ENTRY_OFF_REFCOUNT);
-    }
-
-    private static final MethodHandle directByteBufferHandle;
-    private static final Field byteBufferNativeByteOrder;
-
-    static
-    {
-        try
-        {
-            Constructor ctor = Class.forName("java.nio.DirectByteBuffer")
-                                    .getDeclaredConstructor(long.class, int.class, Object.class);
-            ctor.setAccessible(true);
-
-            byteBufferNativeByteOrder = ByteBuffer.class.getDeclaredField("nativeByteOrder");
-            byteBufferNativeByteOrder.setAccessible(true);
-
-            directByteBufferHandle = MethodHandles.lookup().unreflectConstructor(ctor);
-        }
-        catch (NoSuchMethodException | ClassNotFoundException | IllegalAccessException | NoSuchFieldException e)
-        {
-            throw new RuntimeException(e);
-        }
-    }
-
-    static ByteBuffer directBufferFor(long hashEntryAdr, long offset, long len)
-    {
-        try
-        {
-            ByteBuffer bb = (ByteBuffer) directByteBufferHandle.invoke(hashEntryAdr + offset, (int) len, null);
-            byteBufferNativeByteOrder.setBoolean(bb, true);
-            return bb;
-        }
-        catch (Error e)
-        {
-            throw e;
-        }
-        catch (Throwable t)
-        {
-            throw new RuntimeException(t);
-        }
     }
 }

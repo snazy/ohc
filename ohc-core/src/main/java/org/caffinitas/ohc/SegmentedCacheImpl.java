@@ -18,7 +18,6 @@ package org.caffinitas.ohc;
 import java.io.IOError;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
@@ -31,10 +30,7 @@ import com.google.common.collect.AbstractIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.caffinitas.ohc.Constants.ENTRY_OFF_DATA;
-import static org.caffinitas.ohc.Constants.ENTRY_OFF_HASH;
-import static org.caffinitas.ohc.Constants.allocLen;
-import static org.caffinitas.ohc.Constants.roundUpTo8;
+import static org.caffinitas.ohc.Constants.*;
 
 public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 {
@@ -485,7 +481,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         // read hash, keyLen, valueLen
         byte[] hashKeyValueLen = new byte[3 * 8];
         ByteBuffer bb = ByteBuffer.wrap(hashKeyValueLen);
-        readFully(channel, bb);
+        Constants.readFully(channel, bb);
 
         long hash = Uns.getLongFromByteArray(hashKeyValueLen, 0);
         long keyLen = Uns.getLongFromByteArray(hashKeyValueLen, 8);
@@ -503,7 +499,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
 
         // read key + value
-        readFully(channel, HashEntries.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, kvLen));
+        Constants.readFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, kvLen));
 
         segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen);
 
@@ -571,7 +567,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             long valueLen = HashEntries.getValueLen(hashEntryAdr);
 
             // write hash, keyLen, valueLen + key + value
-            writeFully(channel, HashEntries.directBufferFor(hashEntryAdr, ENTRY_OFF_HASH, 3 * 8L + roundUpTo8(keyLen) + valueLen));
+            Constants.writeFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_HASH, 3 * 8L + roundUpTo8(keyLen) + valueLen));
 
             return true;
         }
@@ -579,18 +575,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         {
             dereference(hashEntryAdr);
         }
-    }
-
-    private void readFully(ReadableByteChannel channel, ByteBuffer buffer) throws IOException
-    {
-        while (buffer.remaining() > 0)
-            channel.read(buffer);
-    }
-
-    private void writeFully(WritableByteChannel channel, ByteBuffer buffer) throws IOException
-    {
-        while (buffer.remaining() > 0)
-            channel.write(buffer);
     }
 
     //

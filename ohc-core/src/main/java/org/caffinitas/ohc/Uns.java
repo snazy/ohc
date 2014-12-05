@@ -30,11 +30,17 @@
  */
 package org.caffinitas.ohc;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import com.google.common.hash.Hasher;
+import com.google.common.hash.Hashing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +64,7 @@ final class Uns
     //
     private static final ConcurrentMap<Long, Long> ohDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, Long>(16384) : null;
     private static final Map<Long, Throwable> ohFreeDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, Throwable>(16384) : null;
+
     private static void freed(long address)
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
@@ -68,9 +75,10 @@ final class Uns
                 Throwable freedAt = ohFreeDebug.get(address);
                 throw new IllegalStateException("Free of unallocated region " + address, freedAt);
             }
-            ohFreeDebug.put(address, new Exception("free backtrace - t="+System.nanoTime()));
+            ohFreeDebug.put(address, new Exception("free backtrace - t=" + System.nanoTime()));
         }
     }
+
     private static void allocated(long address, long bytes)
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
@@ -80,6 +88,7 @@ final class Uns
                 throw new Error("Oops - allocate() got duplicate address");
         }
     }
+
     private static void validate(long address, long offset, long len)
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
@@ -90,7 +99,7 @@ final class Uns
             if (allocatedLen == null)
             {
                 Throwable freedAt = ohFreeDebug.get(address);
-                throw new IllegalStateException("Access to unallocated region " + address +" - t="+System.nanoTime(), freedAt);
+                throw new IllegalStateException("Access to unallocated region " + address + " - t=" + System.nanoTime(), freedAt);
             }
             if (offset < 0L)
                 throw new IllegalArgumentException("Negative offset");
@@ -123,7 +132,6 @@ final class Uns
                 catch (Throwable t)
                 {
                     LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
-
                 }
             if (alloc == null)
                 alloc = new NativeAllocator();
@@ -297,5 +305,66 @@ final class Uns
     {
         freed(address);
         allocator.free(address);
+    }
+
+    private static final MethodHandle directByteBufferHandle;
+    private static final Field byteBufferNativeByteOrder;
+
+    static
+    {
+        try
+        {
+            Constructor ctor = Class.forName("java.nio.DirectByteBuffer")
+                                    .getDeclaredConstructor(long.class, int.class, Object.class);
+            ctor.setAccessible(true);
+
+            byteBufferNativeByteOrder = ByteBuffer.class.getDeclaredField("nativeByteOrder");
+            byteBufferNativeByteOrder.setAccessible(true);
+
+            directByteBufferHandle = MethodHandles.lookup().unreflectConstructor(ctor);
+        }
+        catch (NoSuchMethodException | ClassNotFoundException | IllegalAccessException | NoSuchFieldException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
+
+    static ByteBuffer directBufferFor(long address, long offset, long len)
+    {
+        try
+        {
+            ByteBuffer bb = (ByteBuffer) directByteBufferHandle.invoke(address + offset, (int) len, null);
+            byteBufferNativeByteOrder.setBoolean(bb, true);
+            return bb;
+        }
+        catch (Error e)
+        {
+            throw e;
+        }
+        catch (Throwable t)
+        {
+            throw new RuntimeException(t);
+        }
+    }
+
+    public static String murmur3(long address, long offset, long len)
+    {
+        Hasher hasher = Hashing.murmur3_128().newHasher();
+        while (len > 0)
+        {
+            if (len >= 8)
+            {
+                hasher.putLong(getLong(address, offset));
+                offset += 8;
+                len -= 8;
+            }
+            else
+            {
+                hasher.putByte(getByte(address, offset));
+                offset++;
+                len--;
+            }
+        }
+        return hasher.hash().toString();
     }
 }

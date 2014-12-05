@@ -15,6 +15,11 @@
  */
 package org.caffinitas.ohc;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
+
 abstract class Constants
 {
 
@@ -48,6 +53,10 @@ abstract class Constants
     // total memory required for a hash-partition
     static final long BUCKET_ENTRY_LEN = 8;
 
+// Compressed entries header
+
+    static final int HEADER = 0x4f485243; // 'OHRC'
+
     static long roundUpTo8(long val)
     {
         long rem = val & 7;
@@ -59,5 +68,17 @@ abstract class Constants
     static long allocLen(long keyLen, long valueLen)
     {
         return ENTRY_OFF_DATA + roundUpTo8(keyLen) + valueLen;
+    }
+
+    static void writeFully(WritableByteChannel channel, ByteBuffer buffer) throws IOException
+    {
+        while (buffer.remaining() > 0)
+            channel.write(buffer);
+    }
+
+    static void readFully(ReadableByteChannel channel, ByteBuffer buffer) throws IOException
+    {
+        while (buffer.remaining() > 0)
+            channel.read(buffer);
     }
 }
