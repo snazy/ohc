@@ -155,7 +155,6 @@ public class BenchmarkOHC
                                   .loadFactor(loadFactor)
                                   .segmentCount(segmentCount)
                                   .capacity(capacity)
-                                  .statisticsEnabled(true)
                                   .build();
 
             printMessage("Cache configuration: hash-table-size: %d%n" +
