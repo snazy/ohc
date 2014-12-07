@@ -17,14 +17,10 @@ package org.caffinitas.ohc;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Iterator;
 import java.util.Map;
-
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheStats;
 
 public interface OHCache<K, V> extends Closeable
 {
@@ -47,10 +43,6 @@ public interface OHCache<K, V> extends Closeable
     long size();
 
     void cleanUp();
-
-    boolean isStatisticsEnabled();
-
-    void setStatisticsEnabled(boolean statisticsEnabled);
 
     void resetStatistics();
 

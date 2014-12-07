@@ -48,7 +48,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     private final long maxEntrySize;
 
-    private boolean statisticsEnabled;
     private volatile long putFailCount;
 
     public SegmentedCacheImpl(OHCacheBuilder<K, V> builder)
@@ -107,8 +106,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         else
             maxEntrySize = (long) (mes * capacity / segments);
         this.maxEntrySize = maxEntrySize;
-
-        this.statisticsEnabled = builder.isStatisticsEnabled();
 
         this.keySerializer = builder.getKeySerializer();
         if (keySerializer == null)
@@ -183,8 +180,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         if (bytes > maxEntrySize || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
         {
             // entry too large to be inserted or OS is not able to provide enough memory
-            if (statisticsEnabled)
-                putFailCount++;
+            putFailCount++;
 
             removeInternal(key);
             return PutResult.FAIL;
@@ -330,16 +326,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     //
     // statistics and related stuff
     //
-
-    public boolean isStatisticsEnabled()
-    {
-        return statisticsEnabled;
-    }
-
-    public void setStatisticsEnabled(boolean statisticsEnabled)
-    {
-        this.statisticsEnabled = statisticsEnabled;
-    }
 
     public void resetStatistics()
     {
@@ -605,23 +591,19 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     private void dereference(long hashEntryAdr)
     {
         if (HashEntries.dereference(hashEntryAdr))
-            free(hashEntryAdr);
-    }
+        {
+            if (hashEntryAdr == 0L)
+                throw new NullPointerException();
 
-    long free(long hashEntryAdr)
-    {
-        if (hashEntryAdr == 0L)
-            throw new NullPointerException();
+            long bytes = HashEntries.getAllocLen(hashEntryAdr);
+            if (bytes == 0L)
+                throw new IllegalStateException();
 
-        long bytes = HashEntries.getAllocLen(hashEntryAdr);
-        if (bytes == 0L)
-            throw new IllegalStateException();
+            long hash = HashEntries.getHash(hashEntryAdr);
 
-        long hash = HashEntries.getHash(hashEntryAdr);
-
-        Uns.free(hashEntryAdr);
-        segment(hash).freed(bytes);
-        return bytes;
+            Uns.free(hashEntryAdr);
+            segment(hash).freed(bytes);
+        }
     }
 
     //

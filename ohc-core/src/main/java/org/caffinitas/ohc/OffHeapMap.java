@@ -396,7 +396,7 @@ final class OffHeapMap
         long[] r = new long[n];
         int i = 0;
         for (long hashEntryAdr = lruHead;
-             hashEntryAdr != 0L;
+             hashEntryAdr != 0L && i < n;
              hashEntryAdr = getLruNext(hashEntryAdr))
         {
             r[i++] = hashEntryAdr;

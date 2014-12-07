@@ -34,6 +34,7 @@ public class BasicTest extends AbstractTest
 
     private static String big;
     private static String bigRandom;
+    static int manyCount = 100000;
 
     static
     {
@@ -79,11 +80,61 @@ public class BasicTest extends AbstractTest
     }
 
     @Test(dependsOnMethods = "basic")
+    public void manyValues() throws IOException, InterruptedException
+    {
+        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
+                                                           .keySerializer(stringSerializer)
+                                                           .valueSerializer(stringSerializer)
+                                                           .capacity(32L * 1024 * 1024)
+                                                           .hashTableSize(64)
+                                                           .build())
+        {
+            Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
+
+            fillMany(cache);
+
+            OHCacheStats stats = cache.stats();
+            Assert.assertEquals(stats.getPutAddCount(), manyCount);
+            Assert.assertEquals(stats.getSize(), manyCount);
+
+            for (int i = 0; i < manyCount; i++)
+                Assert.assertEquals(cache.getIfPresent(Integer.toString(i)), Integer.toHexString(i));
+
+            stats = cache.stats();
+            Assert.assertEquals(stats.getHitCount(), manyCount);
+            Assert.assertEquals(stats.getSize(), manyCount);
+
+            for (int i = 0; i < manyCount; i++)
+                cache.put(Integer.toString(i), Integer.toOctalString(i));
+
+            stats = cache.stats();
+            Assert.assertEquals(stats.getPutReplaceCount(), manyCount);
+            Assert.assertEquals(stats.getSize(), manyCount);
+
+            for (int i = 0; i < manyCount; i++)
+                Assert.assertEquals(cache.getIfPresent(Integer.toString(i)), Integer.toOctalString(i));
+
+            stats = cache.stats();
+            Assert.assertEquals(stats.getHitCount(), manyCount * 2);
+            Assert.assertEquals(stats.getSize(), manyCount);
+
+            for (int i = 0; i < manyCount; i++)
+                cache.remove(Integer.toString(i));
+
+            stats = cache.stats();
+            Assert.assertEquals(stats.getRemoveCount(), manyCount);
+            Assert.assertEquals(stats.getSize(), 0);
+            Assert.assertEquals(stats.getFree(), stats.getCapacity());
+        }
+    }
+
+    @Test(dependsOnMethods = "basic")
     public void keyIterator() throws IOException, InterruptedException
     {
         try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
                                                            .keySerializer(stringSerializer)
                                                            .valueSerializer(stringSerializer)
+                                                           .capacity(32L * 1024 * 1024)
                                                            .build())
         {
             long capacity = cache.getCapacity();
@@ -139,7 +190,7 @@ public class BasicTest extends AbstractTest
         }
     }
 
-    @Test(dependsOnMethods = "basic", invocationCount = 1)
+    @Test(dependsOnMethods = "manyValues")
     public void directIO() throws IOException, InterruptedException
     {
         File f = File.createTempFile("OHCBasicTestDirectIO-", ".bin");
@@ -150,11 +201,11 @@ public class BasicTest extends AbstractTest
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
-            fill(cache);
+            fillMany(cache);
 
             try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
             {
-                cache.serializeHotN(100, ch);
+                cache.serializeHotN(manyCount, ch);
             }
             catch (Throwable t)
             {
@@ -187,13 +238,11 @@ public class BasicTest extends AbstractTest
                 }
             }
 
-            Assert.assertEquals(5, count);
-
-            check(cache);
+            checkManyForSerialized(cache, count);
         }
     }
 
-    @Test(dependsOnMethods = "directIO", invocationCount = 1)
+    @Test(dependsOnMethods = "directIO")
     public void directIOBig() throws IOException, InterruptedException
     {
         File f = File.createTempFile("OHCBasicTestDirectIOBig-", ".bin");
@@ -249,7 +298,7 @@ public class BasicTest extends AbstractTest
         }
     }
 
-    @Test(dependsOnMethods = "directIO", invocationCount = 1)
+    @Test(dependsOnMethods = "directIO")
     public void directIOBigRandom() throws IOException, InterruptedException
     {
         File f = File.createTempFile("OHCBasicTestDirectIOBigRandom-", ".bin");
@@ -265,7 +314,7 @@ public class BasicTest extends AbstractTest
 
             try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
             {
-                cache.serializeHotN(100, ch);
+                cache.serializeHotN(5, ch);
             }
             catch (Throwable t)
             {
@@ -299,13 +348,17 @@ public class BasicTest extends AbstractTest
                 }
             }
 
-            Assert.assertEquals(5, count);
-
             checkBigRandom(cache);
         }
     }
 
-    @Test(dependsOnMethods = "basic", invocationCount = 1)
+    private void fillMany(OHCache<String, String> cache)
+    {
+        for (int i = 0; i < manyCount; i++)
+            cache.put(Integer.toString(i), Integer.toHexString(i));
+    }
+
+    @Test(dependsOnMethods = "directIO")
     public void compressedDirectIO() throws IOException, InterruptedException
     {
         File f = File.createTempFile("OHCBasicTestDirectIO-", ".bin");
@@ -316,13 +369,13 @@ public class BasicTest extends AbstractTest
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
-            fill(cache);
+            fillMany(cache);
 
             try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
             {
                 try (CompressingOutputChannel cch = new CompressingOutputChannel(ch, 8192))
                 {
-                    cache.serializeHotN(100, cch);
+                    cache.serializeHotN(manyCount, cch);
                 }
             }
             catch (Throwable t)
@@ -359,13 +412,29 @@ public class BasicTest extends AbstractTest
                 }
             }
 
-            Assert.assertEquals(5, count);
-
-            check(cache);
+            checkManyForSerialized(cache, count);
         }
     }
 
-    @Test(dependsOnMethods = "compressedDirectIO", invocationCount = 1)
+    private void checkManyForSerialized(OHCache<String, String> cache, int count)
+    {
+        Assert.assertTrue(count > manyCount * 9 / 10, "count=" + count); // allow some variation
+
+        int found = 0;
+        for (int i = 0; i < manyCount; i++)
+        {
+            String v = cache.getIfPresent(Integer.toString(i));
+            if (v != null)
+            {
+                Assert.assertEquals(v, Integer.toHexString(i));
+                found++;
+            }
+        }
+
+        Assert.assertEquals(found, count);
+    }
+
+    @Test(dependsOnMethods = "compressedDirectIO")
     public void compressedDirectIOBig() throws IOException, InterruptedException
     {
         File f = File.createTempFile("OHCBasicTestCompressedDirectIOBig-", ".bin");
@@ -427,7 +496,7 @@ public class BasicTest extends AbstractTest
         }
     }
 
-    @Test(dependsOnMethods = "compressedDirectIO", invocationCount = 20, threadPoolSize = 1)
+    @Test(dependsOnMethods = "compressedDirectIO")
     public void compressedDirectIOBigRandom() throws IOException, InterruptedException
     {
         File f = File.createTempFile("OHCBasicTestCompressedDirectIOBigRandom-", ".bin");
@@ -503,73 +572,7 @@ public class BasicTest extends AbstractTest
         }
     }
 
-    @Test(dependsOnMethods = "basic")
-    public void serialize100k() throws IOException, InterruptedException
-    {
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
-                                                           .valueSerializer(stringSerializer)
-                                                           .statisticsEnabled(true)
-                                                           .build())
-        {
-            for (int i = 0; i < 100000; i++)
-                cache.put("key-" + i, "" + i);
-
-            OHCacheStats stats = cache.stats();
-            Assert.assertEquals(stats.getPutAddCount(), 100000);
-
-            Assert.assertEquals(cache.size(), 100000);
-
-            for (int i = 0; i < 100000; i++)
-                Assert.assertEquals(cache.getIfPresent("key-" + i), "" + i);
-
-            stats = cache.stats();
-            Assert.assertEquals(stats.getHitCount(), 100000);
-
-            for (int i = 0; i < 100000; i++)
-                cache.remove("key-" + i);
-
-            Assert.assertEquals(cache.size(), 0);
-
-            stats = cache.stats();
-            Assert.assertEquals(stats.getRemoveCount(), 100000);
-        }
-    }
-
-    @Test(dependsOnMethods = "serialize100k")
-    public void serialize100kReplace() throws IOException, InterruptedException
-    {
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
-                                                           .valueSerializer(stringSerializer)
-                                                           .build())
-        {
-            for (int i = 0; i < 100000; i++)
-                cache.put("key-" + i, "" + i);
-
-            Assert.assertEquals(cache.size(), 100000);
-
-            for (int i = 0; i < 100000; i++)
-                Assert.assertEquals(cache.getIfPresent("key-" + i), "" + i);
-
-            // replace the stuff
-
-            for (int i = 0; i < 100000; i++)
-                cache.put("key-" + i, "" + i);
-
-            Assert.assertEquals(cache.size(), 100000);
-
-            for (int i = 0; i < 100000; i++)
-                Assert.assertEquals(cache.getIfPresent("key-" + i), "" + i);
-
-            for (int i = 0; i < 100000; i++)
-                cache.remove("key-" + i);
-
-            Assert.assertEquals(cache.size(), 0);
-        }
-    }
-
-    @Test(dependsOnMethods = "serialize100k")
+    @Test(dependsOnMethods = "manyValues")
     public void cleanUpTest() throws IOException, InterruptedException
     {
         char[] c940 = new char[940];
@@ -678,5 +681,4 @@ public class BasicTest extends AbstractTest
         Assert.assertEquals(cache.getIfPresent("4"), "four");
         Assert.assertEquals(cache.getIfPresent("5"), "five");
     }
-
 }
