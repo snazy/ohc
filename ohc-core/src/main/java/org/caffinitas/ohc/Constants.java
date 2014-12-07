@@ -29,10 +29,10 @@ abstract class Constants
     static final long ENTRY_OFF_LRU_NEXT = 0;
     // offset of LRU replacement strategy previous pointer
     static final long ENTRY_OFF_LRU_PREV = 8;
-    // offset of entry lock
-    static final long ENTRY_OFF_REFCOUNT = 16;
     // offset of next hash entry in a hash bucket
-    static final long ENTRY_OFF_NEXT = 24;
+    static final long ENTRY_OFF_NEXT = 16;
+    // offset of entry reference counter
+    static final long ENTRY_OFF_REFCOUNT = 24;
     // offset of serialized hash value
     static final long ENTRY_OFF_HASH = 32;
     // offset of serialized hash key length
@@ -48,14 +48,19 @@ abstract class Constants
 
 // Hash bucket-table
 
-    // reference to the first entry of segment
-    static final long BUCKET_FIRST = 0L;
     // total memory required for a hash-partition
     static final long BUCKET_ENTRY_LEN = 8;
 
 // Compressed entries header
 
-    static final int HEADER = 0x4f485243; // 'OHRC'
+    // 'OHRC'
+    static final int HEADER_COMPRESSED = 0x4f485243;
+    // 'OHRC' reversed
+    static final int HEADER_COMPRESSED_WRONG = 0x4352484f;
+    // 'OHRU'
+    static final int HEADER_UNCOMPRESSED = 0x4f485255;
+    // 'OHRU' reversed
+    static final int HEADER_UNCOMPRESSED_WRONG = 0x5552484f;
 
     static long roundUpTo8(long val)
     {

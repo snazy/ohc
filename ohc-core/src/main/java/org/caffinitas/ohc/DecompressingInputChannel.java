@@ -39,7 +39,7 @@ final class DecompressingInputChannel implements SeekableByteChannel
     private long position;
 
     /**
-     * @param delegate channel to read from
+     * @param delegate       channel to read from
      * @param readBufferSize buffer size for reads from {@code delegate}
      */
     DecompressingInputChannel(SeekableByteChannel delegate, int readBufferSize) throws IOException
@@ -52,7 +52,10 @@ final class DecompressingInputChannel implements SeekableByteChannel
             ByteBuffer header = Uns.directBufferFor(headerAdr, 0, 16);
             readFully(delegate, header);
             header.flip();
-            if (header.getInt() != HEADER)
+            int magic = header.getInt();
+            if (magic == HEADER_COMPRESSED_WRONG)
+                throw new IOException("File from instance with different CPU architecture cannot be loaded");
+            if (magic != HEADER_COMPRESSED)
                 throw new IOException("Illegal file header");
             if (header.getInt() != 1)
                 throw new IOException("Illegal file version");
@@ -230,7 +233,7 @@ final class DecompressingInputChannel implements SeekableByteChannel
 
     public long size() throws IOException
     {
-        throw new UnsupportedOperationException();
+        return eof() ? position : position + 1;
     }
 
     public SeekableByteChannel truncate(long size) throws IOException

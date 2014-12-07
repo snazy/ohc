@@ -68,5 +68,7 @@ public interface OHCache<K, V> extends Closeable
 
     boolean serializeEntry(K key, WritableByteChannel channel) throws IOException;
 
+    int deserializeEntries(SeekableByteChannel channel) throws IOException;
+
     int serializeHotN(int n, WritableByteChannel channel) throws IOException;
 }

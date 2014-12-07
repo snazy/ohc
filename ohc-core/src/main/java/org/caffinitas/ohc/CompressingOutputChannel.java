@@ -45,7 +45,7 @@ final class CompressingOutputChannel implements WritableByteChannel
         this.buffer = Uns.directBufferFor(bufferAddress, 0L, bufferCapacity);
         this.uncompressedChunkSize = uncompressedChunkSize - 4;
 
-        buffer.putInt(HEADER);
+        buffer.putInt(HEADER_COMPRESSED);
         buffer.putInt(1);
         buffer.putInt(uncompressedChunkSize);
         buffer.putInt(maxCLen);

@@ -501,12 +501,69 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return hashEntryAdr != 0L && serializeEntry(channel, hashEntryAdr);
     }
 
+    public int deserializeEntries(SeekableByteChannel channel) throws IOException
+    {
+        long headerAddress = Uns.allocate(8);
+        if (headerAddress == 0L)
+            throw new IOException("Unable to allocate 8 bytes in off-heap");
+        try
+        {
+            ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L);
+            readFully(channel, header);
+            header.flip();
+            int magic = header.getInt();
+            if (magic == HEADER_UNCOMPRESSED_WRONG)
+                throw new IOException("File from instance with different CPU architecture cannot be loaded");
+            if (magic != HEADER_UNCOMPRESSED)
+                throw new IOException("Illegal file header");
+            if (header.getInt() != 1)
+                throw new IOException("Illegal file version");
+        }
+        finally
+        {
+            Uns.free(headerAddress);
+        }
+
+        int count = 0;
+        while (channel.position() < channel.size())
+        {
+            try
+            {
+                deserializeEntry(channel);
+            }
+            catch (Throwable t)
+            {
+                // just here since the surrounding try-with-resource might silently consume this exception
+                t.printStackTrace();
+                throw new Error(t);
+            }
+            count++;
+        }
+        return count;
+    }
+
     public int serializeHotN(int n, WritableByteChannel channel) throws IOException
     {
         // hotN implementation does only return a (good) approximation - not necessarily the exact hotN
         // since it iterates over the all segments and takes a fraction of 'n' from them.
         // This implementation may also return more results than expected just to keep it simple
         // (it does not really matter if you request 5000 keys and e.g. get 5015).
+
+        long headerAddress = Uns.allocate(8);
+        if (headerAddress == 0L)
+            throw new IOException("Unable to allocate 8 bytes in off-heap");
+        try
+        {
+            ByteBuffer headerBuffer = Uns.directBufferFor(headerAddress, 0L, 8L);
+            headerBuffer.putInt(HEADER_UNCOMPRESSED);
+            headerBuffer.putInt(1);
+            headerBuffer.flip();
+            writeFully(channel, headerBuffer);
+        }
+        finally
+        {
+            Uns.free(headerAddress);
+        }
 
         int perMap = n / maps.length + 1;
         int cnt = 0;

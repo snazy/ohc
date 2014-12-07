@@ -203,7 +203,7 @@ public class BasicTest extends AbstractTest
         {
             fillMany(cache);
 
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 cache.serializeHotN(manyCount, ch);
             }
@@ -219,23 +219,11 @@ public class BasicTest extends AbstractTest
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
-            int count = 0;
+            int count;
+
             try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
             {
-                while (ch.position() < ch.size())
-                {
-                    try
-                    {
-                        cache.deserializeEntry(ch);
-                    }
-                    catch (Throwable t)
-                    {
-                        // just here since the surrounding try-with-resource might silently consume this exception
-                        t.printStackTrace();
-                        throw new Error(t);
-                    }
-                    count++;
-                }
+                count = cache.deserializeEntries(ch);
             }
 
             checkManyForSerialized(cache, count);
@@ -256,7 +244,7 @@ public class BasicTest extends AbstractTest
         {
             fillBig(cache);
 
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 cache.serializeHotN(100, ch);
             }
@@ -273,23 +261,10 @@ public class BasicTest extends AbstractTest
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
-            int count = 0;
+            int count;
             try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
             {
-                while (ch.position() < ch.size())
-                {
-                    try
-                    {
-                        cache.deserializeEntry(ch);
-                    }
-                    catch (Throwable t)
-                    {
-                        // just here since the surrounding try-with-resource might silently consume this exception
-                        t.printStackTrace();
-                        throw new Error(t);
-                    }
-                    count++;
-                }
+                count = cache.deserializeEntries(ch);
             }
 
             Assert.assertEquals(5, count);
@@ -312,7 +287,7 @@ public class BasicTest extends AbstractTest
         {
             fillBigRandom(cache);
 
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 cache.serializeHotN(5, ch);
             }
@@ -329,24 +304,13 @@ public class BasicTest extends AbstractTest
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
-            int count = 0;
+            int count;
             try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
             {
-                while (ch.position() < ch.size())
-                {
-                    try
-                    {
-                        cache.deserializeEntry(ch);
-                    }
-                    catch (Throwable t)
-                    {
-                        // just here since the surrounding try-with-resource might silently consume this exception
-                        t.printStackTrace();
-                        throw new Error(t);
-                    }
-                    count++;
-                }
+                count = cache.deserializeEntries(ch);
             }
+
+            Assert.assertEquals(5, count);
 
             checkBigRandom(cache);
         }
@@ -371,7 +335,7 @@ public class BasicTest extends AbstractTest
         {
             fillMany(cache);
 
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 try (CompressingOutputChannel cch = new CompressingOutputChannel(ch, 8192))
                 {
@@ -390,25 +354,12 @@ public class BasicTest extends AbstractTest
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
-            int count = 0;
+            int count;
             try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
             {
                 try (DecompressingInputChannel dch = new DecompressingInputChannel(ch, 4096))
                 {
-                    while (!dch.eof())
-                    {
-                        try
-                        {
-                            cache.deserializeEntry(dch);
-                        }
-                        catch (Throwable t)
-                        {
-                            // just here since the surrounding try-with-resource might silently consume this exception
-                            t.printStackTrace();
-                            throw new Error(t);
-                        }
-                        count++;
-                    }
+                    count = cache.deserializeEntries(dch);
                 }
             }
 
@@ -448,7 +399,7 @@ public class BasicTest extends AbstractTest
         {
             fillBig(cache);
 
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 try (CompressingOutputChannel cch = new CompressingOutputChannel(ch, 8192))
                 {
@@ -468,25 +419,12 @@ public class BasicTest extends AbstractTest
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
-            int count = 0;
+            int count;
             try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
             {
                 try (DecompressingInputChannel dch = new DecompressingInputChannel(ch, 4096))
                 {
-                    while (!dch.eof())
-                    {
-                        try
-                        {
-                            cache.deserializeEntry(dch);
-                        }
-                        catch (Throwable t)
-                        {
-                            // just here since the surrounding try-with-resource might silently consume this exception
-                            t.printStackTrace();
-                            throw new Error(t);
-                        }
-                        count++;
-                    }
+                    count = cache.deserializeEntries(dch);
                 }
             }
 
@@ -510,7 +448,7 @@ public class BasicTest extends AbstractTest
         {
             fillBigRandom(cache);
 
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 try (CompressingOutputChannel cch = new CompressingOutputChannel(ch, 8192))
                 {
@@ -535,20 +473,7 @@ public class BasicTest extends AbstractTest
             {
                 try (DecompressingInputChannel dch = new DecompressingInputChannel(ch, 4096))
                 {
-                    while (!dch.eof())
-                    {
-                        try
-                        {
-                            cache.deserializeEntry(dch);
-                        }
-                        catch (Throwable t)
-                        {
-                            // just here since the surrounding try-with-resource might silently consume this exception
-                            t.printStackTrace();
-                            throw new Error(t);
-                        }
-                        count++;
-                    }
+                    count = cache.deserializeEntries(dch);
                 }
             }
 
