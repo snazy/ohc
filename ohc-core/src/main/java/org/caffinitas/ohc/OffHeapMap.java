@@ -17,7 +17,7 @@ package org.caffinitas.ohc;
 
 import java.util.List;
 
-import static org.caffinitas.ohc.Constants.BUCKET_ENTRY_LEN;
+import static org.caffinitas.ohc.Util.BUCKET_ENTRY_LEN;
 
 final class OffHeapMap
 {
@@ -58,7 +58,9 @@ final class OffHeapMap
             hts = 8192;
         if (hts < 256)
             hts = 256;
-        table = new Table(roundUpToPowerOf2(hts));
+        table = Table.create(roundUpToPowerOf2(hts));
+        if (table == null)
+            throw new RuntimeException("unable to allocate off-heap memory for segment");
 
         double lf = builder.getLoadFactor();
         if (lf <= .0d)
@@ -364,7 +366,9 @@ final class OffHeapMap
             return;
         }
 
-        Table newTable = new Table(tableSize * 2);
+        Table newTable = Table.create(tableSize * 2);
+        if (newTable == null)
+            return;
         long next;
 
         for (int part = 0; part < tableSize; part++)
@@ -432,11 +436,17 @@ final class OffHeapMap
         final int mask;
         final long address;
 
-        public Table(int hashTableSize)
+        static Table create(int hashTableSize)
         {
             int msz = (int) BUCKET_ENTRY_LEN * hashTableSize;
-            this.address = Uns.allocate(msz);
-            mask = hashTableSize - 1;
+            long address = Uns.allocate(msz);
+            return new Table(address, hashTableSize);
+        }
+
+        private Table(long address, int hashTableSize)
+        {
+            this.address = address;
+            this.mask = hashTableSize - 1;
             clear();
         }
 

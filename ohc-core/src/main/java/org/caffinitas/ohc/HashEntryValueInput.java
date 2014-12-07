@@ -17,7 +17,7 @@ package org.caffinitas.ohc;
 
 import java.io.IOException;
 
-import static org.caffinitas.ohc.Constants.*;
+import static org.caffinitas.ohc.Util.*;
 
 /**
  * Instances of this class are passed to {@link org.caffinitas.ohc.CacheSerializer#deserialize(java.io.DataInput)}.
@@ -26,7 +26,7 @@ final class HashEntryValueInput extends AbstractDataInput
 {
     HashEntryValueInput(long hashEntryAdr)
     {
-        super(hashEntryAdr, Constants.ENTRY_OFF_DATA + roundUpTo8(HashEntries.getKeyLen(hashEntryAdr)), HashEntries.getValueLen(hashEntryAdr));
+        super(hashEntryAdr, Util.ENTRY_OFF_DATA + roundUpTo8(HashEntries.getKeyLen(hashEntryAdr)), HashEntries.getValueLen(hashEntryAdr));
     }
 
     public boolean readBoolean() throws IOException

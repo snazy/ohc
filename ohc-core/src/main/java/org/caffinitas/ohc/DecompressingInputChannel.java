@@ -22,7 +22,7 @@ import java.nio.channels.ReadableByteChannel;
 
 import org.xerial.snappy.Snappy;
 
-import static org.caffinitas.ohc.Constants.*;
+import static org.caffinitas.ohc.Util.*;
 
 final class DecompressingInputChannel implements ReadableByteChannel
 {
@@ -30,8 +30,6 @@ final class DecompressingInputChannel implements ReadableByteChannel
 
     private final long compressedAddress;
     private ByteBuffer compressedBuffer;
-
-    private final long decompressedAddress;
     private ByteBuffer decompressedBuffer;
 
     /**
@@ -40,13 +38,14 @@ final class DecompressingInputChannel implements ReadableByteChannel
      */
     DecompressingInputChannel(ReadableByteChannel delegate) throws IOException
     {
-        long headerAdr = Uns.allocate(16);
+        long headerAdr = Uns.allocateIOException(16);
         int bufferSize;
         int maxCLen;
         try
         {
             ByteBuffer header = Uns.directBufferFor(headerAdr, 0, 16);
-            readFully(delegate, header);
+            if (!readFully(delegate, header))
+                throw new EOFException("Could not read file header");
             header.flip();
             int magic = header.getInt();
             if (magic == HEADER_COMPRESSED_WRONG)
@@ -64,19 +63,11 @@ final class DecompressingInputChannel implements ReadableByteChannel
         }
 
         this.delegate = delegate;
-        this.compressedAddress = Uns.allocate(maxCLen);
-        if (compressedAddress == 0L)
-            throw new IOException("Unable to allocate " + maxCLen + " bytes in off-heap");
+        this.compressedAddress = Uns.allocateIOException(maxCLen + bufferSize);
         this.compressedBuffer = Uns.directBufferFor(compressedAddress, 0L, maxCLen);
         this.compressedBuffer.position(compressedBuffer.limit());
 
-        this.decompressedAddress = Uns.allocate(bufferSize);
-        if (decompressedAddress == 0L)
-        {
-            Uns.free(compressedAddress);
-            throw new IOException("Unable to allocate " + bufferSize + " bytes in off-heap");
-        }
-        this.decompressedBuffer = Uns.directBufferFor(decompressedAddress, 0L, bufferSize);
+        this.decompressedBuffer = Uns.directBufferFor(compressedAddress, maxCLen, bufferSize);
         this.decompressedBuffer.position(decompressedBuffer.limit());
     }
 
@@ -88,7 +79,6 @@ final class DecompressingInputChannel implements ReadableByteChannel
         this.compressedBuffer = null;
         this.decompressedBuffer = null;
         Uns.free(compressedAddress);
-        Uns.free(decompressedAddress);
     }
 
     public int read(ByteBuffer dst) throws IOException

@@ -31,7 +31,7 @@ import com.google.common.collect.AbstractIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.caffinitas.ohc.Constants.*;
+import static org.caffinitas.ohc.Util.*;
 
 public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 {
@@ -89,10 +89,21 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         segments = OffHeapMap.roundUpToPowerOf2(segments);
         maps = new OffHeapMap[segments];
         for (int i = 0; i < segments; i++)
-            maps[i] = new OffHeapMap(builder,
-                                     capacity / segments,
-                                     cleanUpTriggerFree / segments
-            );
+        {
+            try
+            {
+                maps[i] = new OffHeapMap(builder,
+                                         capacity / segments,
+                                         cleanUpTriggerFree / segments
+                );
+            }
+            catch (RuntimeException e)
+            {
+                while (i-- >= 0)
+                    maps[i].release();
+                throw e;
+            }
+        }
 
         // bit-mask for segment part of hash
         int bitNum = bitNum(segments) - 1;
@@ -526,9 +537,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public int deserializeEntries(ReadableByteChannel channel) throws IOException
     {
-        long headerAddress = Uns.allocate(8);
-        if (headerAddress == 0L)
-            throw new IOException("Unable to allocate 8 bytes in off-heap");
+        long headerAddress = Uns.allocateIOException(8);
         try
         {
             ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L);
@@ -560,9 +569,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         // This implementation may also return more results than expected just to keep it simple
         // (it does not really matter if you request 5000 keys and e.g. get 5015).
 
-        long headerAddress = Uns.allocate(8);
-        if (headerAddress == 0L)
-            throw new IOException("Unable to allocate 8 bytes in off-heap");
+        long headerAddress = Uns.allocateIOException(8);
         try
         {
             ByteBuffer headerBuffer = Uns.directBufferFor(headerAddress, 0L, 8L);
@@ -621,7 +628,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             long valueLen = HashEntries.getValueLen(hashEntryAdr);
 
             // write hash, keyLen, valueLen + key + value
-            Constants.writeFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_HASH, 3 * 8L + roundUpTo8(keyLen) + valueLen));
+            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_HASH, 3 * 8L + roundUpTo8(keyLen) + valueLen));
 
             return true;
         }

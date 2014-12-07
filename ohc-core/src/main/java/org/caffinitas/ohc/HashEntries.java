@@ -15,7 +15,7 @@
  */
 package org.caffinitas.ohc;
 
-import static org.caffinitas.ohc.Constants.*;
+import static org.caffinitas.ohc.Util.*;
 
 /**
  * Encapsulates access to hash entries.

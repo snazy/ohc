@@ -20,7 +20,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
-abstract class Constants
+abstract class Util
 {
 
 // Hash entries
@@ -83,14 +83,11 @@ abstract class Constants
 
     static boolean readFully(ReadableByteChannel channel, ByteBuffer buffer) throws IOException
     {
-        boolean any = false;
         while (buffer.remaining() > 0)
         {
             int rd = channel.read(buffer);
             if (rd == -1)
-                return any;
-            if (rd > 0)
-                any = true;
+                return false;
         }
         return true;
     }

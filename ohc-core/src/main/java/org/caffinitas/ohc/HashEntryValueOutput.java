@@ -33,7 +33,7 @@ final class HashEntryValueOutput extends AbstractDataOutput
             throw new IllegalArgumentException();
 
         this.blkAdr = hashEntryAdr;
-        this.blkOff = Constants.ENTRY_OFF_DATA + Constants.roundUpTo8(keyLen);
+        this.blkOff = Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen);
         this.blkEnd = this.blkOff + valueLen;
     }
 

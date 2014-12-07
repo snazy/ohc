@@ -21,7 +21,7 @@ import java.nio.channels.WritableByteChannel;
 
 import org.xerial.snappy.Snappy;
 
-import static org.caffinitas.ohc.Constants.*;
+import static org.caffinitas.ohc.Util.*;
 
 final class CompressingOutputChannel implements WritableByteChannel
 {
@@ -39,9 +39,7 @@ final class CompressingOutputChannel implements WritableByteChannel
         this.delegate = delegate;
         int maxCLen = Snappy.maxCompressedLength(uncompressedChunkSize);
         int bufferCapacity = 4 + maxCLen;
-        this.bufferAddress = Uns.allocate(bufferCapacity);
-        if (bufferAddress == 0L)
-            throw new IOException("Unable to allocate " + bufferCapacity + " bytes in off-heap");
+        this.bufferAddress = Uns.allocateIOException(bufferCapacity);
         this.buffer = Uns.directBufferFor(bufferAddress, 0L, bufferCapacity);
         this.uncompressedChunkSize = uncompressedChunkSize - 4;
 

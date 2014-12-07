@@ -26,7 +26,7 @@ final class HashEntryKeyInput extends AbstractDataInput
 
     HashEntryKeyInput(long hashEntryAdr)
     {
-        super(hashEntryAdr, Constants.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr));
+        super(hashEntryAdr, Util.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr));
     }
 
     //

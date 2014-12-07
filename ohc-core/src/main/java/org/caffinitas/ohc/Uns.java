@@ -30,6 +30,7 @@
  */
 package org.caffinitas.ohc;
 
+import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
@@ -39,8 +40,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import com.google.common.hash.Hasher;
-import com.google.common.hash.Hashing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -301,6 +300,14 @@ final class Uns
         return address > 0L ? address : 0L;
     }
 
+    static long allocateIOException(long bytes) throws IOException
+    {
+        long address = allocate(bytes);
+        if (address == 0L)
+            throw new IOException("unable to allocate " + bytes + " in off-heap");
+        return address;
+    }
+
     static void free(long address)
     {
         freed(address);
@@ -345,26 +352,5 @@ final class Uns
         {
             throw new RuntimeException(t);
         }
-    }
-
-    public static String murmur3(long address, long offset, long len)
-    {
-        Hasher hasher = Hashing.murmur3_128().newHasher();
-        while (len > 0)
-        {
-            if (len >= 8)
-            {
-                hasher.putLong(getLong(address, offset));
-                offset += 8;
-                len -= 8;
-            }
-            else
-            {
-                hasher.putByte(getByte(address, offset));
-                offset++;
-                len--;
-            }
-        }
-        return hasher.hash().toString();
     }
 }

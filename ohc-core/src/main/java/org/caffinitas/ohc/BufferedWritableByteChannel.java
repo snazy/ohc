@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 
-import static org.caffinitas.ohc.Constants.writeFully;
+import static org.caffinitas.ohc.Util.writeFully;
 
 final class BufferedWritableByteChannel implements WritableByteChannel
 {
@@ -27,10 +27,10 @@ final class BufferedWritableByteChannel implements WritableByteChannel
     private final long bufferAddress;
     private ByteBuffer buffer;
 
-    BufferedWritableByteChannel(WritableByteChannel delegate, int bufferSize)
+    BufferedWritableByteChannel(WritableByteChannel delegate, int bufferSize) throws IOException
     {
         this.delegate = delegate;
-        this.bufferAddress = Uns.allocate(bufferSize);
+        this.bufferAddress = Uns.allocateIOException(bufferSize);
         this.buffer = Uns.directBufferFor(bufferAddress, 0L, bufferSize);
     }
 

@@ -25,18 +25,18 @@ public class UtilTest
     @Test
     public void roundUp8()
     {
-        Assert.assertEquals(Constants.roundUpTo8(0), 0);
-        Assert.assertEquals(Constants.roundUpTo8(1), 8);
-        Assert.assertEquals(Constants.roundUpTo8(2), 8);
-        Assert.assertEquals(Constants.roundUpTo8(3), 8);
-        Assert.assertEquals(Constants.roundUpTo8(4), 8);
-        Assert.assertEquals(Constants.roundUpTo8(5), 8);
-        Assert.assertEquals(Constants.roundUpTo8(6), 8);
-        Assert.assertEquals(Constants.roundUpTo8(7), 8);
-        Assert.assertEquals(Constants.roundUpTo8(8), 8);
-        Assert.assertEquals(Constants.roundUpTo8(121), 128);
-        Assert.assertEquals(Constants.roundUpTo8(128), 128);
-        Assert.assertEquals(Constants.roundUpTo8(BIG + 121), BIG + 128);
-        Assert.assertEquals(Constants.roundUpTo8(BIG + 128), BIG + 128);
+        Assert.assertEquals(Util.roundUpTo8(0), 0);
+        Assert.assertEquals(Util.roundUpTo8(1), 8);
+        Assert.assertEquals(Util.roundUpTo8(2), 8);
+        Assert.assertEquals(Util.roundUpTo8(3), 8);
+        Assert.assertEquals(Util.roundUpTo8(4), 8);
+        Assert.assertEquals(Util.roundUpTo8(5), 8);
+        Assert.assertEquals(Util.roundUpTo8(6), 8);
+        Assert.assertEquals(Util.roundUpTo8(7), 8);
+        Assert.assertEquals(Util.roundUpTo8(8), 8);
+        Assert.assertEquals(Util.roundUpTo8(121), 128);
+        Assert.assertEquals(Util.roundUpTo8(128), 128);
+        Assert.assertEquals(Util.roundUpTo8(BIG + 121), BIG + 128);
+        Assert.assertEquals(Util.roundUpTo8(BIG + 128), BIG + 128);
     }
 }
