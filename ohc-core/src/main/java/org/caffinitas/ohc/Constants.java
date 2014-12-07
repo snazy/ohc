@@ -81,9 +81,17 @@ abstract class Constants
             channel.write(buffer);
     }
 
-    static void readFully(ReadableByteChannel channel, ByteBuffer buffer) throws IOException
+    static boolean readFully(ReadableByteChannel channel, ByteBuffer buffer) throws IOException
     {
+        boolean any = false;
         while (buffer.remaining() > 0)
-            channel.read(buffer);
+        {
+            int rd = channel.read(buffer);
+            if (rd == -1)
+                return any;
+            if (rd > 0)
+                any = true;
+        }
+        return true;
     }
 }

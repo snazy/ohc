@@ -15,20 +15,18 @@
  */
 package org.caffinitas.ohc;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.SeekableByteChannel;
+import java.nio.channels.ReadableByteChannel;
 
 import org.xerial.snappy.Snappy;
 
 import static org.caffinitas.ohc.Constants.*;
 
-final class DecompressingInputChannel implements SeekableByteChannel
+final class DecompressingInputChannel implements ReadableByteChannel
 {
-    private final SeekableByteChannel delegate;
-
-    private final long readAddress;
-    private ByteBuffer readBuffer;
+    private final ReadableByteChannel delegate;
 
     private final long compressedAddress;
     private ByteBuffer compressedBuffer;
@@ -36,13 +34,11 @@ final class DecompressingInputChannel implements SeekableByteChannel
     private final long decompressedAddress;
     private ByteBuffer decompressedBuffer;
 
-    private long position;
-
     /**
      * @param delegate       channel to read from
-     * @param readBufferSize buffer size for reads from {@code delegate}
+     *
      */
-    DecompressingInputChannel(SeekableByteChannel delegate, int readBufferSize) throws IOException
+    DecompressingInputChannel(ReadableByteChannel delegate) throws IOException
     {
         long headerAdr = Uns.allocate(16);
         int bufferSize;
@@ -67,28 +63,16 @@ final class DecompressingInputChannel implements SeekableByteChannel
             Uns.free(headerAdr);
         }
 
-        if (readBufferSize < 4096)
-            readBufferSize = 4096;
-        this.readAddress = Uns.allocate(readBufferSize);
-        if (readAddress == 0L)
-            throw new IOException("Unable to allocate " + readBufferSize + " bytes in off-heap");
-        this.readBuffer = Uns.directBufferFor(readAddress, 0L, readBufferSize);
-        this.readBuffer.position(readBuffer.limit());
-
         this.delegate = delegate;
         this.compressedAddress = Uns.allocate(maxCLen);
         if (compressedAddress == 0L)
-        {
-            Uns.free(readAddress);
             throw new IOException("Unable to allocate " + maxCLen + " bytes in off-heap");
-        }
         this.compressedBuffer = Uns.directBufferFor(compressedAddress, 0L, maxCLen);
         this.compressedBuffer.position(compressedBuffer.limit());
 
         this.decompressedAddress = Uns.allocate(bufferSize);
         if (decompressedAddress == 0L)
         {
-            Uns.free(readAddress);
             Uns.free(compressedAddress);
             throw new IOException("Unable to allocate " + bufferSize + " bytes in off-heap");
         }
@@ -101,19 +85,10 @@ final class DecompressingInputChannel implements SeekableByteChannel
         if (compressedBuffer == null)
             return;
 
-        this.readBuffer = null;
         this.compressedBuffer = null;
         this.decompressedBuffer = null;
-        Uns.free(readAddress);
         Uns.free(compressedAddress);
         Uns.free(decompressedAddress);
-    }
-
-    public boolean eof() throws IOException
-    {
-        return readBuffer.remaining() == 0
-               && decompressedBuffer.remaining() == 0
-               && delegate.position() >= delegate.size();
     }
 
     public int read(ByteBuffer dst) throws IOException
@@ -122,11 +97,13 @@ final class DecompressingInputChannel implements SeekableByteChannel
         if (r == 0)
         {
             // read length of compressed buffer
-            readBytes(4);
+            if (readBytes(4) == 0)
+                return -1;
             int cLen = compressedBuffer.getInt(0);
 
             // read compressed block
-            readBytes(cLen);
+            if (readBytes(cLen) != cLen)
+                throw new EOFException("unexpected EOF");
 
             // decompress
             decompressedBuffer.clear();
@@ -150,95 +127,15 @@ final class DecompressingInputChannel implements SeekableByteChannel
         return r - decompressedBuffer.remaining();
     }
 
-    private void readBytes(int len) throws IOException
+    private int readBytes(int len) throws IOException
     {
         // read compressed buffer
         compressedBuffer.clear();
         compressedBuffer.limit(len);
-        while (compressedBuffer.remaining() > 0)
-        {
-            if (readBuffer.remaining() == 0)
-            {
-                readBuffer.clear();
-                long av = delegate.size() - delegate.position();
-                if (av < readBuffer.capacity())
-                    readBuffer.limit((int) av);
-                readFully(delegate, readBuffer);
-                readBuffer.flip();
-            }
-
-            int cbRem = compressedBuffer.remaining();
-            if (readBuffer.remaining() > cbRem)
-            {
-                int rbLimit = readBuffer.limit();
-                readBuffer.limit(readBuffer.position() + cbRem);
-                compressedBuffer.put(readBuffer);
-                readBuffer.limit(rbLimit);
-            }
-            else
-                compressedBuffer.put(readBuffer);
-        }
+        if (!readFully(delegate, compressedBuffer))
+            return 0;
         compressedBuffer.position(0);
-    }
-
-    public SeekableByteChannel position(long newPosition) throws IOException
-    {
-        long diff = newPosition - position;
-        if (diff < 0L)
-            throw new IllegalStateException("can only seek forward");
-        if (diff > 0L)
-        {
-            // TODO improve and test this one...
-            long tmpAdr = Uns.allocate(4096);
-            if (tmpAdr == 0L)
-                throw new IOException("Unable to allocate 4096 bytes in off-heap");
-            try
-            {
-                ByteBuffer tmpBuf = Uns.directBufferFor(tmpAdr, 0L, 4096);
-                while (diff > 0L)
-                {
-                    tmpBuf.clear();
-                    int n;
-                    if (diff >= 4096)
-                        n = read(tmpBuf);
-                    else
-                    {
-                        ByteBuffer b = tmpBuf.duplicate();
-                        b.limit((int) diff);
-                        n = read(tmpBuf);
-                    }
-                    position += n;
-                    diff -= n;
-                }
-            }
-            finally
-            {
-                Uns.free(tmpAdr);
-            }
-        }
-        return this;
-    }
-
-    public long position() throws IOException
-    {
-        return position;
-    }
-
-    // following stuff is not needed by SegmentedCacheImpl
-
-    public int write(ByteBuffer src) throws IOException
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    public long size() throws IOException
-    {
-        return eof() ? position : position + 1;
-    }
-
-    public SeekableByteChannel truncate(long size) throws IOException
-    {
-        throw new UnsupportedOperationException();
+        return len;
     }
 
     public boolean isOpen()

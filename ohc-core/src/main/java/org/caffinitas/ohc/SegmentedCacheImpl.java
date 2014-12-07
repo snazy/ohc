@@ -18,6 +18,7 @@ package org.caffinitas.ohc;
 import java.io.IOError;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
@@ -113,6 +114,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         this.valueSerializer = builder.getValueSerializer();
         if (valueSerializer == null)
             throw new NullPointerException("valueSerializer == null");
+
+        if (LOGGER.isDebugEnabled())
+            LOGGER.debug("OHC instance with {} segments and capacity of {} created.", segments, capacity);
     }
 
     private static int bitNum(long val)
@@ -462,12 +466,13 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     // serialization (serialized data cannot be ported between different CPU architectures, if endianess differs)
     //
 
-    public boolean deserializeEntry(SeekableByteChannel channel) throws IOException
+    public boolean deserializeEntry(ReadableByteChannel channel) throws IOException
     {
         // read hash, keyLen, valueLen
         byte[] hashKeyValueLen = new byte[3 * 8];
         ByteBuffer bb = ByteBuffer.wrap(hashKeyValueLen);
-        Constants.readFully(channel, bb);
+        if (!readFully(channel, bb))
+            return false;
 
         long hash = Uns.getLongFromByteArray(hashKeyValueLen, 0);
         long keyLen = Uns.getLongFromByteArray(hashKeyValueLen, 8);
@@ -478,14 +483,32 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long hashEntryAdr;
         if (totalLen > maxEntrySize || (hashEntryAdr = Uns.allocate(totalLen)) == 0L)
         {
-            channel.position(channel.position() + kvLen);
+            if (channel instanceof SeekableByteChannel)
+            {
+                SeekableByteChannel sc = (SeekableByteChannel) channel;
+                sc.position(sc.position() + kvLen);
+            }
+            else
+            {
+                ByteBuffer tmp = ByteBuffer.allocate(8192);
+                while (kvLen > 0L)
+                {
+                    tmp.clear();
+                    if (kvLen < tmp.capacity())
+                        tmp.limit((int) kvLen);
+                    if (!readFully(channel, tmp))
+                        return false;
+                    kvLen -= tmp.limit();
+                }
+            }
             return false;
         }
 
         HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
 
         // read key + value
-        Constants.readFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, kvLen));
+        if (!readFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, kvLen)))
+            return false;
 
         segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen);
 
@@ -501,7 +524,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return hashEntryAdr != 0L && serializeEntry(channel, hashEntryAdr);
     }
 
-    public int deserializeEntries(SeekableByteChannel channel) throws IOException
+    public int deserializeEntries(ReadableByteChannel channel) throws IOException
     {
         long headerAddress = Uns.allocate(8);
         if (headerAddress == 0L)
@@ -525,20 +548,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         }
 
         int count = 0;
-        while (channel.position() < channel.size())
-        {
-            try
-            {
-                deserializeEntry(channel);
-            }
-            catch (Throwable t)
-            {
-                // just here since the surrounding try-with-resource might silently consume this exception
-                t.printStackTrace();
-                throw new Error(t);
-            }
+        while (deserializeEntry(channel))
             count++;
-        }
         return count;
     }
 

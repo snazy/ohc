@@ -221,7 +221,7 @@ public class BasicTest extends AbstractTest
         {
             int count;
 
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedReadableByteChannel ch = new BufferedReadableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 count = cache.deserializeEntries(ch);
             }
@@ -262,7 +262,7 @@ public class BasicTest extends AbstractTest
                                                            .build())
         {
             int count;
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedReadableByteChannel ch = new BufferedReadableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 count = cache.deserializeEntries(ch);
             }
@@ -305,7 +305,7 @@ public class BasicTest extends AbstractTest
                                                            .build())
         {
             int count;
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedReadableByteChannel ch = new BufferedReadableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 count = cache.deserializeEntries(ch);
             }
@@ -355,9 +355,9 @@ public class BasicTest extends AbstractTest
                                                            .build())
         {
             int count;
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedReadableByteChannel ch = new BufferedReadableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
-                try (DecompressingInputChannel dch = new DecompressingInputChannel(ch, 4096))
+                try (DecompressingInputChannel dch = new DecompressingInputChannel(ch))
                 {
                     count = cache.deserializeEntries(dch);
                 }
@@ -420,9 +420,9 @@ public class BasicTest extends AbstractTest
                                                            .build())
         {
             int count;
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
+            try (BufferedReadableByteChannel ch = new BufferedReadableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
-                try (DecompressingInputChannel dch = new DecompressingInputChannel(ch, 4096))
+                try (DecompressingInputChannel dch = new DecompressingInputChannel(ch))
                 {
                     count = cache.deserializeEntries(dch);
                 }
@@ -468,10 +468,10 @@ public class BasicTest extends AbstractTest
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
-            int count = 0;
-            try (FileChannel ch = FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING))
+            int count;
+            try (BufferedReadableByteChannel ch = new BufferedReadableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
-                try (DecompressingInputChannel dch = new DecompressingInputChannel(ch, 4096))
+                try (DecompressingInputChannel dch = new DecompressingInputChannel(ch))
                 {
                     count = cache.deserializeEntries(dch);
                 }

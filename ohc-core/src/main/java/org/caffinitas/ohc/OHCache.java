@@ -17,7 +17,7 @@ package org.caffinitas.ohc;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.channels.SeekableByteChannel;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Iterator;
 import java.util.Map;
@@ -64,11 +64,11 @@ public interface OHCache<K, V> extends Closeable
 
     Iterator<K> keyIterator();
 
-    boolean deserializeEntry(SeekableByteChannel channel) throws IOException;
+    boolean deserializeEntry(ReadableByteChannel channel) throws IOException;
 
     boolean serializeEntry(K key, WritableByteChannel channel) throws IOException;
 
-    int deserializeEntries(SeekableByteChannel channel) throws IOException;
+    int deserializeEntries(ReadableByteChannel channel) throws IOException;
 
     int serializeHotN(int n, WritableByteChannel channel) throws IOException;
 }

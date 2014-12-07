@@ -17,51 +17,54 @@ package org.caffinitas.ohc;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.WritableByteChannel;
+import java.nio.channels.ReadableByteChannel;
 
-import static org.caffinitas.ohc.Constants.writeFully;
+import static org.caffinitas.ohc.Constants.readFully;
 
-final class BufferedWritableByteChannel implements WritableByteChannel
+final class BufferedReadableByteChannel implements ReadableByteChannel
 {
-    private final WritableByteChannel delegate;
+    private final ReadableByteChannel delegate;
     private final long bufferAddress;
     private ByteBuffer buffer;
 
-    BufferedWritableByteChannel(WritableByteChannel delegate, int bufferSize)
+    BufferedReadableByteChannel(ReadableByteChannel delegate, int bufferSize)
     {
         this.delegate = delegate;
         this.bufferAddress = Uns.allocate(bufferSize);
         this.buffer = Uns.directBufferFor(bufferAddress, 0L, bufferSize);
+        this.buffer.position(bufferSize);
     }
 
-    public int write(ByteBuffer src) throws IOException
+    public int read(ByteBuffer dst) throws IOException
     {
-        int wr = 0;
+        int p = dst.position();
         while (true)
         {
-            int sr = src.remaining();
-            if (sr == 0)
-                return wr;
+            int dr = dst.remaining();
+            if (dr == 0)
+                return dst.position() - p;
+
             int br = buffer.remaining();
             if (br == 0)
             {
-                buffer.flip();
-                writeFully(delegate, buffer);
                 buffer.clear();
+                if (!readFully(delegate, buffer))
+                {
+                    int rd = dst.position() - p;
+                    return rd == 0 ? -1 : rd;
+                }
+                buffer.flip();
+                br = buffer.remaining();
             }
-            if (sr > br)
-            {
-                int lim = src.limit();
-                src.limit(src.position() + br);
-                buffer.put(src);
-                src.position(src.limit());
-                src.limit(lim);
-                wr += br;
-            }
+
+            if (dr >= br)
+                dst.put(buffer);
             else
             {
-                buffer.put(src);
-                wr += sr;
+                int lim = buffer.limit();
+                buffer.limit(buffer.position() + dr);
+                dst.put(buffer);
+                buffer.limit(lim);
             }
         }
     }
@@ -73,9 +76,6 @@ final class BufferedWritableByteChannel implements WritableByteChannel
 
     public void close() throws IOException
     {
-        buffer.flip();
-        writeFully(delegate, buffer);
-
         buffer = null;
         Uns.free(bufferAddress);
     }
