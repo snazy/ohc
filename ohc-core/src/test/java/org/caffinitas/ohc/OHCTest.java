@@ -73,6 +73,38 @@ public class OHCTest
             return utflen + 2;
         }
     };
+    public static final CacheSerializer<Integer> complexSerializer = new CacheSerializer<Integer>()
+    {
+        public void serialize(Integer s, DataOutput out) throws IOException
+        {
+            out.writeBoolean(true);
+            out.writeByte(1);
+            out.writeChar('A');
+            out.writeDouble(42.42424242d);
+            out.writeFloat(11.111f);
+            out.writeInt(s);
+            out.writeLong(Long.MAX_VALUE);
+            out.writeShort(0x7654);
+        }
+
+        public Integer deserialize(DataInput in) throws IOException
+        {
+            Assert.assertEquals(in.readBoolean(), true);
+            Assert.assertEquals(in.readByte(), (byte) 1);
+            Assert.assertEquals(in.readChar(), 'A');
+            Assert.assertEquals(in.readDouble(), 42.42424242d);
+            Assert.assertEquals(in.readFloat(), 11.111f);
+            int r = in.readInt();
+            Assert.assertEquals(in.readLong(), Long.MAX_VALUE);
+            Assert.assertEquals(in.readShort(), 0x7654);
+            return r;
+        }
+
+        public int serializedSize(Integer s)
+        {
+            return 30;
+        }
+    };
 
     private static String big;
     private static String bigRandom;
@@ -96,22 +128,21 @@ public class OHCTest
     @Test
     public void basic() throws IOException, InterruptedException
     {
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
             Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
 
-            String k = "123";
-            cache.put(k, "hello world \u00e4\u00f6\u00fc\u00df");
+            cache.put(11, "hello world \u00e4\u00f6\u00fc\u00df");
 
             Assert.assertTrue(cache.getFreeCapacity() < cache.getCapacity());
 
-            String v = cache.getIfPresent(k);
+            String v = cache.getIfPresent(11);
             Assert.assertEquals(v, "hello world \u00e4\u00f6\u00fc\u00df");
 
-            cache.remove(k);
+            cache.remove(11);
 
             Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
 
@@ -124,8 +155,8 @@ public class OHCTest
     @Test(dependsOnMethods = "basic")
     public void manyValues() throws IOException, InterruptedException
     {
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(32L * 1024 * 1024)
                                                            .hashTableSize(64)
@@ -140,28 +171,28 @@ public class OHCTest
             Assert.assertEquals(stats.getSize(), manyCount);
 
             for (int i = 0; i < manyCount; i++)
-                Assert.assertEquals(cache.getIfPresent(Integer.toString(i)), Integer.toHexString(i));
+                Assert.assertEquals(cache.getIfPresent(i), Integer.toHexString(i));
 
             stats = cache.stats();
             Assert.assertEquals(stats.getHitCount(), manyCount);
             Assert.assertEquals(stats.getSize(), manyCount);
 
             for (int i = 0; i < manyCount; i++)
-                cache.put(Integer.toString(i), Integer.toOctalString(i));
+                cache.put(i, Integer.toOctalString(i));
 
             stats = cache.stats();
             Assert.assertEquals(stats.getPutReplaceCount(), manyCount);
             Assert.assertEquals(stats.getSize(), manyCount);
 
             for (int i = 0; i < manyCount; i++)
-                Assert.assertEquals(cache.getIfPresent(Integer.toString(i)), Integer.toOctalString(i));
+                Assert.assertEquals(cache.getIfPresent(i), Integer.toOctalString(i));
 
             stats = cache.stats();
             Assert.assertEquals(stats.getHitCount(), manyCount * 2);
             Assert.assertEquals(stats.getSize(), manyCount);
 
             for (int i = 0; i < manyCount; i++)
-                cache.remove(Integer.toString(i));
+                cache.remove(i);
 
             stats = cache.stats();
             Assert.assertEquals(stats.getRemoveCount(), manyCount);
@@ -173,8 +204,8 @@ public class OHCTest
     @Test(dependsOnMethods = "basic")
     public void keyIterator() throws IOException, InterruptedException
     {
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(32L * 1024 * 1024)
                                                            .build())
@@ -184,8 +215,8 @@ public class OHCTest
 
             fill(cache);
 
-            Set<String> returned = new TreeSet<>();
-            Iterator<String> iter = cache.keyIterator();
+            Set<Integer> returned = new TreeSet<>();
+            Iterator<Integer> iter = cache.keyIterator();
             for (int i = 0; i < 5; i++)
             {
                 Assert.assertTrue(iter.hasNext());
@@ -194,11 +225,11 @@ public class OHCTest
             Assert.assertFalse(iter.hasNext());
             Assert.assertEquals(returned.size(), 5);
 
-            Assert.assertTrue(returned.contains("1"));
-            Assert.assertTrue(returned.contains("2"));
-            Assert.assertTrue(returned.contains("3"));
-            Assert.assertTrue(returned.contains("4"));
-            Assert.assertTrue(returned.contains("5"));
+            Assert.assertTrue(returned.contains(1));
+            Assert.assertTrue(returned.contains(2));
+            Assert.assertTrue(returned.contains(3));
+            Assert.assertTrue(returned.contains(4));
+            Assert.assertTrue(returned.contains(5));
 
             returned.clear();
 
@@ -208,11 +239,11 @@ public class OHCTest
             Assert.assertFalse(iter.hasNext());
             Assert.assertEquals(returned.size(), 5);
 
-            Assert.assertTrue(returned.contains("1"));
-            Assert.assertTrue(returned.contains("2"));
-            Assert.assertTrue(returned.contains("3"));
-            Assert.assertTrue(returned.contains("4"));
-            Assert.assertTrue(returned.contains("5"));
+            Assert.assertTrue(returned.contains(1));
+            Assert.assertTrue(returned.contains(2));
+            Assert.assertTrue(returned.contains(3));
+            Assert.assertTrue(returned.contains(4));
+            Assert.assertTrue(returned.contains(5));
 
             iter = cache.keyIterator();
             for (int i = 0; i < 5; i++)
@@ -224,11 +255,11 @@ public class OHCTest
             Assert.assertEquals(cache.getFreeCapacity(), capacity);
 
             Assert.assertEquals(0, cache.size());
-            Assert.assertNull(cache.getIfPresent("1"));
-            Assert.assertNull(cache.getIfPresent("2"));
-            Assert.assertNull(cache.getIfPresent("3"));
-            Assert.assertNull(cache.getIfPresent("4"));
-            Assert.assertNull(cache.getIfPresent("5"));
+            Assert.assertNull(cache.getIfPresent(1));
+            Assert.assertNull(cache.getIfPresent(2));
+            Assert.assertNull(cache.getIfPresent(3));
+            Assert.assertNull(cache.getIfPresent(4));
+            Assert.assertNull(cache.getIfPresent(5));
         }
     }
 
@@ -238,8 +269,8 @@ public class OHCTest
         File f = File.createTempFile("OHCBasicTestDirectIO-", ".bin");
         f.deleteOnExit();
 
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
@@ -256,8 +287,8 @@ public class OHCTest
                 throw new Error(t);
             }
         }
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
@@ -278,8 +309,8 @@ public class OHCTest
         File f = File.createTempFile("OHCBasicTestDirectIOBig-", ".bin");
         f.deleteOnExit();
 
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
@@ -297,8 +328,8 @@ public class OHCTest
                 throw new Error(t);
             }
         }
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
@@ -321,8 +352,8 @@ public class OHCTest
         File f = File.createTempFile("OHCBasicTestDirectIOBigRandom-", ".bin");
         f.deleteOnExit();
 
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
@@ -340,8 +371,8 @@ public class OHCTest
                 throw new Error(t);
             }
         }
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
@@ -358,10 +389,10 @@ public class OHCTest
         }
     }
 
-    private void fillMany(OHCache<String, String> cache)
+    private void fillMany(OHCache<Integer, String> cache)
     {
         for (int i = 0; i < manyCount; i++)
-            cache.put(Integer.toString(i), Integer.toHexString(i));
+            cache.put(i, Integer.toHexString(i));
     }
 
     @Test(dependsOnMethods = "directIO")
@@ -370,8 +401,8 @@ public class OHCTest
         File f = File.createTempFile("OHCBasicTestDirectIO-", ".bin");
         f.deleteOnExit();
 
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
@@ -391,8 +422,8 @@ public class OHCTest
                 throw new Error(t);
             }
         }
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
@@ -409,14 +440,14 @@ public class OHCTest
         }
     }
 
-    private void checkManyForSerialized(OHCache<String, String> cache, int count)
+    private void checkManyForSerialized(OHCache<Integer, String> cache, int count)
     {
         Assert.assertTrue(count > manyCount * 9 / 10, "count=" + count); // allow some variation
 
         int found = 0;
         for (int i = 0; i < manyCount; i++)
         {
-            String v = cache.getIfPresent(Integer.toString(i));
+            String v = cache.getIfPresent(i);
             if (v != null)
             {
                 Assert.assertEquals(v, Integer.toHexString(i));
@@ -433,8 +464,8 @@ public class OHCTest
         File f = File.createTempFile("OHCBasicTestCompressedDirectIOBig-", ".bin");
         f.deleteOnExit();
 
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
@@ -455,8 +486,8 @@ public class OHCTest
                 throw new Error(t);
             }
         }
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
@@ -482,8 +513,8 @@ public class OHCTest
         File f = File.createTempFile("OHCBasicTestCompressedDirectIOBigRandom-", ".bin");
         f.deleteOnExit();
 
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
@@ -504,8 +535,8 @@ public class OHCTest
                 throw new Error(t);
             }
         }
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
@@ -528,8 +559,8 @@ public class OHCTest
     @Test(dependsOnMethods = "basic")
     public void hotN() throws IOException, InterruptedException
     {
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
@@ -542,14 +573,14 @@ public class OHCTest
     @Test(dependsOnMethods = "manyValues")
     public void cleanUpTest() throws IOException, InterruptedException
     {
-        char[] c940 = new char[940];
-        for (int i = 0; i < c940.length; i++)
-            c940[i] = (char) ('A' + i % 26);
-        String v = new String(c940);
+        char[] chars = new char[900];
+        for (int i = 0; i < chars.length; i++)
+            chars[i] = (char) ('A' + i % 26);
+        String v = new String(chars);
 
         // Build cache with 64MB capacity and trigger on less than 8 MB free capacity
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .segmentCount(1)
                                                            .capacity(32 * ONE_MB)
@@ -558,11 +589,15 @@ public class OHCTest
         {
             int i;
             for (i = 0; cache.getFreeCapacity() > 4 * ONE_MB + 1000; i++)
-                cache.put(Integer.toString(i), v);
+            {
+                cache.put(i, v);
+                if ((i % 10000) == 0)
+                    Assert.assertEquals(cache.stats().getCleanupCount(), 0L, "oops - cleanup triggered - fix the unit test!");
+            }
 
             Assert.assertEquals(cache.stats().getCleanupCount(), 0L, "oops - cleanup triggered - fix the unit test!");
 
-            cache.put(Integer.toString(i), v);
+            cache.put(i, v);
 
             Assert.assertEquals(cache.stats().getCleanupCount(), 1L, "cleanup did not run");
             Assert.assertEquals(cache.stats().getEvictionCount(), 1L, "cleanup did not run");
@@ -578,8 +613,8 @@ public class OHCTest
         String v = new String(c940);
 
         // Build cache with 64MB capacity and trigger on less than 8 MB free capacity
-        try (OHCache<String, String> cache = OHCacheBuilder.<String, String>newBuilder()
-                                                           .keySerializer(stringSerializer)
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                           .keySerializer(complexSerializer)
                                                            .valueSerializer(stringSerializer)
                                                            .segmentCount(1)
                                                            .capacity(ONE_MB)
@@ -587,65 +622,65 @@ public class OHCTest
                                              .cleanUpTriggerFree(.125d)
                                              .build())
         {
-            cache.put("foobar", v);
+            cache.put(88, v);
 
-            Assert.assertNull(cache.getIfPresent("foobar"));
+            Assert.assertNull(cache.getIfPresent(88));
             Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
             Assert.assertEquals(cache.stats().getCleanupCount(), 0L, "cleanup did run");
         }
     }
 
-    private void fillBigRandom(OHCache<String, String> cache)
+    private void fillBigRandom(OHCache<Integer, String> cache)
     {
-        cache.put("1", "one " + bigRandom);
-        cache.put("2", "two " + bigRandom);
-        cache.put("3", "three " + bigRandom);
-        cache.put("4", "four " + bigRandom);
-        cache.put("5", "five " + bigRandom);
+        cache.put(1, "one " + bigRandom);
+        cache.put(2, "two " + bigRandom);
+        cache.put(3, "three " + bigRandom);
+        cache.put(4, "four " + bigRandom);
+        cache.put(5, "five " + bigRandom);
     }
 
-    private void checkBigRandom(OHCache<String, String> cache)
+    private void checkBigRandom(OHCache<Integer, String> cache)
     {
-        Assert.assertEquals(cache.getIfPresent("1"), "one " + bigRandom);
-        Assert.assertEquals(cache.getIfPresent("2"), "two " + bigRandom);
-        Assert.assertEquals(cache.getIfPresent("3"), "three " + bigRandom);
-        Assert.assertEquals(cache.getIfPresent("4"), "four " + bigRandom);
-        Assert.assertEquals(cache.getIfPresent("5"), "five " + bigRandom);
+        Assert.assertEquals(cache.getIfPresent(1), "one " + bigRandom);
+        Assert.assertEquals(cache.getIfPresent(2), "two " + bigRandom);
+        Assert.assertEquals(cache.getIfPresent(3), "three " + bigRandom);
+        Assert.assertEquals(cache.getIfPresent(4), "four " + bigRandom);
+        Assert.assertEquals(cache.getIfPresent(5), "five " + bigRandom);
     }
 
-    private void fillBig(OHCache<String, String> cache)
+    private void fillBig(OHCache<Integer, String> cache)
     {
-        cache.put("1", "one " + big);
-        cache.put("2", "two " + big);
-        cache.put("3", "three " + big);
-        cache.put("4", "four " + big);
-        cache.put("5", "five " + big);
+        cache.put(1, "one " + big);
+        cache.put(2, "two " + big);
+        cache.put(3, "three " + big);
+        cache.put(4, "four " + big);
+        cache.put(5, "five " + big);
     }
 
-    private void checkBig(OHCache<String, String> cache)
+    private void checkBig(OHCache<Integer, String> cache)
     {
-        Assert.assertEquals(cache.getIfPresent("1"), "one " + big);
-        Assert.assertEquals(cache.getIfPresent("2"), "two " + big);
-        Assert.assertEquals(cache.getIfPresent("3"), "three " + big);
-        Assert.assertEquals(cache.getIfPresent("4"), "four " + big);
-        Assert.assertEquals(cache.getIfPresent("5"), "five " + big);
+        Assert.assertEquals(cache.getIfPresent(1), "one " + big);
+        Assert.assertEquals(cache.getIfPresent(2), "two " + big);
+        Assert.assertEquals(cache.getIfPresent(3), "three " + big);
+        Assert.assertEquals(cache.getIfPresent(4), "four " + big);
+        Assert.assertEquals(cache.getIfPresent(5), "five " + big);
     }
 
-    private void fill(OHCache<String, String> cache)
+    private void fill(OHCache<Integer, String> cache)
     {
-        cache.put("1", "one");
-        cache.put("2", "two");
-        cache.put("3", "three");
-        cache.put("4", "four");
-        cache.put("5", "five");
+        cache.put(1, "one");
+        cache.put(2, "two");
+        cache.put(3, "three");
+        cache.put(4, "four");
+        cache.put(5, "five");
     }
 
-    private void check(OHCache<String, String> cache)
+    private void check(OHCache<Integer, String> cache)
     {
-        Assert.assertEquals(cache.getIfPresent("1"), "one");
-        Assert.assertEquals(cache.getIfPresent("2"), "two");
-        Assert.assertEquals(cache.getIfPresent("3"), "three");
-        Assert.assertEquals(cache.getIfPresent("4"), "four");
-        Assert.assertEquals(cache.getIfPresent("5"), "five");
+        Assert.assertEquals(cache.getIfPresent(1), "one");
+        Assert.assertEquals(cache.getIfPresent(2), "two");
+        Assert.assertEquals(cache.getIfPresent(3), "three");
+        Assert.assertEquals(cache.getIfPresent(4), "four");
+        Assert.assertEquals(cache.getIfPresent(5), "five");
     }
 }
