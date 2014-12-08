@@ -22,27 +22,37 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.sun.jna.Function;
 import com.sun.jna.InvocationMapper;
 import com.sun.jna.Library;
+import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLibrary;
+import com.sun.jna.NativeLong;
+import com.sun.jna.Pointer;
 
 public class JEMallocAllocator implements IAllocator
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JEMallocAllocator.class);
+
     public interface JEMLibrary extends Library
     {
         long malloc(long size);
 
         void free(long pointer);
+
+        int je_mallctl(String name, Pointer oldp, Pointer oldlenp, Pointer newp, long newlen);
     }
 
     private final JEMLibrary library;
     
     public JEMallocAllocator()
     {
+        // use a custom invocation mapper to reduce unnecessary argument mapping and temporary objects
         Map options = Collections.singletonMap(Library.OPTION_INVOCATION_MAPPER,
-                                 // Invocation mapping
                                  new InvocationMapper() {
                                      public InvocationHandler getInvocationHandler(NativeLibrary lib, Method m) {
                                          final Function f = lib.getFunction(m.getName());
@@ -63,6 +73,43 @@ public class JEMallocAllocator implements IAllocator
                                      }
                                  } );
         library = (JEMLibrary) Native.loadLibrary("jemalloc", JEMLibrary.class, options);
+
+        //
+        // see `man jemalloc`
+        //
+        if (mallctlBool("opt.zero"))
+            LOGGER.warn("jemalloc is has opt.fill enabled - this leads to performance penalties");
+        if (mallctlBool("opt.redzone"))
+            LOGGER.warn("jemalloc is has opt.redzone enabled - this leads to performance penalties");
+        if (mallctlBool("opt.junk"))
+            LOGGER.warn("jemalloc is has opt.junk enabled - this leads to performance penalties");
+        if (mallctlBool("config.debug"))
+            LOGGER.warn("jemalloc is compiled with debug code - this leads to performance penalties");
+        if (mallctlBool("config.fill"))
+            LOGGER.warn("jemalloc is compiled with fill code - this leads to performance penalties");
+    }
+
+    public long totalAllocated()
+    {
+        return mallctlSizeT("stats.allocated");
+    }
+
+    private boolean mallctlBool(String name)
+    {
+        Memory oldp = new Memory(1);
+        Memory oldlenp = new Memory(NativeLong.SIZE);
+        oldlenp.setNativeLong(0, new NativeLong(oldp.size()));
+        int r = library.je_mallctl(name, oldp, oldlenp, null, 0);
+        return r == 0 && oldp.getByte(0) != 0;
+    }
+
+    private long mallctlSizeT(String name)
+    {
+        Memory oldp = new Memory(NativeLong.SIZE);
+        Memory oldlenp = new Memory(NativeLong.SIZE);
+        oldlenp.setNativeLong(0, new NativeLong(oldp.size()));
+        int r = library.je_mallctl(name, oldp, oldlenp, null, 0);
+        return oldp.getNativeLong(0).longValue();
     }
 
     public long allocate(long size)
