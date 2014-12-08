@@ -17,8 +17,16 @@
  */
 package org.caffinitas.ohc.alloc;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.Map;
+
+import com.sun.jna.Function;
+import com.sun.jna.InvocationMapper;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
+import com.sun.jna.NativeLibrary;
 
 public class JEMallocAllocator implements IAllocator
 {
@@ -33,7 +41,28 @@ public class JEMallocAllocator implements IAllocator
     
     public JEMallocAllocator()
     {
-        library = (JEMLibrary) Native.loadLibrary("jemalloc", JEMLibrary.class);
+        Map options = Collections.singletonMap(Library.OPTION_INVOCATION_MAPPER,
+                                 // Invocation mapping
+                                 new InvocationMapper() {
+                                     public InvocationHandler getInvocationHandler(NativeLibrary lib, Method m) {
+                                         final Function f = lib.getFunction(m.getName());
+                                         if ("malloc".equals(m.getName()))
+                                             return new InvocationHandler() {
+                                                 public Object invoke(Object proxy, Method method, Object[] args) {
+                                                     return f.invokeLong(args);
+                                                 }
+                                             };
+                                         if ("free".equals(m.getName()))
+                                             return new InvocationHandler() {
+                                                 public Object invoke(Object proxy, Method method, Object[] args) {
+                                                     f.invoke(args);
+                                                     return null;
+                                                 }
+                                             };
+                                         return null;
+                                     }
+                                 } );
+        library = (JEMLibrary) Native.loadLibrary("jemalloc", JEMLibrary.class, options);
     }
 
     public long allocate(long size)
