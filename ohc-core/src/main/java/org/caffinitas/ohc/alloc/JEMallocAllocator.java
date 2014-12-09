@@ -87,8 +87,6 @@ public class JEMallocAllocator implements IAllocator
             LOGGER.warn("jemalloc is compiled with debug code - this leads to performance penalties");
         if (mallctlBool("config.fill"))
             LOGGER.warn("jemalloc is compiled with fill code - this leads to performance penalties");
-
-        getTotalAllocated();
     }
 
     public long getTotalAllocated()
