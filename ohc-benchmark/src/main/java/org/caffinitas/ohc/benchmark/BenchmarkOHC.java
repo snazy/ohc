@@ -161,10 +161,10 @@ public class BenchmarkOHC
                          "                     load-factor    : %.3f%n" +
                          "                     segments       : %d%n" +
                          "                     capacity       : %d%n",
-                         cache.getHashTableSizes()[0],
-                         cache.getLoadFactor(),
-                         cache.getSegments(),
-                         cache.getCapacity());
+                         cache.hashTableSizes()[0],
+                         cache.loadFactor(),
+                         cache.segments(),
+                         cache.capacity());
 
             LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>(5000);
             ThreadPoolExecutor exec = new ThreadPoolExecutor(threads, threads,
@@ -277,7 +277,7 @@ public class BenchmarkOHC
 
     private static void printStats(String title)
     {
-        printMessage("%s%n     %s entries, %d/%d free, %s", title, cache.size(), cache.getFreeCapacity(), cache.getCapacity(), cache.stats());
+        printMessage("%s%n     %s entries, %d/%d free, %s", title, cache.size(), cache.freeCapacity(), cache.capacity(), cache.stats());
         for (Map.Entry<String, GCStats> gcStat : gcStats.entrySet())
         {
             GCStats gs = gcStat.getValue();
@@ -381,8 +381,8 @@ public class BenchmarkOHC
         sleep(100);
         printMessage("Memory consumed: %s / %s, size %d%n" +
                      "          stats: %s",
-                     byteCountToDisplaySize(cache.getMemUsed()),
-                     byteCountToDisplaySize(cache.getCapacity()),
+                     byteCountToDisplaySize(cache.memUsed()),
+                     byteCountToDisplaySize(cache.capacity()),
                      cache.size(),
                      cache.stats());
         printMessage("");
@@ -414,7 +414,7 @@ public class BenchmarkOHC
             try
             {
                 long t0 = ntime();
-                cache.getIfPresent(key);
+                cache.get(key);
                 long t = ntime() - t0;
                 readTimer.update(t, TimeUnit.NANOSECONDS);
             }

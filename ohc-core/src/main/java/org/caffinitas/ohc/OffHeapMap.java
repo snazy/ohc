@@ -16,10 +16,13 @@
 package org.caffinitas.ohc;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.codahale.metrics.Histogram;
 
 import static org.caffinitas.ohc.Util.BUCKET_ENTRY_LEN;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
+import static org.caffinitas.ohc.Util.roundUpTo8;
 
 final class OffHeapMap
 {
@@ -41,19 +44,14 @@ final class OffHeapMap
     private long threshold;
     private final double loadFactor;
 
-    private final long capacity;
-    private long freeCapacity;
-    private final long cleanUpTriggerFree;
-
     private long rehashes;
-    private long cleanUpCount;
     private long evictedEntries;
 
-    OffHeapMap(OHCacheBuilder builder, long capacity, long cleanUpTriggerFree)
+    private final AtomicLong freeCapacity;
+
+    OffHeapMap(OHCacheBuilder builder, AtomicLong freeCapacity)
     {
-        this.capacity = capacity;
-        this.freeCapacity = capacity;
-        this.cleanUpTriggerFree = cleanUpTriggerFree;
+        this.freeCapacity = freeCapacity;
 
         int hts = builder.getHashTableSize();
         if (hts <= 0)
@@ -80,16 +78,6 @@ final class OffHeapMap
     long size()
     {
         return size;
-    }
-
-    long capacity()
-    {
-        return capacity;
-    }
-
-    long freeCapacity()
-    {
-        return freeCapacity;
     }
 
     long hitCount()
@@ -120,7 +108,6 @@ final class OffHeapMap
     void resetStatistics()
     {
         rehashes = 0L;
-        cleanUpCount = 0L;
         evictedEntries = 0L;
         hitCount = 0L;
         missCount = 0L;
@@ -132,11 +119,6 @@ final class OffHeapMap
     long rehashes()
     {
         return rehashes;
-    }
-
-    long cleanUpCount()
-    {
-        return cleanUpCount;
     }
 
     long evictedEntries()
@@ -190,12 +172,10 @@ final class OffHeapMap
         return false;
     }
 
-    synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent)
+    synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
     {
-        if (freeCapacity - bytes < cleanUpTriggerFree)
-            cleanUp();
-
-        freeCapacity -= bytes;
+        while (freeCapacity.get() < bytes)
+            removeOldest();
 
         long hashEntryAdr;
         long prevEntryAdr = 0L;
@@ -211,6 +191,14 @@ final class OffHeapMap
             if (ifAbsent)
                 return false;
 
+            if (oldValueAdr != 0L)
+            {
+                // code for replace() operation
+                long valueLen = HashEntries.getValueLen(hashEntryAdr);
+                if (valueLen != oldValueLen || !HashEntries.compare(hashEntryAdr, ENTRY_OFF_DATA + roundUpTo8(keyLen), oldValueAdr, 0L, oldValueLen))
+                    return false;
+            }
+
             remove(hashEntryAdr, prevEntryAdr);
             dereference(hashEntryAdr);
 
@@ -224,6 +212,12 @@ final class OffHeapMap
 
             size++;
         }
+
+        // if replace() operation fail if key is not present yet
+        if (oldValueAdr != 0L)
+            return false;
+
+        freeCapacity.addAndGet(-bytes);
 
         add(newHashEntryAdr);
 
@@ -318,7 +312,7 @@ final class OffHeapMap
 
         long serKeyLen = HashEntries.getKeyLen(hashEntryAdr);
         return serKeyLen != newKeyLen
-               || !HashEntries.compareKey(hashEntryAdr, newHashEntryAdr, serKeyLen);
+               || !HashEntries.compare(hashEntryAdr, ENTRY_OFF_DATA, newHashEntryAdr, ENTRY_OFF_DATA, serKeyLen);
     }
 
     private void rehash()
@@ -615,34 +609,20 @@ final class OffHeapMap
         HashEntries.setLRUPrev(hashEntryAdr, prev);
     }
 
-    synchronized void cleanUp()
+    private boolean removeOldest()
     {
-        long recycleGoal = cleanUpTriggerFree - freeCapacity;
-        if (recycleGoal <= 0L)
-            recycleGoal = 1L;
+        long hashEntryAdr = lruTail;
+        if (hashEntryAdr == 0L)
+            return false;
 
-        long prev;
-        long evicted = 0L;
-        for (long hashEntryAdr = lruTail;
-             hashEntryAdr != 0L && recycleGoal > 0L;
-             hashEntryAdr = prev)
-        {
-            prev = getLruPrev(hashEntryAdr);
+        remove(hashEntryAdr, -1L);
+        dereference(hashEntryAdr);
 
-            long bytes = HashEntries.getAllocLen(hashEntryAdr);
+        size--;
 
-            remove(hashEntryAdr, -1L);
-            dereference(hashEntryAdr);
+        evictedEntries ++;
 
-            size--;
-
-            recycleGoal -= bytes;
-
-            evicted++;
-        }
-
-        cleanUpCount++;
-        evictedEntries += evicted;
+        return true;
     }
 
     void dereference(long hashEntryAdr)
@@ -655,7 +635,7 @@ final class OffHeapMap
 
             Uns.free(hashEntryAdr);
 
-            freeCapacity += bytes;
+            freeCapacity.addAndGet(bytes);
         }
     }
 }

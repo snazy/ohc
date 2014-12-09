@@ -133,18 +133,18 @@ public class OHCTest
                                                            .valueSerializer(stringSerializer)
                                                            .build())
         {
-            Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
+            Assert.assertEquals(cache.freeCapacity(), cache.capacity());
 
             cache.put(11, "hello world \u00e4\u00f6\u00fc\u00df");
 
-            Assert.assertTrue(cache.getFreeCapacity() < cache.getCapacity());
+            Assert.assertTrue(cache.freeCapacity() < cache.capacity());
 
-            String v = cache.getIfPresent(11);
+            String v = cache.get(11);
             Assert.assertEquals(v, "hello world \u00e4\u00f6\u00fc\u00df");
 
             cache.remove(11);
 
-            Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
+            Assert.assertEquals(cache.freeCapacity(), cache.capacity());
 
             fill(cache);
 
@@ -162,7 +162,7 @@ public class OHCTest
                                                            .hashTableSize(64)
                                                            .build())
         {
-            Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
+            Assert.assertEquals(cache.freeCapacity(), cache.capacity());
 
             fillMany(cache);
 
@@ -171,7 +171,7 @@ public class OHCTest
             Assert.assertEquals(stats.getSize(), manyCount);
 
             for (int i = 0; i < manyCount; i++)
-                Assert.assertEquals(cache.getIfPresent(i), Integer.toHexString(i));
+                Assert.assertEquals(cache.get(i), Integer.toHexString(i));
 
             stats = cache.stats();
             Assert.assertEquals(stats.getHitCount(), manyCount);
@@ -185,7 +185,7 @@ public class OHCTest
             Assert.assertEquals(stats.getSize(), manyCount);
 
             for (int i = 0; i < manyCount; i++)
-                Assert.assertEquals(cache.getIfPresent(i), Integer.toOctalString(i));
+                Assert.assertEquals(cache.get(i), Integer.toOctalString(i));
 
             stats = cache.stats();
             Assert.assertEquals(stats.getHitCount(), manyCount * 2);
@@ -210,8 +210,8 @@ public class OHCTest
                                                            .capacity(32L * 1024 * 1024)
                                                            .build())
         {
-            long capacity = cache.getCapacity();
-            Assert.assertEquals(cache.getFreeCapacity(), capacity);
+            long capacity = cache.capacity();
+            Assert.assertEquals(cache.freeCapacity(), capacity);
 
             fill(cache);
 
@@ -252,14 +252,14 @@ public class OHCTest
                 iter.remove();
             }
 
-            Assert.assertEquals(cache.getFreeCapacity(), capacity);
+            Assert.assertEquals(cache.freeCapacity(), capacity);
 
             Assert.assertEquals(0, cache.size());
-            Assert.assertNull(cache.getIfPresent(1));
-            Assert.assertNull(cache.getIfPresent(2));
-            Assert.assertNull(cache.getIfPresent(3));
-            Assert.assertNull(cache.getIfPresent(4));
-            Assert.assertNull(cache.getIfPresent(5));
+            Assert.assertNull(cache.get(1));
+            Assert.assertNull(cache.get(2));
+            Assert.assertNull(cache.get(3));
+            Assert.assertNull(cache.get(4));
+            Assert.assertNull(cache.get(5));
         }
     }
 
@@ -447,7 +447,7 @@ public class OHCTest
         int found = 0;
         for (int i = 0; i < manyCount; i++)
         {
-            String v = cache.getIfPresent(i);
+            String v = cache.get(i);
             if (v != null)
             {
                 Assert.assertEquals(v, Integer.toHexString(i));
@@ -566,7 +566,7 @@ public class OHCTest
         {
             fill(cache);
 
-            Assert.assertNotNull(cache.hotN(1).next());
+            Assert.assertNotNull(cache.hotKeyIterator(1).next());
         }
     }
 
@@ -584,22 +584,20 @@ public class OHCTest
                                                            .valueSerializer(stringSerializer)
                                                            .segmentCount(1)
                                                            .capacity(32 * ONE_MB)
-                                                           .cleanUpTriggerFree(.125d)
                                                            .build())
         {
             int i;
-            for (i = 0; cache.getFreeCapacity() > 4 * ONE_MB + 1000; i++)
+            for (i = 0; cache.freeCapacity() > 950; i++)
             {
                 cache.put(i, v);
                 if ((i % 10000) == 0)
-                    Assert.assertEquals(cache.stats().getCleanupCount(), 0L, "oops - cleanup triggered - fix the unit test!");
+                    Assert.assertEquals(cache.stats().getEvictionCount(), 0L, "oops - cleanup triggered - fix the unit test!");
             }
 
-            Assert.assertEquals(cache.stats().getCleanupCount(), 0L, "oops - cleanup triggered - fix the unit test!");
+            Assert.assertEquals(cache.stats().getEvictionCount(), 0L, "oops - cleanup triggered - fix the unit test!");
 
             cache.put(i, v);
 
-            Assert.assertEquals(cache.stats().getCleanupCount(), 1L, "cleanup did not run");
             Assert.assertEquals(cache.stats().getEvictionCount(), 1L, "cleanup did not run");
         }
     }
@@ -619,14 +617,13 @@ public class OHCTest
                                                            .segmentCount(1)
                                                            .capacity(ONE_MB)
                                              .maxEntrySize((double) ONE_MB / 128) // == 8kB
-                                             .cleanUpTriggerFree(.125d)
                                              .build())
         {
             cache.put(88, v);
 
-            Assert.assertNull(cache.getIfPresent(88));
-            Assert.assertEquals(cache.getFreeCapacity(), cache.getCapacity());
-            Assert.assertEquals(cache.stats().getCleanupCount(), 0L, "cleanup did run");
+            Assert.assertNull(cache.get(88));
+            Assert.assertEquals(cache.freeCapacity(), cache.capacity());
+            Assert.assertEquals(cache.stats().getEvictionCount(), 0L, "eviction must not be performed");
         }
     }
 
@@ -641,11 +638,11 @@ public class OHCTest
 
     private void checkBigRandom(OHCache<Integer, String> cache)
     {
-        Assert.assertEquals(cache.getIfPresent(1), "one " + bigRandom);
-        Assert.assertEquals(cache.getIfPresent(2), "two " + bigRandom);
-        Assert.assertEquals(cache.getIfPresent(3), "three " + bigRandom);
-        Assert.assertEquals(cache.getIfPresent(4), "four " + bigRandom);
-        Assert.assertEquals(cache.getIfPresent(5), "five " + bigRandom);
+        Assert.assertEquals(cache.get(1), "one " + bigRandom);
+        Assert.assertEquals(cache.get(2), "two " + bigRandom);
+        Assert.assertEquals(cache.get(3), "three " + bigRandom);
+        Assert.assertEquals(cache.get(4), "four " + bigRandom);
+        Assert.assertEquals(cache.get(5), "five " + bigRandom);
     }
 
     private void fillBig(OHCache<Integer, String> cache)
@@ -659,11 +656,11 @@ public class OHCTest
 
     private void checkBig(OHCache<Integer, String> cache)
     {
-        Assert.assertEquals(cache.getIfPresent(1), "one " + big);
-        Assert.assertEquals(cache.getIfPresent(2), "two " + big);
-        Assert.assertEquals(cache.getIfPresent(3), "three " + big);
-        Assert.assertEquals(cache.getIfPresent(4), "four " + big);
-        Assert.assertEquals(cache.getIfPresent(5), "five " + big);
+        Assert.assertEquals(cache.get(1), "one " + big);
+        Assert.assertEquals(cache.get(2), "two " + big);
+        Assert.assertEquals(cache.get(3), "three " + big);
+        Assert.assertEquals(cache.get(4), "four " + big);
+        Assert.assertEquals(cache.get(5), "five " + big);
     }
 
     private void fill(OHCache<Integer, String> cache)
@@ -677,10 +674,10 @@ public class OHCTest
 
     private void check(OHCache<Integer, String> cache)
     {
-        Assert.assertEquals(cache.getIfPresent(1), "one");
-        Assert.assertEquals(cache.getIfPresent(2), "two");
-        Assert.assertEquals(cache.getIfPresent(3), "three");
-        Assert.assertEquals(cache.getIfPresent(4), "four");
-        Assert.assertEquals(cache.getIfPresent(5), "five");
+        Assert.assertEquals(cache.get(1), "one");
+        Assert.assertEquals(cache.get(2), "two");
+        Assert.assertEquals(cache.get(3), "three");
+        Assert.assertEquals(cache.get(4), "four");
+        Assert.assertEquals(cache.get(5), "five");
     }
 }

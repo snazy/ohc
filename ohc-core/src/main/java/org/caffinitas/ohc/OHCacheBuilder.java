@@ -23,7 +23,6 @@ public class OHCacheBuilder<K, V>
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
     private double loadFactor;
-    private double cleanUpTriggerFree = -1d;
     private double maxEntrySize;
 
     private OHCacheBuilder()
@@ -81,17 +80,6 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> valueSerializer(CacheSerializer<V> valueSerializer)
     {
         this.valueSerializer = valueSerializer;
-        return this;
-    }
-
-    public double getCleanUpTriggerFree()
-    {
-        return cleanUpTriggerFree;
-    }
-
-    public OHCacheBuilder<K, V> cleanUpTriggerFree(double cleanUpTriggerFree)
-    {
-        this.cleanUpTriggerFree = cleanUpTriggerFree;
         return this;
     }
 

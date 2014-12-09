@@ -26,7 +26,6 @@ public final class OHCacheStats
     private final long capacity;
     private final long free;
     private final long size;
-    private final long cleanupCount;
     private final long rehashCount;
     private final long putAddCount;
     private final long putReplaceCount;
@@ -35,8 +34,7 @@ public final class OHCacheStats
     private final long totalAllocated;
 
     public OHCacheStats(long hitCount, long missCount, long evictionCount,
-                        long[] segmentSizes, long size, long capacity, long free,
-                        long cleanupCount, long rehashCount,
+                        long[] segmentSizes, long size, long capacity, long free, long rehashCount,
                         long putAddCount, long putReplaceCount, long putFailCount, long removeCount,
                         long totalAllocated)
     {
@@ -47,7 +45,6 @@ public final class OHCacheStats
         this.size = size;
         this.capacity = capacity;
         this.free = free;
-        this.cleanupCount = cleanupCount;
         this.rehashCount = rehashCount;
         this.putAddCount = putAddCount;
         this.putReplaceCount = putReplaceCount;
@@ -64,11 +61,6 @@ public final class OHCacheStats
     public long getFree()
     {
         return free;
-    }
-
-    public long getCleanupCount()
-    {
-        return cleanupCount;
     }
 
     public long getRehashCount()
@@ -150,7 +142,6 @@ public final class OHCacheStats
                       .add("size", size)
                       .add("capacity", capacity)
                       .add("free", free)
-                      .add("cleanupCount", cleanupCount)
                       .add("rehashCount", rehashCount)
                       .add("put(add/replace/fail)", Long.toString(putAddCount)+'/'+putReplaceCount+'/'+putFailCount)
                       .add("removeCount", removeCount)

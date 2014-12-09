@@ -21,54 +21,38 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 import com.codahale.metrics.Histogram;
 
 public interface OHCache<K, V> extends Closeable
 {
-    V getIfPresent(K key);
-
-    boolean contains(K key);
 
     void put(K key, V value);
 
-    PutResult putIfAbsent(K k, V v);
+    boolean replace(K key, V old, V value);
+
+    boolean putIfAbsent(K k, V v);
 
     void putAll(Map<? extends K, ? extends V> m);
 
     void remove(K key);
 
-    void invalidateAll(Iterable<K> keys);
+    void removeAll(Iterable<K> keys);
 
-    void invalidateAll();
+    void clear();
 
-    long size();
+    V get(K key);
 
-    void cleanUp();
+    boolean containsKey(K key);
 
-    void resetStatistics();
+    // iterators
 
-    int[] getHashTableSizes();
-
-    long[] getPerSegmentSizes();
-
-    Histogram getBucketHistogram();
-
-    int getSegments();
-
-    long getCapacity();
-
-    long getMemUsed();
-
-    long getFreeCapacity();
-
-    Iterator<K> hotN(int n);
-
-    OHCacheStats stats();
-
-    double getLoadFactor();
+    Iterator<K> hotKeyIterator(int n);
 
     Iterator<K> keyIterator();
+
+    // serialization
 
     boolean deserializeEntry(ReadableByteChannel channel) throws IOException;
 
@@ -77,4 +61,34 @@ public interface OHCache<K, V> extends Closeable
     int deserializeEntries(ReadableByteChannel channel) throws IOException;
 
     int serializeHotN(int n, WritableByteChannel channel) throws IOException;
+
+    // statistics / information
+
+    void resetStatistics();
+
+    long size();
+
+    int[] hashTableSizes();
+
+    long[] perSegmentSizes();
+
+    Histogram getBucketHistogram();
+
+    int segments();
+
+    long capacity();
+
+    long memUsed();
+
+    long freeCapacity();
+
+    double loadFactor();
+
+    OHCacheStats stats();
+
+    // C* ICache
+
+    public void setCapacity(long capacity);
+
+    public long weightedSize();
 }

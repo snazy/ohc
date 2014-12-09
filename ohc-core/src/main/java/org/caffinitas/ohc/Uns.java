@@ -315,6 +315,8 @@ final class Uns
 
     static void free(long address)
     {
+        if (address == 0L)
+            return;
         freed(address);
         allocator.free(address);
     }

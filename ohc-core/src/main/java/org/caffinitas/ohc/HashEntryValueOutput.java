@@ -27,6 +27,11 @@ final class HashEntryValueOutput extends AbstractOffHeapDataOutput
         super(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), valueLen);
     }
 
+    HashEntryValueOutput(long hashEntryAdr, long valueLen)
+    {
+        super(hashEntryAdr, 0, valueLen);
+    }
+
     // Note: it is a very bad idea to override writeInt/Short/Long etc because the corresponding
     // sun.misc.Unsafe methods use CPU endian which usually differs from endian used by Java
 

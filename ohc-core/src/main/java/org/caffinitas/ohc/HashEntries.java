@@ -49,18 +49,17 @@ public final class HashEntries
         return true;
     }
 
-    static boolean compareKey(long hashEntryAdr, long newHashEntryAdr, long serKeyLen)
+    static boolean compare(long hashEntryAdr, long offset, long otherHashEntryAdr, long otherOffset, long len)
     {
         if (hashEntryAdr == 0L)
             return false;
 
-        long blkOff = ENTRY_OFF_DATA;
         int p = 0;
-        for (; p <= serKeyLen - 8; p += 8, blkOff += 8)
-            if (Uns.getLong(hashEntryAdr, blkOff) != Uns.getLong(newHashEntryAdr, blkOff))
+        for (; p <= len - 8; p += 8, offset += 8, otherOffset += 8)
+            if (Uns.getLong(hashEntryAdr, offset) != Uns.getLong(otherHashEntryAdr, otherOffset))
                 return false;
-        for (; p < serKeyLen; p ++, blkOff ++)
-            if (Uns.getByte(hashEntryAdr, blkOff) != Uns.getByte(newHashEntryAdr, blkOff))
+        for (; p < len; p ++, offset ++, otherOffset ++)
+            if (Uns.getByte(hashEntryAdr, offset) != Uns.getByte(otherHashEntryAdr, otherOffset))
                 return false;
 
         return true;
