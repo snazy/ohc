@@ -28,6 +28,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 import com.google.common.collect.AbstractIterator;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.UniformReservoir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -351,19 +353,14 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public OHCacheStats stats()
     {
-        long[] mapSizes = new long[maps.length];
         long rehashes = 0L;
-        for (int i = 0; i < maps.length; i++)
-        {
-            OffHeapMap map = maps[i];
+        for (OffHeapMap map : maps)
             rehashes += map.rehashes();
-            mapSizes[i] = map.size();
-        }
         return new OHCacheStats(
                                hitCount(),
                                missCount(),
                                evictedEntries(),
-                               mapSizes,
+                               getPerSegmentSizes(),
                                size(),
                                getCapacity(),
                                getFreeCapacity(),
@@ -472,6 +469,22 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         for (int i = 0; i < maps.length; i++)
             r[i] = maps[i].hashTableSize();
         return r;
+    }
+
+    public long[] getPerSegmentSizes()
+    {
+        long[] r = new long[maps.length];
+        for (int i = 0; i < maps.length; i++)
+            r[i] = maps[i].size();
+        return r;
+    }
+
+    public Histogram getBucketHistogram()
+    {
+        Histogram h = new Histogram(new UniformReservoir());
+        for (OffHeapMap map : maps)
+            map.updateBucketHistogram(h);
+        return h;
     }
 
     //
@@ -645,12 +658,14 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public void putAll(Map<? extends K, ? extends V> m)
     {
+        // TODO could be improved by grouping removes by segment - but increases heap pressure and complexity - decide later
         for (Map.Entry<? extends K, ? extends V> entry : m.entrySet())
             put(entry.getKey(), entry.getValue());
     }
 
     public void invalidateAll(Iterable<K> iterable)
     {
+        // TODO could be improved by grouping removes by segment - but increases heap pressure and complexity - decide later
         for (K o : iterable)
             remove(o);
     }

@@ -22,6 +22,8 @@ import java.nio.channels.WritableByteChannel;
 import java.util.Iterator;
 import java.util.Map;
 
+import com.codahale.metrics.Histogram;
+
 public interface OHCache<K, V> extends Closeable
 {
     V getIfPresent(K key);
@@ -47,6 +49,10 @@ public interface OHCache<K, V> extends Closeable
     void resetStatistics();
 
     int[] getHashTableSizes();
+
+    long[] getPerSegmentSizes();
+
+    Histogram getBucketHistogram();
 
     int getSegments();
 

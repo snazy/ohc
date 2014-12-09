@@ -17,6 +17,8 @@ package org.caffinitas.ohc;
 
 import java.util.List;
 
+import com.codahale.metrics.Histogram;
+
 import static org.caffinitas.ohc.Util.BUCKET_ENTRY_LEN;
 
 final class OffHeapMap
@@ -419,6 +421,11 @@ final class OffHeapMap
         return table.size();
     }
 
+    synchronized void updateBucketHistogram(Histogram h)
+    {
+        table.updateBucketHistogram(h);
+    }
+
     synchronized void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
     {
         for (; nSegments-- > 0 && mapSegmentIndex < table.size(); mapSegmentIndex++)
@@ -529,6 +536,17 @@ final class OffHeapMap
         int size()
         {
             return mask + 1;
+        }
+
+        void updateBucketHistogram(Histogram h)
+        {
+            for (int i = 0; i < size(); i++)
+            {
+                int len = 0;
+                for (long adr = first(i); adr != 0L; adr = HashEntries.getNext(adr))
+                    len++;
+                h.update(len);
+            }
         }
     }
 

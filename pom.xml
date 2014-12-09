@@ -65,6 +65,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
+        <version.com.codahale.metrics>3.0.2</version.com.codahale.metrics>
         <version.com.google.guava>16.0</version.com.google.guava>
         <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m2</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
         <version.net.java.dev.jna>4.0.0</version.net.java.dev.jna>
@@ -120,6 +121,12 @@
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
                 <version>${version.org.slf4j}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.codahale.metrics</groupId>
+                <artifactId>metrics-core</artifactId>
+                <version>${version.com.codahale.metrics}</version>
             </dependency>
 
             <dependency>
