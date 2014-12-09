@@ -615,11 +615,6 @@ final class OffHeapMap
         HashEntries.setLRUPrev(hashEntryAdr, prev);
     }
 
-    synchronized void freed(long bytes)
-    {
-        freeCapacity += bytes;
-    }
-
     synchronized void cleanUp()
     {
         long recycleGoal = cleanUpTriggerFree - freeCapacity;
@@ -650,7 +645,7 @@ final class OffHeapMap
         evictedEntries += evicted;
     }
 
-    private void dereference(long hashEntryAdr)
+    void dereference(long hashEntryAdr)
     {
         if (HashEntries.dereference(hashEntryAdr))
         {

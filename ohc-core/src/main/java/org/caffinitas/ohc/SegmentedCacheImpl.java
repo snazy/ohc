@@ -151,7 +151,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
         KeyBuffer keySource = keySource(key);
 
-        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource);
+        OffHeapMap segment = segment(keySource.hash());
+        long hashEntryAdr = segment.getEntry(keySource);
 
         if (hashEntryAdr == 0L)
             return null;
@@ -166,7 +167,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            dereference(hashEntryAdr);
+            segment.dereference(hashEntryAdr);
         }
     }
 
@@ -290,6 +291,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         {
             int mapIndex;
 
+            OffHeapMap segment;
             long[] hotPerMap;
             int subIndex;
 
@@ -312,14 +314,15 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                             }
                             finally
                             {
-                                dereference(hashEntryAdr);
+                                segment.dereference(hashEntryAdr);
                             }
                     }
 
                     if (mapIndex == maps.length)
                         return endOfData();
 
-                    hotPerMap = maps[mapIndex++].hotN(perMap);
+                    segment = maps[mapIndex++];
+                    hotPerMap = segment.hotN(perMap);
                     subIndex = 0;
                 }
             }
@@ -557,9 +560,10 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     {
         KeyBuffer keySource = keySource(key);
 
-        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource);
+        OffHeapMap segment = segment(keySource.hash());
+        long hashEntryAdr = segment.getEntry(keySource);
 
-        return hashEntryAdr != 0L && serializeEntry(channel, hashEntryAdr);
+        return hashEntryAdr != 0L && serializeEntry(segment, channel, hashEntryAdr);
     }
 
     public int deserializeEntries(ReadableByteChannel channel) throws IOException
@@ -626,7 +630,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
                     try
                     {
-                        serializeEntry(channel, hashEntryAdr);
+                        serializeEntry(map, channel, hashEntryAdr);
                     }
                     finally
                     {
@@ -640,14 +644,14 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             {
                 for (long hashEntryAdr : hotPerMap)
                     if (hashEntryAdr != 0L)
-                        dereference(hashEntryAdr);
+                        map.dereference(hashEntryAdr);
             }
         }
 
         return cnt;
     }
 
-    private boolean serializeEntry(WritableByteChannel channel, long hashEntryAdr) throws IOException
+    private boolean serializeEntry(OffHeapMap segment, WritableByteChannel channel, long hashEntryAdr) throws IOException
     {
         try
         {
@@ -661,7 +665,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            dereference(hashEntryAdr);
+            segment.dereference(hashEntryAdr);
         }
     }
 
@@ -686,28 +690,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     public long getMemUsed()
     {
         return getCapacity() - getFreeCapacity();
-    }
-
-    //
-    // alloc/free
-    //
-
-    private void dereference(long hashEntryAdr)
-    {
-        if (HashEntries.dereference(hashEntryAdr))
-        {
-            if (hashEntryAdr == 0L)
-                throw new NullPointerException();
-
-            long bytes = HashEntries.getAllocLen(hashEntryAdr);
-            if (bytes == 0L)
-                throw new IllegalStateException();
-
-            long hash = HashEntries.getHash(hashEntryAdr);
-
-            Uns.free(hashEntryAdr);
-            segment(hash).freed(bytes);
-        }
     }
 
     //
@@ -763,7 +745,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                     throw new NoSuchElementException();
 
                 segment.removeEntry(lastHashEntryAdr);
-                dereference(lastHashEntryAdr);
+                segment.dereference(lastHashEntryAdr);
                 lastHashEntryAdr = 0L;
             }
 
@@ -771,7 +753,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             {
                 if (lastHashEntryAdr != 0L)
                 {
-                    dereference(lastHashEntryAdr);
+                    segment.dereference(lastHashEntryAdr);
                     lastHashEntryAdr = 0L;
                 }
 
