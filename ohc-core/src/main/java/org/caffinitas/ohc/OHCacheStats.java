@@ -32,11 +32,13 @@ public final class OHCacheStats
     private final long putReplaceCount;
     private final long putFailCount;
     private final long removeCount;
+    private final long totalAllocated;
 
     public OHCacheStats(long hitCount, long missCount, long evictionCount,
                         long[] segmentSizes, long size, long capacity, long free,
                         long cleanupCount, long rehashCount,
-                        long putAddCount, long putReplaceCount, long putFailCount, long removeCount)
+                        long putAddCount, long putReplaceCount, long putFailCount, long removeCount,
+                        long totalAllocated)
     {
         this.hitCount = hitCount;
         this.missCount = missCount;
@@ -51,6 +53,7 @@ public final class OHCacheStats
         this.putReplaceCount = putReplaceCount;
         this.putFailCount = putFailCount;
         this.removeCount = removeCount;
+        this.totalAllocated = totalAllocated;
     }
 
     public long getCapacity()
@@ -133,6 +136,11 @@ public final class OHCacheStats
         return maxOf(segmentSizes);
     }
 
+    public long getTotalAllocated()
+    {
+        return totalAllocated;
+    }
+
     public String toString()
     {
         return Objects.toStringHelper(this)
@@ -147,6 +155,7 @@ public final class OHCacheStats
                       .add("put(add/replace/fail)", Long.toString(putAddCount)+'/'+putReplaceCount+'/'+putFailCount)
                       .add("removeCount", removeCount)
                       .add("segmentSizes(#/min/max/avg)", String.format("%d/%d/%d/%.2f", segmentSizes.length, getMinSegmentSize(), getMaxSegmentSize(), getAverageSegmentSize()))
+                      .add("totalAllocated", totalAllocated)
                       .toString();
     }
 

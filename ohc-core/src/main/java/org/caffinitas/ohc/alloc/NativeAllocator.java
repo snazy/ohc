@@ -55,4 +55,9 @@ public class NativeAllocator implements IAllocator
     {
         unsafe.freeMemory(peer);
     }
+
+    public long getTotalAllocated()
+    {
+        return 0L;
+    }
 }

@@ -87,9 +87,11 @@ public class JEMallocAllocator implements IAllocator
             LOGGER.warn("jemalloc is compiled with debug code - this leads to performance penalties");
         if (mallctlBool("config.fill"))
             LOGGER.warn("jemalloc is compiled with fill code - this leads to performance penalties");
+
+        getTotalAllocated();
     }
 
-    public long totalAllocated()
+    public long getTotalAllocated()
     {
         return mallctlSizeT("stats.allocated");
     }
@@ -109,7 +111,7 @@ public class JEMallocAllocator implements IAllocator
         Memory oldlenp = new Memory(NativeLong.SIZE);
         oldlenp.setNativeLong(0, new NativeLong(oldp.size()));
         int r = library.je_mallctl(name, oldp, oldlenp, null, 0);
-        return oldp.getNativeLong(0).longValue();
+        return r != 0 ? 0L : oldp.getNativeLong(0).longValue();
     }
 
     public long allocate(long size)

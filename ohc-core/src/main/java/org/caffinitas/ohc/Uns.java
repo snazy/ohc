@@ -52,7 +52,7 @@ final class Uns
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(Uns.class);
 
-    static final Unsafe unsafe;
+    private static final Unsafe unsafe;
     private static final IAllocator allocator;
 
     private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty("DEBUG_OFF_HEAP_MEMORY_ACCESS", "false"));
@@ -289,6 +289,11 @@ final class Uns
     {
         validate(address, offset, len);
         unsafe.setMemory(address + offset, len, val);
+    }
+
+    static long getTotalAllocated()
+    {
+        return allocator.getTotalAllocated();
     }
 
     static long allocate(long bytes)

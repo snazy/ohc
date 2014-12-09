@@ -372,7 +372,8 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
                                putAddCount(),
                                putReplaceCount(),
                                putFailCount,
-                               removeCount());
+                               removeCount(),
+                               Uns.getTotalAllocated());
     }
 
     private long putAddCount()
