@@ -213,10 +213,6 @@ final class OffHeapMap
             size++;
         }
 
-        // if replace() operation fail if key is not present yet
-        if (oldValueAdr != 0L)
-            return false;
-
         freeCapacity.addAndGet(-bytes);
 
         add(newHashEntryAdr);

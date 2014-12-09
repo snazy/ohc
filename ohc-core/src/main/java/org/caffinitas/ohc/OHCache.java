@@ -30,7 +30,7 @@ public interface OHCache<K, V> extends Closeable
 
     void put(K key, V value);
 
-    boolean replace(K key, V old, V value);
+    boolean addOrReplace(K key, V old, V value);
 
     boolean putIfAbsent(K k, V v);
 

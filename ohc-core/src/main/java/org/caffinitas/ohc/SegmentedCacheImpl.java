@@ -164,9 +164,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         put(k, v, false, null);
     }
 
-    public boolean replace(K key, V old, V value)
+    public boolean addOrReplace(K key, V old, V value)
     {
-        return put(key, value, true, old);
+        return put(key, value, false, old);
     }
 
     public boolean putIfAbsent(K k, V v)
