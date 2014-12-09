@@ -27,6 +27,11 @@ final class KeyBuffer extends AbstractDataOutput
     private int p;
     private long hash;
 
+    // TODO maybe move 'array' to off-heap - depends on actual use.
+    // pro: reduces heap pressure
+    // pro: harmonize code for key + value (de)serialization in DataIn/Output implementations
+    // con: puts pressure on jemalloc
+
     KeyBuffer(int size)
     {
         array = new byte[size];
