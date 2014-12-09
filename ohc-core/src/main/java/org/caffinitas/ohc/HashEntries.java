@@ -22,14 +22,6 @@ import static org.caffinitas.ohc.Util.*;
  */
 public final class HashEntries
 {
-    static void toOffHeap(KeyBuffer key, long hashEntryAdr, long blkOff)
-    {
-        long len = key.size();
-
-        byte[] arr = key.array();
-        Uns.copyMemory(arr, 0, hashEntryAdr, blkOff, len);
-    }
-
     static void init(long hash, long keyLen, long valueLen, long hashEntryAdr)
     {
         Uns.putLong(hashEntryAdr, ENTRY_OFF_HASH, hash);
@@ -67,7 +59,7 @@ public final class HashEntries
         for (; p <= serKeyLen - 8; p += 8, blkOff += 8)
             if (Uns.getLong(hashEntryAdr, blkOff) != Uns.getLong(newHashEntryAdr, blkOff))
                 return false;
-        for (; p <= serKeyLen; p ++, blkOff ++)
+        for (; p < serKeyLen; p ++, blkOff ++)
             if (Uns.getByte(hashEntryAdr, blkOff) != Uns.getByte(newHashEntryAdr, blkOff))
                 return false;
 

@@ -146,6 +146,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public V getIfPresent(K key)
     {
+        if (key == null)
+            throw new NullPointerException();
+
         KeyBuffer keySource = keySource(key);
 
         long hashEntryAdr = segment(keySource.hash()).getEntry(keySource);
@@ -169,6 +172,9 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     public boolean contains(K key)
     {
+        if (key == null)
+            throw new NullPointerException();
+
         KeyBuffer keySource = keySource(key);
 
         return segment(keySource.hash()).containsEntry(keySource);
@@ -186,10 +192,11 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     private PutResult put(K k, V v, boolean ifAbsent)
     {
-        KeyBuffer key = keySource(k);
-        long keyLen = key.size();
+        if (k == null || v == null)
+            throw new NullPointerException();
+
+        long keyLen = keySerializer.serializedSize(k);
         long valueLen = valueSerializer.serializedSize(v);
-        long hash = key.hash();
 
         long bytes = allocLen(keyLen, valueLen);
 
@@ -199,16 +206,15 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             // entry too large to be inserted or OS is not able to provide enough memory
             putFailCount++;
 
-            removeInternal(key);
+            remove(k);
             return PutResult.FAIL;
         }
 
-        // initialize hash entry
-        HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
-        HashEntries.toOffHeap(key, hashEntryAdr, ENTRY_OFF_DATA);
+        HashEntryKeyOutput key = new HashEntryKeyOutput(hashEntryAdr, keyLen);
         try
         {
-            valueSerializer.serialize(v, new HashEntryValueOutput(hashEntryAdr, key.size(), valueLen));
+            keySerializer.serialize(k, key);
+            valueSerializer.serialize(v, new HashEntryValueOutput(hashEntryAdr, keyLen, valueLen));
         }
         catch (Error e)
         {
@@ -220,12 +226,21 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
             Uns.free(hashEntryAdr);
             throw new IOError(e);
         }
+        key.finish();
 
-        return segment(hash).putEntry(key, hashEntryAdr, bytes, ifAbsent) ? PutResult.OK : PutResult.KEY_PRESENT;
+        // initialize hash entry
+        HashEntries.init(key.hash(), keyLen, valueLen, hashEntryAdr);
+
+        long hash = key.hash();
+
+        return segment(hash).putEntry(hashEntryAdr, key.hash(), keyLen, bytes, ifAbsent) ? PutResult.OK : PutResult.KEY_PRESENT;
     }
 
     public void remove(K k)
     {
+        if (k == null)
+            throw new NullPointerException();
+
         KeyBuffer key = keySource(k);
 
         removeInternal(key);
@@ -244,8 +259,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     private KeyBuffer keySource(K o)
     {
-        if (keySerializer == null)
-            throw new NullPointerException("no keySerializer configured");
         int size = keySerializer.serializedSize(o);
 
         KeyBuffer key = new KeyBuffer(size);
@@ -535,7 +548,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         if (!readFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, kvLen)))
             return false;
 
-        segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen);
+        segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false);
 
         return true;
     }

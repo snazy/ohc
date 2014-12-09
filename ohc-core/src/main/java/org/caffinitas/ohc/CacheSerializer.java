@@ -28,7 +28,7 @@ public interface CacheSerializer<T>
      * Serialize the specified type into the specified DataOutput instance.
      *
      * @param t   type that needs to be serialized
-     * @param out OutputStream into which serialization needs to happen.
+     * @param out DataOutput into which serialization needs to happen.
      * @throws java.io.IOException
      */
     public void serialize(T t, DataOutput out) throws IOException;
@@ -36,12 +36,19 @@ public interface CacheSerializer<T>
     /**
      * Deserialize from the specified DataInput instance.
      *
-     * @param in InputStream from which deserialization needs to happen.
+     * @param in DataInput from which deserialization needs to happen.
      * @return the type that was deserialized
      * @throws IOException
      */
     public T deserialize(DataInput in) throws IOException;
 
+    /**
+     * Calculate the number of bytes that will be produced by {@link #serialize(Object, java.io.DataOutput)}
+     * for given object {@code t}.
+     *
+     * @param t object to calculate serialized size for
+     * @return serialized size of {@code t}
+     */
     public int serializedSize(T t);
 }
 

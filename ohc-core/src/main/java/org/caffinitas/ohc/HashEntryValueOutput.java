@@ -15,55 +15,16 @@
  */
 package org.caffinitas.ohc;
 
-import java.io.EOFException;
 import java.io.IOException;
 
 /**
  * Instances of this class are passed to {@link org.caffinitas.ohc.CacheSerializer#serialize(Object, java.io.DataOutput)}.
  */
-final class HashEntryValueOutput extends AbstractDataOutput
+final class HashEntryValueOutput extends AbstractOffHeapDataOutput
 {
-    private long blkAdr;
-    private long blkOff;
-    private final long blkEnd;
-
     HashEntryValueOutput(long hashEntryAdr, long keyLen, long valueLen)
     {
-        if (hashEntryAdr == 0L || keyLen < 0L || valueLen < 0L || valueLen > Integer.MAX_VALUE)
-            throw new IllegalArgumentException();
-
-        this.blkAdr = hashEntryAdr;
-        this.blkOff = Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen);
-        this.blkEnd = this.blkOff + valueLen;
-    }
-
-    private void assertAvail(int req) throws IOException
-    {
-        if (avail() < req || req < 0)
-            throw new EOFException();
-    }
-
-    private long avail()
-    {
-        return blkEnd - blkOff;
-    }
-
-    public void write(byte[] b, int off, int len) throws IOException
-    {
-        if (b == null || off < 0 || off + len > b.length || len < 0)
-            throw new IllegalArgumentException();
-
-        assertAvail(len);
-
-        Uns.copyMemory(b, off, blkAdr, blkOff, len);
-        blkOff += len;
-    }
-
-    public void write(int b) throws IOException
-    {
-        assertAvail(1);
-
-        Uns.putByte(blkAdr, blkOff++, (byte) b);
+        super(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), valueLen);
     }
 
     // Note: it is a very bad idea to override writeInt/Short/Long etc because the corresponding

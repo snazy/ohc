@@ -190,7 +190,7 @@ final class OffHeapMap
         return false;
     }
 
-    synchronized boolean putEntry(KeyBuffer key, long newHashEntryAdr, long bytes, boolean ifAbsent)
+    synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent)
     {
         if (freeCapacity - bytes < cleanUpTriggerFree)
             cleanUp();
@@ -199,11 +199,11 @@ final class OffHeapMap
 
         long hashEntryAdr;
         long prevEntryAdr = 0L;
-        for (hashEntryAdr = table.first(key.hash());
+        for (hashEntryAdr = table.first(hash);
              hashEntryAdr != 0L;
              prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
-            if (notSameKey(key, hashEntryAdr))
+            if (notSameKey(newHashEntryAdr, hash, keyLen, hashEntryAdr))
                 continue;
 
             // replace existing entry
@@ -233,43 +233,6 @@ final class OffHeapMap
             putReplaceCount++;
 
         return true;
-    }
-
-    synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes)
-    {
-        if (freeCapacity - bytes < cleanUpTriggerFree)
-            cleanUp();
-
-        freeCapacity -= bytes;
-
-        long hashEntryAdr;
-        long prevEntryAdr = 0L;
-        for (hashEntryAdr = table.first(hash);
-             hashEntryAdr != 0L;
-             prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
-        {
-            if (notSameKey(newHashEntryAdr, hash, keyLen, hashEntryAdr))
-                continue;
-
-            // replace existing entry
-
-            remove(hashEntryAdr, prevEntryAdr);
-            dereference(hashEntryAdr);
-
-            break;
-        }
-
-        if (hashEntryAdr == 0L)
-        {
-            if (size >= threshold)
-                rehash();
-
-            size++;
-        }
-
-        add(newHashEntryAdr);
-
-        return hashEntryAdr == 0L;
     }
 
     synchronized void clear()
