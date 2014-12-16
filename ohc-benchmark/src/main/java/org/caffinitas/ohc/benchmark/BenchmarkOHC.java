@@ -131,7 +131,7 @@ public class BenchmarkOHC
             long capacity = Long.parseLong(cmd.getOptionValue(CAPACITY, "" + (1024 * 1024 * 1024)));
             int hashTableSize = Integer.parseInt(cmd.getOptionValue(HASH_TABLE_SIZE, "0"));
             int segmentCount = Integer.parseInt(cmd.getOptionValue(SEGMENT_COUNT, "0"));
-            double loadFactor = Double.parseDouble(cmd.getOptionValue(LOAD_FACTOR, "0"));
+            float loadFactor = Float.parseFloat(cmd.getOptionValue(LOAD_FACTOR, "0"));
 
             double readWriteRatio = Double.parseDouble(cmd.getOptionValue(READ_WRITE_RATIO, ".5"));
             Distribution readKeyDist = parseDistribution(cmd.getOptionValue(READ_KEY_DIST, DEFAULT_KEY_DIST));
@@ -366,7 +366,7 @@ public class BenchmarkOHC
             HelpFormatter formatter = new HelpFormatter();
             String help = "";
             for (String s : OptionDistribution.help())
-                help = help + "\n" + s;
+                help = help + '\n' + s;
             formatter.printHelp(160, "BenchmarkOHC", null, options, help);
             System.exit(-1);
         }
