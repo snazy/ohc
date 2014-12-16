@@ -143,9 +143,7 @@ public class BenchmarkOHC
                          "   warm-up-secs: %d%n" +
                          "   idle-secs   : %d%n" +
                          "   runtime-secs: %d%n",
-                         threads,
-                         duration,
-                         warmUpSecs, coldSleepSecs);
+                         threads, warmUpSecs, coldSleepSecs, duration);
 
             printMessage("Initializing OHC cache...");
             cache = OHCacheBuilder.<Long, byte[]>newBuilder()

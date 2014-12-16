@@ -248,7 +248,6 @@ public class CrossCheckTest
             c940[i] = (char) ('A' + i % 26);
         String v = new String(c940);
 
-        // Build cache with 64MB capacity and trigger on less than 8 MB free capacity
         try (OHCache<Integer, String> cache = cache(1, -1, -1, 8192))
         {
             cache.put(88, v);
