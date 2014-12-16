@@ -19,7 +19,6 @@ import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.io.UTFDataFormatException;
 
 abstract class AbstractDataInput implements DataInput
 {
@@ -41,7 +40,7 @@ abstract class AbstractDataInput implements DataInput
 
     void assertAvail(int req) throws IOException
     {
-        if (avail() < req || req < 0)
+        if (available() < req || req < 0)
             throw new EOFException();
     }
 
@@ -59,6 +58,7 @@ abstract class AbstractDataInput implements DataInput
         assertAvail(len);
 
         Uns.copyMemory(blkAdr, blkOff, b, off, len);
+        blkOff += len;
     }
 
     public byte readByte() throws IOException

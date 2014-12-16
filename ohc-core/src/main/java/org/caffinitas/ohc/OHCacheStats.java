@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import java.util.Arrays;
+
 import com.google.common.base.Objects;
 
 public final class OHCacheStats
@@ -174,5 +176,47 @@ public final class OHCacheStats
         for (long l : arr)
             r += l;
         return r / arr.length;
+    }
+
+    public boolean equals(Object o)
+    {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        OHCacheStats that = (OHCacheStats) o;
+
+        if (capacity != that.capacity) return false;
+        if (evictionCount != that.evictionCount) return false;
+        if (free != that.free) return false;
+        if (hitCount != that.hitCount) return false;
+        if (missCount != that.missCount) return false;
+        if (putAddCount != that.putAddCount) return false;
+        if (putFailCount != that.putFailCount) return false;
+        if (putReplaceCount != that.putReplaceCount) return false;
+//        if (rehashCount != that.rehashCount) return false;
+        if (removeCount != that.removeCount) return false;
+        if (size != that.size) return false;
+//        if (totalAllocated != that.totalAllocated) return false;
+        if (!Arrays.equals(segmentSizes, that.segmentSizes)) return false;
+
+        return true;
+    }
+
+    public int hashCode()
+    {
+        int result = (int) (hitCount ^ (hitCount >>> 32));
+        result = 31 * result + (int) (missCount ^ (missCount >>> 32));
+        result = 31 * result + (int) (evictionCount ^ (evictionCount >>> 32));
+        result = 31 * result + Arrays.hashCode(segmentSizes);
+        result = 31 * result + (int) (capacity ^ (capacity >>> 32));
+        result = 31 * result + (int) (free ^ (free >>> 32));
+        result = 31 * result + (int) (size ^ (size >>> 32));
+//        result = 31 * result + (int) (rehashCount ^ (rehashCount >>> 32));
+        result = 31 * result + (int) (putAddCount ^ (putAddCount >>> 32));
+        result = 31 * result + (int) (putReplaceCount ^ (putReplaceCount >>> 32));
+        result = 31 * result + (int) (putFailCount ^ (putFailCount >>> 32));
+        result = 31 * result + (int) (removeCount ^ (removeCount >>> 32));
+//        result = 31 * result + (int) (totalAllocated ^ (totalAllocated >>> 32));
+        return result;
     }
 }

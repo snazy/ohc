@@ -17,7 +17,7 @@ package org.caffinitas.ohc;
 
 import java.io.IOException;
 
-import static org.caffinitas.ohc.Util.*;
+import static org.caffinitas.ohc.Util.roundUpTo8;
 
 /**
  * Instances of this class are passed to {@link org.caffinitas.ohc.CacheSerializer#deserialize(java.io.DataInput)}.

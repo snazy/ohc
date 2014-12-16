@@ -25,18 +25,18 @@ import java.io.IOException;
 public interface CacheSerializer<T>
 {
     /**
-     * Serialize the specified type into the specified DataOutput instance.
+     * Serialize the specified type into the specified {@code DataOutput} instance.
      *
      * @param t   type that needs to be serialized
-     * @param out DataOutput into which serialization needs to happen.
+     * @param out {@code DataOutput} into which serialization needs to happen.
      * @throws java.io.IOException
      */
     public void serialize(T t, DataOutput out) throws IOException;
 
     /**
-     * Deserialize from the specified DataInput instance.
+     * Deserialize from the specified {@code DataInput} instance.
      *
-     * @param in DataInput from which deserialization needs to happen.
+     * @param in {@code DataInput} from which deserialization needs to happen.
      * @return the type that was deserialized
      * @throws IOException
      */

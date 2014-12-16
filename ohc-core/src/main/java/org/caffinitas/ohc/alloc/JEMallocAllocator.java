@@ -91,7 +91,7 @@ public class JEMallocAllocator implements IAllocator
 
     public long getTotalAllocated()
     {
-        return mallctlSizeT("stats.allocated");
+        return mallctlSizeT("stats.allocated") + mallctlSizeT("stats.huge.allocated");
     }
 
     private boolean mallctlBool(String name)

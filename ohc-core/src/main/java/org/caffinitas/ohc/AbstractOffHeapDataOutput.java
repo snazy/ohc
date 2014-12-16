@@ -20,7 +20,7 @@ import java.io.IOException;
 
 abstract class AbstractOffHeapDataOutput extends AbstractDataOutput
 {
-    protected long blkAdr;
+    long blkAdr;
     protected long blkOff;
     protected final long blkEnd;
 
@@ -40,7 +40,7 @@ abstract class AbstractOffHeapDataOutput extends AbstractDataOutput
             throw new EOFException();
     }
 
-    private long avail()
+    long avail()
     {
         return blkEnd - blkOff;
     }

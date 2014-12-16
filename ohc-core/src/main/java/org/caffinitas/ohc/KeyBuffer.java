@@ -15,7 +15,7 @@
  */
 package org.caffinitas.ohc;
 
-import java.io.IOException;
+import java.util.Arrays;
 
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
@@ -71,19 +71,19 @@ final class KeyBuffer extends AbstractDataOutput
         p += len;
     }
 
-    public void writeShort(int v) throws IOException
+    public void writeShort(int v)
     {
         write((v >>> 8) & 0xFF);
         write(v & 0xFF);
     }
 
-    public void writeChar(int v) throws IOException
+    public void writeChar(int v)
     {
         write((v >>> 8) & 0xFF);
         write(v & 0xFF);
     }
 
-    public void writeInt(int v) throws IOException
+    public void writeInt(int v)
     {
         write((v >>> 24) & 0xFF);
         write((v >>> 16) & 0xFF);
@@ -91,7 +91,7 @@ final class KeyBuffer extends AbstractDataOutput
         write(v & 0xFF);
     }
 
-    public void writeLong(long v) throws IOException
+    public void writeLong(long v)
     {
         write((int) ((v >>> 56) & 0xFF));
         write((int) ((v >>> 48) & 0xFF));
@@ -103,13 +103,30 @@ final class KeyBuffer extends AbstractDataOutput
         write((int) (v & 0xFF));
     }
 
-    public void writeFloat(float v) throws IOException
+    public void writeFloat(float v)
     {
         writeInt(Float.floatToIntBits(v));
     }
 
-    public void writeDouble(double v) throws IOException
+    public void writeDouble(double v)
     {
         writeLong(Double.doubleToLongBits(v));
+    }
+
+    public boolean equals(Object o)
+    {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        KeyBuffer keyBuffer = (KeyBuffer) o;
+
+        if (!Arrays.equals(array, keyBuffer.array)) return false;
+
+        return true;
+    }
+
+    public int hashCode()
+    {
+        return (int) hash;
     }
 }

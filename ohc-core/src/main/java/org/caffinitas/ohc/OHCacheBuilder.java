@@ -18,15 +18,16 @@ package org.caffinitas.ohc;
 public class OHCacheBuilder<K, V>
 {
     private int segmentCount;
-    private int hashTableSize;
+    private int hashTableSize = 8192;
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
-    private double loadFactor;
-    private double maxEntrySize;
+    private float loadFactor = .75f;
+    private long maxEntrySize;
 
     private OHCacheBuilder()
     {
+        segmentCount = OffHeapMap.roundUpToPowerOf2(Runtime.getRuntime().availableProcessors() * 2);
     }
 
     public static <K, V> OHCacheBuilder<K, V> newBuilder()
@@ -36,7 +37,7 @@ public class OHCacheBuilder<K, V>
 
     public OHCache<K, V> build()
     {
-        return new SegmentedCacheImpl<>(this);
+        return new OHCacheImpl<>(this);
     }
 
     public int getHashTableSize()
@@ -94,23 +95,23 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
-    public double getLoadFactor()
+    public float getLoadFactor()
     {
         return loadFactor;
     }
 
-    public OHCacheBuilder<K, V> loadFactor(double loadFactor)
+    public OHCacheBuilder<K, V> loadFactor(float loadFactor)
     {
         this.loadFactor = loadFactor;
         return this;
     }
 
-    public double getMaxEntrySize()
+    public long getMaxEntrySize()
     {
         return maxEntrySize;
     }
 
-    public OHCacheBuilder<K, V> maxEntrySize(double maxEntrySize)
+    public OHCacheBuilder<K, V> maxEntrySize(long maxEntrySize)
     {
         this.maxEntrySize = maxEntrySize;
         return this;

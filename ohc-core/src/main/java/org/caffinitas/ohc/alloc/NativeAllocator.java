@@ -58,6 +58,6 @@ public class NativeAllocator implements IAllocator
 
     public long getTotalAllocated()
     {
-        return 0L;
+        return -1L;
     }
 }

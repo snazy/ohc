@@ -15,7 +15,15 @@
  */
 package org.caffinitas.ohc;
 
-import static org.caffinitas.ohc.Util.*;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_HASH;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_KEY_LENGTH;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_LRU_NEXT;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_LRU_PREV;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_NEXT;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_REFCOUNT;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_VALUE_LENGTH;
+import static org.caffinitas.ohc.Util.allocLen;
 
 /**
  * Encapsulates access to hash entries.

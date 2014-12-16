@@ -21,7 +21,8 @@ import java.nio.channels.WritableByteChannel;
 
 import org.xerial.snappy.Snappy;
 
-import static org.caffinitas.ohc.Util.*;
+import static org.caffinitas.ohc.Util.HEADER_COMPRESSED;
+import static org.caffinitas.ohc.Util.writeFully;
 
 final class CompressingOutputChannel implements WritableByteChannel
 {
@@ -52,7 +53,7 @@ final class CompressingOutputChannel implements WritableByteChannel
         buffer.clear();
     }
 
-    public void close() throws IOException
+    public void close()
     {
         if (buffer == null)
             return;

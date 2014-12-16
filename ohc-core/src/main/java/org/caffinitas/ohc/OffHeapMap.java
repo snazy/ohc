@@ -18,7 +18,7 @@ package org.caffinitas.ohc;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.codahale.metrics.Histogram;
+import org.caffinitas.ohc.histo.HistogramBuilder;
 
 import static org.caffinitas.ohc.Util.BUCKET_ENTRY_LEN;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
@@ -42,7 +42,7 @@ final class OffHeapMap
     private long removeCount;
 
     private long threshold;
-    private final double loadFactor;
+    private final float loadFactor;
 
     private long rehashes;
     private long evictedEntries;
@@ -62,9 +62,9 @@ final class OffHeapMap
         if (table == null)
             throw new RuntimeException("unable to allocate off-heap memory for segment");
 
-        double lf = builder.getLoadFactor();
+        float lf = builder.getLoadFactor();
         if (lf <= .0d)
-            lf = .75d;
+            lf = .75f;
         this.loadFactor = lf;
         threshold = (long) ((double) table.size() * loadFactor);
     }
@@ -174,9 +174,6 @@ final class OffHeapMap
 
     synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
     {
-        while (freeCapacity.get() < bytes)
-            removeOldest();
-
         long hashEntryAdr;
         long prevEntryAdr = 0L;
         for (hashEntryAdr = table.first(hash);
@@ -204,6 +201,10 @@ final class OffHeapMap
 
             break;
         }
+
+        while (freeCapacity.get() < bytes)
+            if (!removeOldest())
+                break;
 
         if (hashEntryAdr == 0L)
         {
@@ -289,7 +290,7 @@ final class OffHeapMap
         }
     }
 
-    private boolean notSameKey(KeyBuffer key, long hashEntryAdr)
+    private static boolean notSameKey(KeyBuffer key, long hashEntryAdr)
     {
         long hashEntryHash = HashEntries.getHash(hashEntryAdr);
         if (hashEntryHash != key.hash())
@@ -300,7 +301,7 @@ final class OffHeapMap
                || !HashEntries.compareKey(hashEntryAdr, key, serKeyLen);
     }
 
-    private boolean notSameKey(long newHashEntryAdr, long newHash, long newKeyLen, long hashEntryAdr)
+    private static boolean notSameKey(long newHashEntryAdr, long newHash, long newKeyLen, long hashEntryAdr)
     {
         long hashEntryHash = HashEntries.getHash(hashEntryAdr);
         if (hashEntryHash != newHash)
@@ -338,7 +339,7 @@ final class OffHeapMap
                 newTable.addLinkAsHead(HashEntries.getHash(hashEntryAdr), hashEntryAdr);
             }
 
-        threshold = (long) ((double) newTable.size() * loadFactor);
+        threshold = (long) ((float) newTable.size() * loadFactor);
         table = newTable;
         rehashes++;
     }
@@ -364,7 +365,7 @@ final class OffHeapMap
         return r;
     }
 
-    double loadFactor()
+    float loadFactor()
     {
         return loadFactor;
     }
@@ -374,9 +375,9 @@ final class OffHeapMap
         return table.size();
     }
 
-    synchronized void updateBucketHistogram(Histogram h)
+    synchronized void updateBucketHistogram(HistogramBuilder builder)
     {
-        table.updateBucketHistogram(h);
+        table.updateBucketHistogram(builder);
     }
 
     synchronized void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
@@ -491,14 +492,14 @@ final class OffHeapMap
             return mask + 1;
         }
 
-        void updateBucketHistogram(Histogram h)
+        void updateBucketHistogram(HistogramBuilder h)
         {
             for (int i = 0; i < size(); i++)
             {
                 int len = 0;
                 for (long adr = first(i); adr != 0L; adr = HashEntries.getNext(adr))
                     len++;
-                h.update(len);
+                h.add(len);
             }
         }
     }
@@ -585,22 +586,22 @@ final class OffHeapMap
             lruTail = hashEntryAdr;
     }
 
-    private long getLruNext(long hashEntryAdr)
+    private static long getLruNext(long hashEntryAdr)
     {
         return HashEntries.getLRUNext(hashEntryAdr);
     }
 
-    private long getLruPrev(long hashEntryAdr)
+    private static long getLruPrev(long hashEntryAdr)
     {
         return HashEntries.getLRUPrev(hashEntryAdr);
     }
 
-    private void setLruNext(long hashEntryAdr, long next)
+    private static void setLruNext(long hashEntryAdr, long next)
     {
         HashEntries.setLRUNext(hashEntryAdr, next);
     }
 
-    private void setLruPrev(long hashEntryAdr, long prev)
+    private static void setLruPrev(long hashEntryAdr, long prev)
     {
         HashEntries.setLRUPrev(hashEntryAdr, prev);
     }

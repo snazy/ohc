@@ -22,25 +22,30 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.collect.AbstractIterator;
-
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.UniformReservoir;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.caffinitas.ohc.Util.*;
+import org.caffinitas.ohc.histo.EstimatedHistogram;
+import org.caffinitas.ohc.histo.HistogramBuilder;
 
-public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
+import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
+import static org.caffinitas.ohc.Util.ENTRY_OFF_HASH;
+import static org.caffinitas.ohc.Util.HEADER_UNCOMPRESSED;
+import static org.caffinitas.ohc.Util.HEADER_UNCOMPRESSED_WRONG;
+import static org.caffinitas.ohc.Util.allocLen;
+import static org.caffinitas.ohc.Util.readFully;
+import static org.caffinitas.ohc.Util.roundUpTo8;
+import static org.caffinitas.ohc.Util.writeFully;
+
+public final class OHCacheImpl<K, V> implements OHCache<K, V>
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(SegmentedCacheImpl.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(OHCacheImpl.class);
 
     private final CacheSerializer<K> keySerializer;
     private final CacheSerializer<V> valueSerializer;
@@ -51,12 +56,12 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
     private final long maxEntrySize;
 
-    private final long capacity;
+    private long capacity;
     private final AtomicLong freeCapacity;
 
     private volatile long putFailCount;
 
-    public SegmentedCacheImpl(OHCacheBuilder<K, V> builder)
+    public OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
         long capacity = builder.getCapacity();
         if (capacity <= 0L)
@@ -86,17 +91,14 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         }
 
         // bit-mask for segment part of hash
-        int bitNum = bitNum(segments) - 1;
+        int bitNum = Util.bitNum(segments) - 1;
         this.segmentShift = 64 - bitNum;
         this.segmentMask = ((long) segments - 1) << segmentShift;
 
         // calculate max entry size
-        double mes = builder.getMaxEntrySize();
-        long maxEntrySize;
-        if (mes <= 0d || mes >= 1d)
-            maxEntrySize = capacity / segments / 128;
-        else
-            maxEntrySize = (long) (mes * capacity / segments);
+        long maxEntrySize = builder.getMaxEntrySize();
+        if (maxEntrySize > capacity / segments)
+            throw new IllegalArgumentException("Illegal max entry size " + maxEntrySize);
         this.maxEntrySize = maxEntrySize;
 
         this.keySerializer = builder.getKeySerializer();
@@ -108,14 +110,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("OHC instance with {} segments and capacity of {} created.", segments, capacity);
-    }
-
-    private static int bitNum(long val)
-    {
-        int bit = 0;
-        for (; val != 0L; bit++)
-            val >>>= 1;
-        return bit;
     }
 
     //
@@ -212,7 +206,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         {
 
             long hashEntryAdr;
-            if (bytes > maxEntrySize || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
+            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
             {
                 // entry too large to be inserted or OS is not able to provide enough memory
                 putFailCount++;
@@ -298,57 +292,6 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     // maintenance
     //
 
-    public Iterator<K> hotKeyIterator(int n)
-    {
-        // hotN implementation does only return a (good) approximation - not necessarily the exact hotN
-        // since it iterates over the all segments and takes a fraction of 'n' from them.
-        // This implementation may also return more results than expected just to keep it simple
-        // (it does not really matter if you request 5000 keys and e.g. get 5015).
-
-        final int perMap = n / maps.length + 1;
-
-        return new AbstractIterator<K>()
-        {
-            int mapIndex;
-
-            OffHeapMap segment;
-            long[] hotPerMap;
-            int subIndex;
-
-            protected K computeNext()
-            {
-                while (true)
-                {
-                    if (hotPerMap != null && subIndex < hotPerMap.length)
-                    {
-                        long hashEntryAdr = hotPerMap[subIndex++];
-                        if (hashEntryAdr != 0L)
-                            try
-                            {
-                                return keySerializer.deserialize(new HashEntryKeyInput(hashEntryAdr));
-                            }
-                            catch (IOException e)
-                            {
-                                LOGGER.error("Key serializer failed to deserialize", e);
-                                continue;
-                            }
-                            finally
-                            {
-                                segment.dereference(hashEntryAdr);
-                            }
-                    }
-
-                    if (mapIndex == maps.length)
-                        return endOfData();
-
-                    segment = maps[mapIndex++];
-                    hotPerMap = segment.hotN(perMap);
-                    subIndex = 0;
-                }
-            }
-        };
-    }
-
     public void clear()
     {
         for (OffHeapMap map : maps)
@@ -359,13 +302,16 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     // state
     //
 
-
     public void setCapacity(long capacity)
     {
-        throw new UnsupportedOperationException();
+        if (capacity < this.capacity)
+            throw new IllegalArgumentException("New capacity " + capacity + " must not be smaller than current capacity");
+        long diff = capacity - this.capacity;
+        this.capacity = capacity;
+        freeCapacity.addAndGet(diff);
     }
 
-    public void close() throws IOException
+    public void close()
     {
         clear();
 
@@ -484,7 +430,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return maps.length;
     }
 
-    public double loadFactor()
+    public float loadFactor()
     {
         return maps[0].loadFactor();
     }
@@ -505,12 +451,12 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return r;
     }
 
-    public Histogram getBucketHistogram()
+    public EstimatedHistogram getBucketHistogram()
     {
-        Histogram h = new Histogram(new UniformReservoir());
+        HistogramBuilder builder = new HistogramBuilder();
         for (OffHeapMap map : maps)
-            map.updateBucketHistogram(h);
-        return h;
+            map.updateBucketHistogram(builder);
+        return builder.buildWithStdevRangesAroundMean();
     }
 
     //
@@ -532,7 +478,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         long kvLen = roundUpTo8(keyLen) + valueLen;
         long totalLen = kvLen + ENTRY_OFF_DATA;
         long hashEntryAdr;
-        if (totalLen > maxEntrySize || (hashEntryAdr = Uns.allocate(totalLen)) == 0L)
+        if ((maxEntrySize > 0L && totalLen > maxEntrySize) || (hashEntryAdr = Uns.allocate(totalLen)) == 0L)
         {
             if (channel instanceof SeekableByteChannel)
             {
@@ -559,7 +505,10 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
         // read key + value
         if (!readFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, kvLen)))
+        {
+            Uns.free(hashEntryAdr);
             return false;
+        }
 
         if (!segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, 0L, 0L))
             Uns.free(hashEntryAdr);
@@ -574,7 +523,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         OffHeapMap segment = segment(keySource.hash());
         long hashEntryAdr = segment.getEntry(keySource);
 
-        return hashEntryAdr != 0L && serializeEntry(segment, channel, hashEntryAdr);
+        return hashEntryAdr != 0L && serializeEntry(segment, channel, hashEntryAdr, true);
     }
 
     public int deserializeEntries(ReadableByteChannel channel) throws IOException
@@ -604,7 +553,17 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return count;
     }
 
-    public int serializeHotN(int n, WritableByteChannel channel) throws IOException
+    public int serializeHotNEntries(int n, WritableByteChannel channel) throws IOException
+    {
+        return serializeHotN(n, channel, true);
+    }
+
+    public int serializeHotNKeys(int n, WritableByteChannel channel) throws IOException
+    {
+        return serializeHotN(n, channel, false);
+    }
+
+    private int serializeHotN(int n, WritableByteChannel channel, boolean entries) throws IOException
     {
         // hotN implementation does only return a (good) approximation - not necessarily the exact hotN
         // since it iterates over the all segments and takes a fraction of 'n' from them.
@@ -641,7 +600,7 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
 
                     try
                     {
-                        serializeEntry(map, channel, hashEntryAdr);
+                        serializeEntry(map, channel, hashEntryAdr, entries);
                     }
                     finally
                     {
@@ -662,15 +621,17 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
         return cnt;
     }
 
-    private boolean serializeEntry(OffHeapMap segment, WritableByteChannel channel, long hashEntryAdr) throws IOException
+    private static boolean serializeEntry(OffHeapMap segment, WritableByteChannel channel, long hashEntryAdr, boolean entries) throws IOException
     {
         try
         {
             long keyLen = HashEntries.getKeyLen(hashEntryAdr);
             long valueLen = HashEntries.getValueLen(hashEntryAdr);
 
+            long totalLen = 3 * 8L + (entries ? roundUpTo8(keyLen) + valueLen : keyLen);
+
             // write hash, keyLen, valueLen + key + value
-            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_HASH, 3 * 8L + roundUpTo8(keyLen) + valueLen));
+            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_HASH, totalLen));
 
             return true;
         }
@@ -704,107 +665,226 @@ public final class SegmentedCacheImpl<K, V> implements OHCache<K, V>
     }
 
     //
-    // key iterator
+    // key iterators
     //
 
-    public Iterator<K> keyIterator()
+    public CloseableIterator<K> hotKeyIterator(int n)
     {
-        return new Iterator<K>()
+        return new AbstractHotKeyIterator<K>(n)
         {
-            private int segmentIndex;
-            private OffHeapMap segment;
-
-            private int mapSegmentCount;
-            private int mapSegmentIndex;
-
-            private final List<Long> hashEntryAdrs = new ArrayList<>(1024);
-            private int listIndex;
-
-            private boolean eod;
-            private K next;
-
-            private long lastHashEntryAdr;
-
-            public boolean hasNext()
+            K buildResult(long hashEntryAdr)
             {
-                if (eod)
-                    return false;
-
-                if (next == null)
-                    next = computeNext();
-
-                return next != null;
-            }
-
-            public K next()
-            {
-                if (eod)
-                    throw new NoSuchElementException();
-
-                if (next == null)
-                    next = computeNext();
-                K r = next;
-                next = null;
-                if (!eod)
-                    return r;
-                throw new NoSuchElementException();
-            }
-
-            public void remove()
-            {
-                if (eod)
-                    throw new NoSuchElementException();
-
-                segment.removeEntry(lastHashEntryAdr);
-                segment.dereference(lastHashEntryAdr);
-                lastHashEntryAdr = 0L;
-            }
-
-            private K computeNext()
-            {
-                if (lastHashEntryAdr != 0L)
+                try
                 {
-                    segment.dereference(lastHashEntryAdr);
-                    lastHashEntryAdr = 0L;
+                    return keySerializer.deserialize(new HashEntryKeyInput(hashEntryAdr));
                 }
-
-                while (true)
+                catch (IOException e)
                 {
-                    if (mapSegmentIndex >= mapSegmentCount)
-                    {
-                        if (segmentIndex == maps.length)
-                        {
-                            eod = true;
-                            return null;
-                        }
-                        segment = maps[segmentIndex++];
-                        mapSegmentCount = segment.hashTableSize();
-                        mapSegmentIndex = 0;
-                    }
-
-                    if (listIndex == hashEntryAdrs.size())
-                    {
-                        hashEntryAdrs.clear();
-                        segment.getEntryAddresses(mapSegmentIndex, 1024, hashEntryAdrs);
-                        mapSegmentIndex += 1024;
-                        listIndex = 0;
-                    }
-
-                    if (listIndex < hashEntryAdrs.size())
-                    {
-                        long hashEntryAdr = hashEntryAdrs.get(listIndex++);
-                        try
-                        {
-                            lastHashEntryAdr = hashEntryAdr;
-                            return keySerializer.deserialize(new HashEntryKeyInput(hashEntryAdr));
-                        }
-                        catch (IOException e)
-                        {
-                            throw new IOError(e);
-                        }
-                    }
+                    throw new IOError(e);
                 }
             }
         };
+    }
+
+    public CloseableIterator<ByteBuffer> hotKeyBufferIterator(int n)
+    {
+        return new AbstractHotKeyIterator<ByteBuffer>(n)
+        {
+            ByteBuffer buildResult(long hashEntryAdr)
+            {
+                return Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr));
+            }
+        };
+    }
+
+    public CloseableIterator<K> keyIterator()
+    {
+        return new AbstractKeyIterator<K>()
+        {
+            K buildResult(long hashEntryAdr)
+            {
+                try
+                {
+                    return keySerializer.deserialize(new HashEntryKeyInput(hashEntryAdr));
+                }
+                catch (IOException e)
+                {
+                    throw new IOError(e);
+                }
+            }
+        };
+    }
+
+    public CloseableIterator<ByteBuffer> keyBufferIterator()
+    {
+        return new AbstractKeyIterator<ByteBuffer>()
+        {
+            ByteBuffer buildResult(long hashEntryAdr)
+            {
+                return Uns.directBufferFor(hashEntryAdr, ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr));
+            }
+        };
+    }
+
+    private abstract class AbstractKeyIterator<R> implements CloseableIterator<R>
+    {
+        private int segmentIndex;
+        private OffHeapMap segment;
+
+        private int mapSegmentCount;
+        private int mapSegmentIndex;
+
+        private final List<Long> hashEntryAdrs = new ArrayList<>(1024);
+        private int listIndex;
+
+        private boolean eod;
+        private R next;
+
+        private OffHeapMap lastSegment;
+        private long lastHashEntryAdr;
+
+        public void close()
+        {
+            if (lastHashEntryAdr != 0L)
+            {
+                lastSegment.dereference(lastHashEntryAdr);
+                lastHashEntryAdr = 0L;
+                lastSegment = null;
+            }
+        }
+
+        public boolean hasNext()
+        {
+            if (eod)
+                return false;
+
+            if (next == null)
+                next = computeNext();
+
+            return next != null;
+        }
+
+        public R next()
+        {
+            if (eod)
+                throw new NoSuchElementException();
+
+            if (next == null)
+                next = computeNext();
+            R r = next;
+            next = null;
+            if (!eod)
+                return r;
+            throw new NoSuchElementException();
+        }
+
+        public void remove()
+        {
+            if (eod)
+                throw new NoSuchElementException();
+
+            lastSegment.removeEntry(lastHashEntryAdr);
+            close();
+        }
+
+        private R computeNext()
+        {
+            close();
+
+            while (true)
+            {
+                if (listIndex < hashEntryAdrs.size())
+                {
+                    long hashEntryAdr = hashEntryAdrs.get(listIndex++);
+                    lastSegment = segment;
+                    lastHashEntryAdr = hashEntryAdr;
+                    return buildResult(hashEntryAdr);
+                }
+
+                if (mapSegmentIndex >= mapSegmentCount)
+                {
+                    if (segmentIndex == maps.length)
+                    {
+                        eod = true;
+                        return null;
+                    }
+                    segment = maps[segmentIndex++];
+                    mapSegmentCount = segment.hashTableSize();
+                    mapSegmentIndex = 0;
+                }
+
+                if (listIndex == hashEntryAdrs.size())
+                {
+                    hashEntryAdrs.clear();
+                    segment.getEntryAddresses(mapSegmentIndex, 1024, hashEntryAdrs);
+                    mapSegmentIndex += 1024;
+                    listIndex = 0;
+                }
+
+            }
+        }
+
+        abstract R buildResult(long hashEntryAdr);
+    }
+
+    private abstract class AbstractHotKeyIterator<R> extends AbstractIterator<R> implements CloseableIterator<R>
+    {
+        private final int perMap;
+        int mapIndex;
+
+        OffHeapMap segment;
+        long[] hotPerMap;
+        int subIndex;
+
+        OffHeapMap lastSegment;
+        long lastHashEntryAdr;
+
+        public AbstractHotKeyIterator(int n)
+        {
+            // hotN implementation does only return a (good) approximation - not necessarily the exact hotN
+            // since it iterates over the all segments and takes a fraction of 'n' from them.
+            // This implementation may also return more results than expected just to keep it simple
+            // (it does not really matter if you request 5000 keys and e.g. get 5015).
+
+            this.perMap = n / maps.length + 1;
+        }
+
+        public void close()
+        {
+            if (lastHashEntryAdr != 0L)
+            {
+                lastSegment.dereference(lastHashEntryAdr);
+                lastHashEntryAdr = 0L;
+                lastSegment = null;
+            }
+        }
+
+        abstract R buildResult(long hashEntryAdr);
+
+        protected R computeNext()
+        {
+            close();
+
+            while (true)
+            {
+                if (hotPerMap != null && subIndex < hotPerMap.length)
+                {
+                    long hashEntryAdr = hotPerMap[subIndex++];
+                    if (hashEntryAdr != 0L)
+                    {
+                        lastSegment = segment;
+                        lastHashEntryAdr = hashEntryAdr;
+                        return buildResult(hashEntryAdr);
+                    }
+                }
+
+                if (mapIndex == maps.length)
+                    return endOfData();
+
+                segment = maps[mapIndex++];
+                hotPerMap = segment.hotN(perMap);
+                subIndex = 0;
+            }
+        }
     }
 }

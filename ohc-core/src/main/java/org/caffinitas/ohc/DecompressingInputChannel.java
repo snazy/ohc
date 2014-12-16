@@ -22,7 +22,9 @@ import java.nio.channels.ReadableByteChannel;
 
 import org.xerial.snappy.Snappy;
 
-import static org.caffinitas.ohc.Util.*;
+import static org.caffinitas.ohc.Util.HEADER_COMPRESSED;
+import static org.caffinitas.ohc.Util.HEADER_COMPRESSED_WRONG;
+import static org.caffinitas.ohc.Util.readFully;
 
 final class DecompressingInputChannel implements ReadableByteChannel
 {
@@ -71,7 +73,7 @@ final class DecompressingInputChannel implements ReadableByteChannel
         this.decompressedBuffer.position(decompressedBuffer.limit());
     }
 
-    public void close() throws IOException
+    public void close()
     {
         if (compressedBuffer == null)
             return;

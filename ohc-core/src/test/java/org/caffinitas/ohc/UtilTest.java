@@ -23,7 +23,7 @@ public class UtilTest
     static final long BIG = 2L << 40;
 
     @Test
-    public void roundUp8()
+    public void testRoundUp8()
     {
         Assert.assertEquals(Util.roundUpTo8(0), 0);
         Assert.assertEquals(Util.roundUpTo8(1), 8);
@@ -38,5 +38,22 @@ public class UtilTest
         Assert.assertEquals(Util.roundUpTo8(128), 128);
         Assert.assertEquals(Util.roundUpTo8(BIG + 121), BIG + 128);
         Assert.assertEquals(Util.roundUpTo8(BIG + 128), BIG + 128);
+    }
+
+    @Test
+    public void testBitNum()
+    {
+        Assert.assertEquals(Util.bitNum(0), 0);
+        Assert.assertEquals(Util.bitNum(1), 1);
+        Assert.assertEquals(Util.bitNum(2), 2);
+        Assert.assertEquals(Util.bitNum(4), 3);
+        Assert.assertEquals(Util.bitNum(8), 4);
+        Assert.assertEquals(Util.bitNum(16), 5);
+        Assert.assertEquals(Util.bitNum(32), 6);
+        Assert.assertEquals(Util.bitNum(64), 7);
+        Assert.assertEquals(Util.bitNum(128), 8);
+        Assert.assertEquals(Util.bitNum(256), 9);
+        Assert.assertEquals(Util.bitNum(1024), 11);
+        Assert.assertEquals(Util.bitNum(65536), 17);
     }
 }

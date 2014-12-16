@@ -91,4 +91,12 @@ abstract class Util
         }
         return true;
     }
+
+    static int bitNum(long val)
+    {
+        int bit = 0;
+        for (; val != 0L; bit++)
+            val >>>= 1;
+        return bit;
+    }
 }

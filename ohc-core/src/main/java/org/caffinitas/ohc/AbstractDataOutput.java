@@ -38,20 +38,22 @@ public abstract class AbstractDataOutput implements DataOutput
 
     public void writeBytes(String s) throws IOException
     {
-        int len = s.length();
-        for (int i = 0; i < len; i++)
-            write((byte) s.charAt(i));
+        throw new UnsupportedOperationException();
+//        int len = s.length();
+//        for (int i = 0; i < len; i++)
+//            write((byte) s.charAt(i));
     }
 
     public void writeChars(String s) throws IOException
     {
-        int len = s.length();
-        for (int i = 0; i < len; i++)
-        {
-            int v = s.charAt(i);
-            write((v >>> 8) & 0xFF);
-            write(v & 0xFF);
-        }
+        throw new UnsupportedOperationException();
+//        int len = s.length();
+//        for (int i = 0; i < len; i++)
+//        {
+//            int v = s.charAt(i);
+//            write((v >>> 8) & 0xFF);
+//            write(v & 0xFF);
+//        }
     }
 
     public void writeUTF(String str) throws IOException

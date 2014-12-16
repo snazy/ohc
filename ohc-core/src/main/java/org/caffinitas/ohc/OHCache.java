@@ -17,13 +17,13 @@ package org.caffinitas.ohc;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 
 import com.codahale.metrics.Histogram;
+import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 public interface OHCache<K, V> extends Closeable
 {
@@ -48,9 +48,31 @@ public interface OHCache<K, V> extends Closeable
 
     // iterators
 
-    Iterator<K> hotKeyIterator(int n);
+    /**
+     * Builds an iterator over the N most recently used keys returning deserialized objects.
+     * You must call {@code close()} on the returned iterator.
+     */
+    CloseableIterator<K> hotKeyIterator(int n);
 
-    Iterator<K> keyIterator();
+    /**
+     * Builds an iterator over all keys returning deserialized objects.
+     * You must call {@code close()} on the returned iterator.
+     */
+    CloseableIterator<K> keyIterator();
+
+    /**
+     * Builds an iterator over all keys returning direct byte buffers.
+     * Do not use a returned {@code ByteBuffer} after calling any method on the iterator.
+     * You must call {@code close()} on the returned iterator.
+     */
+    CloseableIterator<ByteBuffer> hotKeyBufferIterator(int n);
+
+    /**
+     * Builds an iterator over all keys returning direct byte buffers.
+     * Do not use a returned {@code ByteBuffer} after calling any method on the iterator.
+     * You must call {@code close()} on the returned iterator.
+     */
+    CloseableIterator<ByteBuffer> keyBufferIterator();
 
     // serialization
 
@@ -60,7 +82,9 @@ public interface OHCache<K, V> extends Closeable
 
     int deserializeEntries(ReadableByteChannel channel) throws IOException;
 
-    int serializeHotN(int n, WritableByteChannel channel) throws IOException;
+    int serializeHotNEntries(int n, WritableByteChannel channel) throws IOException;
+
+    int serializeHotNKeys(int n, WritableByteChannel channel) throws IOException;
 
     // statistics / information
 
@@ -72,7 +96,7 @@ public interface OHCache<K, V> extends Closeable
 
     long[] perSegmentSizes();
 
-    Histogram getBucketHistogram();
+    EstimatedHistogram getBucketHistogram();
 
     int segments();
 
@@ -82,7 +106,7 @@ public interface OHCache<K, V> extends Closeable
 
     long freeCapacity();
 
-    double loadFactor();
+    float loadFactor();
 
     OHCacheStats stats();
 

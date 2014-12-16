@@ -73,7 +73,7 @@ final class BufferedReadableByteChannel implements ReadableByteChannel
         return buffer != null;
     }
 
-    public void close() throws IOException
+    public void close()
     {
         buffer = null;
         Uns.free(bufferAddress);
