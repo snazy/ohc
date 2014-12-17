@@ -30,6 +30,7 @@ final class CompressingOutputChannel implements WritableByteChannel
     private final long bufferAddress;
     private final int uncompressedChunkSize;
     private ByteBuffer buffer;
+    private boolean closed;
 
     /**
      * @param delegate              channel to write to
@@ -59,7 +60,16 @@ final class CompressingOutputChannel implements WritableByteChannel
             return;
 
         this.buffer = null;
-        Uns.free(bufferAddress);
+        if (!closed)
+            Uns.free(bufferAddress);
+        closed = true;
+    }
+
+    protected void finalize() throws Throwable
+    {
+        if (!closed)
+            Uns.free(bufferAddress);
+        super.finalize();
     }
 
     public int write(ByteBuffer src) throws IOException

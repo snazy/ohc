@@ -58,7 +58,7 @@ final class OffHeapMap
             hts = 8192;
         if (hts < 256)
             hts = 256;
-        table = Table.create(roundUpToPowerOf2(hts));
+        table = Table.create((int) Util.roundUpToPowerOf2(hts, MAX_TABLE_SIZE));
         if (table == null)
             throw new RuntimeException("unable to allocate off-heap memory for segment");
 
@@ -204,7 +204,11 @@ final class OffHeapMap
 
         while (freeCapacity.get() < bytes)
             if (!removeOldest())
-                break;
+            {
+                if (hashEntryAdr != 0L)
+                    size--;
+                return false;
+            }
 
         if (hashEntryAdr == 0L)
         {
@@ -344,13 +348,6 @@ final class OffHeapMap
         rehashes++;
     }
 
-    static int roundUpToPowerOf2(int number)
-    {
-        return number >= MAX_TABLE_SIZE
-               ? MAX_TABLE_SIZE
-               : (number > 1) ? Integer.highestOneBit((number - 1) << 1) : 1;
-    }
-
     synchronized long[] hotN(int n)
     {
         long[] r = new long[n];
@@ -396,6 +393,7 @@ final class OffHeapMap
     {
         final int mask;
         final long address;
+        private boolean released;
 
         static Table create(int hashTableSize)
         {
@@ -421,6 +419,14 @@ final class OffHeapMap
         void release()
         {
             Uns.free(address);
+            released = true;
+        }
+
+        protected void finalize() throws Throwable
+        {
+            if (!released)
+                Uns.free(address);
+            super.finalize();
         }
 
         long first(long hash)

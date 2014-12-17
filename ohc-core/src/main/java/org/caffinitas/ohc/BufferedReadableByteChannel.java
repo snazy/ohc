@@ -24,6 +24,7 @@ final class BufferedReadableByteChannel implements ReadableByteChannel
     private final ReadableByteChannel delegate;
     private final long bufferAddress;
     private ByteBuffer buffer;
+    private boolean closed;
 
     BufferedReadableByteChannel(ReadableByteChannel delegate, int bufferSize) throws IOException
     {
@@ -76,6 +77,14 @@ final class BufferedReadableByteChannel implements ReadableByteChannel
     public void close()
     {
         buffer = null;
-        Uns.free(bufferAddress);
+        if (!closed)
+            Uns.free(bufferAddress);
+        closed = true;
+    }
+
+    protected void finalize() throws Throwable
+    {
+        close();
+        super.finalize();
     }
 }

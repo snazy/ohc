@@ -27,7 +27,7 @@ public class OHCacheBuilder<K, V>
 
     private OHCacheBuilder()
     {
-        segmentCount = OffHeapMap.roundUpToPowerOf2(Runtime.getRuntime().availableProcessors() * 2);
+        segmentCount = (int) Util.roundUpToPowerOf2(Runtime.getRuntime().availableProcessors() * 2, 1 << 30);
     }
 
     public static <K, V> OHCacheBuilder<K, V> newBuilder()

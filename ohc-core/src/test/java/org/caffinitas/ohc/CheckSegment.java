@@ -75,7 +75,10 @@ final class CheckSegment
         long sz = sizeOf(keyBuffer, data);
         while (freeCapacity.get() < sz)
             if (!evictOne())
-                break;
+            {
+                remove(keyBuffer);
+                return false;
+            }
 
         byte[] existing = map.get(keyBuffer);
         if (ifAbsent || old != null)

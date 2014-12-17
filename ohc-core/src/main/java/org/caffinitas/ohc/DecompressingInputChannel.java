@@ -33,6 +33,7 @@ final class DecompressingInputChannel implements ReadableByteChannel
     private final long compressedAddress;
     private ByteBuffer compressedBuffer;
     private ByteBuffer decompressedBuffer;
+    private boolean closed;
 
     /**
      * @param delegate       channel to read from
@@ -80,7 +81,16 @@ final class DecompressingInputChannel implements ReadableByteChannel
 
         this.compressedBuffer = null;
         this.decompressedBuffer = null;
-        Uns.free(compressedAddress);
+        if (!closed)
+            Uns.free(compressedAddress);
+        closed = true;
+    }
+
+    protected void finalize() throws Throwable
+    {
+        if (!closed)
+            Uns.free(compressedAddress);
+        super.finalize();
     }
 
     public int read(ByteBuffer dst) throws IOException

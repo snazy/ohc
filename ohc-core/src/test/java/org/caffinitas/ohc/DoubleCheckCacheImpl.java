@@ -256,14 +256,6 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
         check.setCapacity(capacity);
     }
 
-    public long weightedSize()
-    {
-        long rProd = prod.weightedSize();
-        long rCheck = check.weightedSize();
-        Assert.assertEquals(rCheck, rProd);
-        return rProd;
-    }
-
     public void close() throws IOException
     {
         prod.close();

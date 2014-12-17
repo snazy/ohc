@@ -26,6 +26,7 @@ final class BufferedWritableByteChannel implements WritableByteChannel
     private final WritableByteChannel delegate;
     private final long bufferAddress;
     private ByteBuffer buffer;
+    private boolean closed;
 
     BufferedWritableByteChannel(WritableByteChannel delegate, int bufferSize) throws IOException
     {
@@ -77,6 +78,15 @@ final class BufferedWritableByteChannel implements WritableByteChannel
         writeFully(delegate, buffer);
 
         buffer = null;
-        Uns.free(bufferAddress);
+        if (!closed)
+            Uns.free(bufferAddress);
+        closed = true;
+    }
+
+    protected void finalize() throws Throwable
+    {
+        if (!closed)
+            Uns.free(bufferAddress);
+        super.finalize();
     }
 }

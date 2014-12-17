@@ -700,16 +700,19 @@ public class CrossCheckTest
             cache.setCapacity(cap + TestUtils.ONE_MB);
             Assert.assertEquals(cache.capacity(), cap + TestUtils.ONE_MB);
             Assert.assertEquals(cache.freeCapacity(), free + TestUtils.ONE_MB);
-            try
-            {
-                cache.setCapacity(cache.capacity() - TestUtils.ONE_MB);
-                Assert.fail();
-            }
-            catch (IllegalArgumentException ignored)
-            {
-            }
-            Assert.assertEquals(cache.capacity(), cap + TestUtils.ONE_MB);
-            Assert.assertEquals(cache.freeCapacity(), free + TestUtils.ONE_MB);
+
+            cache.setCapacity(cap - TestUtils.ONE_MB);
+            Assert.assertEquals(cache.capacity(), cap - TestUtils.ONE_MB);
+            Assert.assertEquals(cache.freeCapacity(), free - TestUtils.ONE_MB);
+
+            cache.setCapacity(0L);
+            Assert.assertEquals(cache.capacity(), 0L);
+            Assert.assertTrue(cache.freeCapacity() < 0L);
+
+            Assert.assertEquals(cache.size(), 1);
+            cache.put(42, "bar");
+            Assert.assertEquals(cache.size(), 0);
+            Assert.assertEquals(cache.freeCapacity(), 0L);
         }
     }
 

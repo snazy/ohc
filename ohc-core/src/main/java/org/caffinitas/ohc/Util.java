@@ -103,4 +103,11 @@ final class Util
             val >>>= 1;
         return bit;
     }
+
+    static long roundUpToPowerOf2(long number, long max)
+    {
+        return number >= max
+               ? max
+               : (number > 1) ? Long.highestOneBit((number - 1) << 1) : 1;
+    }
 }

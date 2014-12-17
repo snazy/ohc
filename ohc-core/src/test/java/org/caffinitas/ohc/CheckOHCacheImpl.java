@@ -486,16 +486,11 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
     public void setCapacity(long capacity)
     {
-        if (capacity < this.capacity)
+        if (capacity < 0L)
             throw new IllegalArgumentException("New capacity " + capacity + " must not be smaller than current capacity");
         long diff = capacity - this.capacity;
         this.capacity = capacity;
         freeCapacity.addAndGet(diff);
-    }
-
-    public long weightedSize()
-    {
-        throw new UnsupportedOperationException();
     }
 
     public void close()

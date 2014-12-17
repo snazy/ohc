@@ -78,7 +78,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         int segments = builder.getSegmentCount();
         if (segments <= 0)
             segments = Runtime.getRuntime().availableProcessors() * 2;
-        segments = OffHeapMap.roundUpToPowerOf2(segments);
+        segments = (int) Util.roundUpToPowerOf2(segments, 1<<30);
         maps = new OffHeapMap[segments];
         for (int i = 0; i < segments; i++)
         {
@@ -308,8 +308,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void setCapacity(long capacity)
     {
-        if (capacity < this.capacity)
-            throw new IllegalArgumentException("New capacity " + capacity + " must not be smaller than current capacity");
+        if (capacity < 0L)
+            throw new IllegalArgumentException();
         long diff = capacity - this.capacity;
         this.capacity = capacity;
         freeCapacity.addAndGet(diff);
@@ -424,11 +424,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         return size;
     }
 
-    public long weightedSize()
-    {
-        return size();
-    }
-
     public int segments()
     {
         return maps.length;
@@ -498,8 +493,19 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             private final byte[] keyLenBuf = new byte[8];
             private final ByteBuffer bb = ByteBuffer.wrap(keyLenBuf);
 
-            public void close() throws IOException
+            private long bufAdr;
+            private long bufLen;
+
+            public void close()
             {
+                Uns.free(bufAdr);
+                bufAdr = 0L;
+            }
+
+            protected void finalize() throws Throwable
+            {
+                close();
+                super.finalize();
             }
 
             public boolean hasNext()
@@ -523,22 +529,24 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                     }
 
                     long keyLen = Uns.getLongFromByteArray(keyLenBuf, 0);
+                    long totalLen = ENTRY_OFF_DATA + keyLen;
 
-                    long adr = Uns.allocateIOException(ENTRY_OFF_DATA + keyLen);
-                    try
+                    if (bufLen < totalLen)
                     {
-                        if (!readFully(channel, Uns.directBufferFor(adr, ENTRY_OFF_DATA, keyLen)))
-                        {
-                            eod = true;
-                            throw new EOFException();
-                        }
-                        HashEntries.init(adr, keyLen, 0L, adr);
-                        next = keySerializer.deserialize(new HashEntryKeyInput(adr));
+                        Uns.free(bufAdr);
+                        bufAdr = 0L;
+
+                        bufLen = Math.max(4096, Util.roundUpToPowerOf2(totalLen, 1 << 30));
+                        bufAdr = Uns.allocateIOException(bufLen);
                     }
-                    finally
+
+                    if (!readFully(channel, Uns.directBufferFor(bufAdr, ENTRY_OFF_DATA, keyLen)))
                     {
-                        Uns.free(adr);
+                        eod = true;
+                        throw new EOFException();
                     }
+                    HashEntries.init(0L, keyLen, 0L, bufAdr);
+                    next = keySerializer.deserialize(new HashEntryKeyInput(bufAdr));
                 }
                 catch (IOException e)
                 {
