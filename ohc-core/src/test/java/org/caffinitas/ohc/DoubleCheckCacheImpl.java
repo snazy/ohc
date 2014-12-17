@@ -26,6 +26,11 @@ import java.util.Set;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 import org.testng.Assert;
 
+/**
+ * Test code that contains an instance of the production and check {@link org.caffinitas.ohc.OHCache}
+ * implementations {@link org.caffinitas.ohc.OHCacheImpl} and
+ * {@link org.caffinitas.ohc.CheckOHCacheImpl}.
+ */
 public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
 {
     public final OHCache<K, V> prod;
@@ -156,6 +161,11 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
     }
 
     public int serializeHotNKeys(int n, WritableByteChannel channel) throws IOException
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public CloseableIterator<K> deserializeKeys(ReadableByteChannel channel) throws IOException
     {
         throw new UnsupportedOperationException();
     }

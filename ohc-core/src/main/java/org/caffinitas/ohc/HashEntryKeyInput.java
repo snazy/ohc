@@ -15,7 +15,6 @@
  */
 package org.caffinitas.ohc;
 
-import java.io.EOFException;
 import java.io.IOException;
 
 /**
@@ -47,8 +46,6 @@ final class HashEntryKeyInput extends AbstractDataInput
     {
         int ch1 = readUnsignedByte();
         int ch2 = readUnsignedByte();
-        if ((ch1 | ch2) < 0)
-            throw new EOFException();
         return (short)((ch1 << 8) + ch2);
     }
 
@@ -56,8 +53,6 @@ final class HashEntryKeyInput extends AbstractDataInput
     {
         int ch1 = readUnsignedByte();
         int ch2 = readUnsignedByte();
-        if ((ch1 | ch2) < 0)
-            throw new EOFException();
         return (ch1 << 8) + ch2;
     }
 
@@ -65,8 +60,6 @@ final class HashEntryKeyInput extends AbstractDataInput
     {
         int ch1 = readUnsignedByte();
         int ch2 = readUnsignedByte();
-        if ((ch1 | ch2) < 0)
-            throw new EOFException();
         return (char)((ch1 << 8) + ch2);
     }
 
@@ -76,8 +69,6 @@ final class HashEntryKeyInput extends AbstractDataInput
         int ch2 = readUnsignedByte();
         int ch3 = readUnsignedByte();
         int ch4 = readUnsignedByte();
-        if ((ch1 | ch2 | ch3 | ch4) < 0)
-            throw new EOFException();
         return ((ch1 << 24) + (ch2 << 16) + (ch3 << 8) + ch4);
     }
 

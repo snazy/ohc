@@ -38,6 +38,7 @@ public abstract class AbstractDataOutput implements DataOutput
 
     public void writeBytes(String s) throws IOException
     {
+        // method intentionally not supported (no length prefix)
         throw new UnsupportedOperationException();
 //        int len = s.length();
 //        for (int i = 0; i < len; i++)
@@ -46,6 +47,7 @@ public abstract class AbstractDataOutput implements DataOutput
 
     public void writeChars(String s) throws IOException
     {
+        // method intentionally not supported (no length prefix)
         throw new UnsupportedOperationException();
 //        int len = s.length();
 //        for (int i = 0; i < len; i++)

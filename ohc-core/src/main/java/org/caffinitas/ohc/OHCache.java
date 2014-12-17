@@ -22,16 +22,29 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Map;
 
-import com.codahale.metrics.Histogram;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 public interface OHCache<K, V> extends Closeable
 {
 
+    /**
+     * Adds the key/value.
+     * If the entry size of key/value exceeds the configured maximum entry length, any previously existing entry
+     * for the key is removed.
+     */
     void put(K key, V value);
 
+    /**
+     * Adds key/value if either the key is not present or the existing value matches parameter {@code old}.
+     * If the entry size of key/value exceeds the configured maximum entry length, the old value is removed.
+     */
     boolean addOrReplace(K key, V old, V value);
 
+    /**
+     * Adds the key/value if the key is not present.
+     * If the entry size of key/value exceeds the configured maximum entry length, any previously existing entry
+     * for the key is removed.
+     */
     boolean putIfAbsent(K k, V v);
 
     void putAll(Map<? extends K, ? extends V> m);
@@ -85,6 +98,8 @@ public interface OHCache<K, V> extends Closeable
     int serializeHotNEntries(int n, WritableByteChannel channel) throws IOException;
 
     int serializeHotNKeys(int n, WritableByteChannel channel) throws IOException;
+
+    CloseableIterator<K> deserializeKeys(ReadableByteChannel channel) throws IOException;
 
     // statistics / information
 

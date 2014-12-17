@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * On-heap test-only counterpart of {@link org.caffinitas.ohc.OffHeapMap}.
+ * On-heap test-only counterpart of {@link org.caffinitas.ohc.OffHeapMap} for {@link org.caffinitas.ohc.CheckOHCacheImpl}.
  */
 final class CheckSegment
 {
@@ -63,7 +63,7 @@ final class CheckSegment
             return null;
         }
 
-        lru.remove();
+        lru.remove(keyBuffer);
         lru.addFirst(keyBuffer);
         hitCount++;
 

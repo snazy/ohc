@@ -23,25 +23,25 @@ import java.nio.file.StandardOpenOption;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-public class EntrySerializationTest
+public class SerializationTest
 {
 
     @Test
-    public void directIO() throws IOException, InterruptedException
+    public void testDirectIO() throws IOException, InterruptedException
     {
-        File f = File.createTempFile("OHCBasicTestDirectIO-", ".bin");
+        File f = File.createTempFile("EntrySerializationTest-directIO-", ".bin");
         f.deleteOnExit();
 
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .build())
         {
-            Utils.fillMany(cache);
+            TestUtils.fillMany(cache);
 
             try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
-                cache.serializeHotNEntries(Utils.manyCount, ch);
+                cache.serializeHotNEntries(TestUtils.manyCount, ch);
             }
             catch (Throwable t)
             {
@@ -51,8 +51,8 @@ public class EntrySerializationTest
             }
         }
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .build())
         {
             int count;
@@ -62,24 +62,24 @@ public class EntrySerializationTest
                 count = cache.deserializeEntries(ch);
             }
 
-            Utils.checkManyForSerialized(cache, count);
+            TestUtils.checkManyForSerializedEntries(cache, count);
         }
     }
 
-    @Test(dependsOnMethods = "directIO")
-    public void directIOBig() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testDirectIO")
+    public void testDirectIOBig() throws IOException, InterruptedException
     {
-        File f = File.createTempFile("OHCBasicTestDirectIOBig-", ".bin");
+        File f = File.createTempFile("EntrySerializationTest-directIOBig-", ".bin");
         f.deleteOnExit();
 
         int serialized;
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
-            Utils.fillBig5(cache);
+            TestUtils.fillBig5(cache);
 
             try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
@@ -93,8 +93,8 @@ public class EntrySerializationTest
             }
         }
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
@@ -106,24 +106,24 @@ public class EntrySerializationTest
 
             Assert.assertEquals(count, serialized);
 
-            Utils.checkBig5(cache);
+            TestUtils.checkBig5(cache);
         }
     }
 
-    @Test(dependsOnMethods = "directIO")
-    public void directIOBigRandom() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testDirectIO")
+    public void testDirectIOBigRandom() throws IOException, InterruptedException
     {
-        File f = File.createTempFile("OHCBasicTestDirectIOBigRandom-", ".bin");
+        File f = File.createTempFile("EntrySerializationTest-directIOBigRandom-", ".bin");
         f.deleteOnExit();
 
         int serialized;
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
-            Utils.fillBigRandom5(cache);
+            TestUtils.fillBigRandom5(cache);
 
             try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
@@ -137,8 +137,8 @@ public class EntrySerializationTest
             }
         }
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
@@ -150,28 +150,28 @@ public class EntrySerializationTest
 
             Assert.assertEquals(count, serialized);
 
-            Utils.checkBigRandom5(cache, serialized);
+            TestUtils.checkBigRandom5(cache, serialized);
         }
     }
 
-    @Test(dependsOnMethods = "directIO")
-    public void compressedDirectIO() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testDirectIO")
+    public void testCompressedDirectIO() throws IOException, InterruptedException
     {
-        File f = File.createTempFile("OHCBasicTestDirectIO-", ".bin");
+        File f = File.createTempFile("EntrySerializationTest-compressedDirectIO-", ".bin");
         f.deleteOnExit();
 
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .build())
         {
-            Utils.fillMany(cache);
+            TestUtils.fillMany(cache);
 
             try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
                 try (CompressingOutputChannel cch = new CompressingOutputChannel(ch, 8192))
                 {
-                    cache.serializeHotNEntries(Utils.manyCount, cch);
+                    cache.serializeHotNEntries(TestUtils.manyCount, cch);
                 }
             }
             catch (Throwable t)
@@ -182,8 +182,8 @@ public class EntrySerializationTest
             }
         }
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .build())
         {
             int count;
@@ -195,24 +195,24 @@ public class EntrySerializationTest
                 }
             }
 
-            Utils.checkManyForSerialized(cache, count);
+            TestUtils.checkManyForSerializedEntries(cache, count);
         }
     }
 
-    @Test(dependsOnMethods = "compressedDirectIO")
-    public void compressedDirectIOBig() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testCompressedDirectIO")
+    public void testCompressedDirectIOBig() throws IOException, InterruptedException
     {
-        File f = File.createTempFile("OHCBasicTestCompressedDirectIOBig-", ".bin");
+        File f = File.createTempFile("EntrySerializationTest-compressedDirectIOBig-", ".bin");
         f.deleteOnExit();
 
         int serialized;
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
-            Utils.fillBig5(cache);
+            TestUtils.fillBig5(cache);
 
             try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
@@ -229,8 +229,8 @@ public class EntrySerializationTest
             }
         }
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
@@ -245,24 +245,24 @@ public class EntrySerializationTest
 
             Assert.assertEquals(count, serialized);
 
-            Utils.checkBig5(cache);
+            TestUtils.checkBig5(cache);
         }
     }
 
-    @Test(dependsOnMethods = "compressedDirectIO")
-    public void compressedDirectIOBigRandom() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testCompressedDirectIO")
+    public void testCompressedDirectIOBigRandom() throws IOException, InterruptedException
     {
-        File f = File.createTempFile("OHCBasicTestCompressedDirectIOBigRandom-", ".bin");
+        File f = File.createTempFile("EntrySerializationTest-compressedDirectIOBigRandom-", ".bin");
         f.deleteOnExit();
 
         int serialized;
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
-            Utils.fillBigRandom5(cache);
+            TestUtils.fillBigRandom5(cache);
 
             try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
             {
@@ -279,8 +279,8 @@ public class EntrySerializationTest
             }
         }
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                           .keySerializer(Utils.complexSerializer)
-                                                           .valueSerializer(Utils.stringSerializer)
+                                                           .keySerializer(TestUtils.intSerializer)
+                                                           .valueSerializer(TestUtils.stringSerializer)
                                                            .capacity(512L * 1024 * 1024)
                                                            .build())
         {
@@ -295,70 +295,112 @@ public class EntrySerializationTest
 
             Assert.assertEquals(count, serialized);
 
-            Utils.checkBigRandom5(cache, serialized);
+            TestUtils.checkBigRandom5(cache, serialized);
         }
     }
 
     @Test
-    public void testTooBigEntryOnPut()
+    public void testTooBigEntryOnDeserialize() throws IOException, InterruptedException
     {
-        Assert.fail();
+        File f = File.createTempFile("EntrySerializationTest-tooBigEntryOnPut-", ".bin");
+        f.deleteOnExit();
+
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                            .keySerializer(TestUtils.intSerializer)
+                                                            .valueSerializer(TestUtils.stringSerializer)
+                                                            .capacity(512L * 1024 * 1024)
+                                                            .build())
+        {
+            cache.put(1, "hello");
+            cache.put(2, "world");
+            cache.put(3, new String(new byte[100]));
+            cache.put(4, "foo");
+
+            try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
+            {
+                cache.serializeEntry(1, ch);
+                cache.serializeEntry(2, ch);
+                cache.serializeEntry(3, ch);
+                cache.serializeEntry(4, ch);
+            }
+            catch (Throwable t)
+            {
+                // just here since the surrounding try-with-resource might silently consume this exception
+                t.printStackTrace();
+                throw new Error(t);
+            }
+        }
+
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                            .keySerializer(TestUtils.intSerializer)
+                                                            .valueSerializer(TestUtils.stringSerializer)
+                                                            .capacity(512L * 1024 * 1024)
+                                                            .maxEntrySize(TestUtils.intSerializer.serializedSize(1) + Util.ENTRY_OFF_DATA + Util.roundUpTo8(9))
+                                                            .build())
+        {
+            try (BufferedReadableByteChannel ch = new BufferedReadableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING), 8192))
+            {
+                Assert.assertTrue(cache.deserializeEntry(ch));
+                Assert.assertTrue(cache.deserializeEntry(ch));
+                Assert.assertFalse(cache.deserializeEntry(ch));
+                Assert.assertTrue(cache.deserializeEntry(ch));
+            }
+            catch (Throwable t)
+            {
+                // just here since the surrounding try-with-resource might silently consume this exception
+                t.printStackTrace();
+                throw new Error(t);
+            }
+        }
+
         // TODO check off-heap mem is not leaked
     }
 
     @Test
-    public void testTooBigEntryOnReplace()
+    public void testKeySerialization() throws IOException, InterruptedException
     {
-        Assert.fail();
-        // TODO check off-heap mem is not leaked
-    }
+        File f = File.createTempFile("EntrySerializationTest-keySerialization-", ".bin");
+        f.deleteOnExit();
 
-    @Test
-    public void testTooBigEntryOnPutIfAbsent()
-    {
-        Assert.fail();
-        // TODO check off-heap mem is not leaked
-    }
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                            .keySerializer(TestUtils.intSerializer)
+                                                            .valueSerializer(TestUtils.stringSerializer)
+                                                            .build())
+        {
+            TestUtils.fillMany(cache);
 
-    @Test
-    public void testTooBigEntryOnDeserialize()
-    {
-        Assert.fail();
-        // TODO check off-heap mem is not leaked
-    }
+            try (BufferedWritableByteChannel ch = new BufferedWritableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING), 8192))
+            {
+                cache.serializeHotNKeys(TestUtils.manyCount, ch);
+            }
+            catch (Throwable t)
+            {
+                // just here since the surrounding try-with-resource might silently consume this exception
+                t.printStackTrace();
+                throw new Error(t);
+            }
+        }
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                            .keySerializer(TestUtils.intSerializer)
+                                                            .valueSerializer(TestUtils.stringSerializer)
+                                                            .build())
+        {
+            int count = 0;
 
-    @Test
-    public void testFailingKeySerializerOnPut()
-    {
-        Assert.fail();
-        // TODO check off-heap mem is not leaked
-    }
+            try (BufferedReadableByteChannel ch = new BufferedReadableByteChannel(FileChannel.open(f.toPath(), StandardOpenOption.READ, StandardOpenOption.TRUNCATE_EXISTING), 8192))
+            {
+                try (CloseableIterator<Integer> keyIter = cache.deserializeKeys(ch))
+                {
+                    while (keyIter.hasNext())
+                    {
+                        Integer key = keyIter.next();
+                        Assert.assertNotNull(key);
+                        count++;
+                    }
+                }
+            }
 
-    @Test
-    public void testFailingKeySerializerOnGet()
-    {
-        Assert.fail();
-        // TODO check off-heap mem is not leaked
-    }
-
-    @Test
-    public void testFailingKeySerializerInKeyIterator()
-    {
-        Assert.fail();
-        // TODO check off-heap mem is not leaked
-    }
-
-    @Test
-    public void testFailingValueSerializerOnPut()
-    {
-        Assert.fail();
-        // TODO check off-heap mem is not leaked
-    }
-
-    @Test
-    public void testFailingValueSerializerInEntrySerialization()
-    {
-        Assert.fail();
-        // TODO check off-heap mem is not leaked
+            TestUtils.checkManyForSerializedKeys(cache, count);
+        }
     }
 }

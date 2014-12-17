@@ -23,6 +23,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -54,9 +55,9 @@ public class CrossCheckTest
     static DoubleCheckCacheImpl<Integer, String> cache(long capacity, int hashTableSize, int segments, long maxEntrySize)
     {
         OHCacheBuilder<Integer, String> builder = OHCacheBuilder.<Integer, String>newBuilder()
-                                                                .keySerializer(Utils.complexSerializer)
-                                                                .valueSerializer(Utils.stringSerializer)
-                                                                .capacity(capacity * Utils.ONE_MB);
+                                                                .keySerializer(TestUtils.intSerializer)
+                                                                .valueSerializer(TestUtils.stringSerializer)
+                                                                .capacity(capacity * TestUtils.ONE_MB);
         if (hashTableSize > 0)
             builder.hashTableSize(hashTableSize);
         if (segments > 0)
@@ -68,7 +69,7 @@ public class CrossCheckTest
     }
 
     @Test
-    public void basic() throws IOException, InterruptedException
+    public void testBasics() throws IOException, InterruptedException
     {
         try (OHCache<Integer, String> cache = cache())
         {
@@ -85,130 +86,72 @@ public class CrossCheckTest
 
             Assert.assertEquals(cache.freeCapacity(), cache.capacity());
 
-            Utils.fill5(cache);
+            TestUtils.fill5(cache);
 
-            Utils.check5(cache);
+            TestUtils.check5(cache);
 
             // implicitly compares stats
             cache.stats();
         }
     }
 
-    @Test(dependsOnMethods = "basic")
-    public void manyValues() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testBasics")
+    public void testManyValues() throws IOException, InterruptedException
     {
         try (OHCache<Integer, String> cache = cache(64, -1))
         {
             Assert.assertEquals(cache.freeCapacity(), cache.capacity());
 
-            Utils.fillMany(cache);
+            TestUtils.fillMany(cache);
 
             OHCacheStats stats = cache.stats();
-            Assert.assertEquals(stats.getPutAddCount(), Utils.manyCount);
-            Assert.assertEquals(stats.getSize(), Utils.manyCount);
+            Assert.assertEquals(stats.getPutAddCount(), TestUtils.manyCount);
+            Assert.assertEquals(stats.getSize(), TestUtils.manyCount);
 
-            for (int i = 0; i < Utils.manyCount; i++)
+            for (int i = 0; i < TestUtils.manyCount; i++)
                 Assert.assertEquals(cache.get(i), Integer.toHexString(i));
 
             stats = cache.stats();
-            Assert.assertEquals(stats.getHitCount(), Utils.manyCount);
-            Assert.assertEquals(stats.getSize(), Utils.manyCount);
+            Assert.assertEquals(stats.getHitCount(), TestUtils.manyCount);
+            Assert.assertEquals(stats.getSize(), TestUtils.manyCount);
 
-            for (int i = 0; i < Utils.manyCount; i++)
+            for (int i = 0; i < TestUtils.manyCount; i++)
                 cache.put(i, Integer.toOctalString(i));
 
             stats = cache.stats();
-            Assert.assertEquals(stats.getPutReplaceCount(), Utils.manyCount);
-            Assert.assertEquals(stats.getSize(), Utils.manyCount);
+            Assert.assertEquals(stats.getPutReplaceCount(), TestUtils.manyCount);
+            Assert.assertEquals(stats.getSize(), TestUtils.manyCount);
 
-            for (int i = 0; i < Utils.manyCount; i++)
+            for (int i = 0; i < TestUtils.manyCount; i++)
                 Assert.assertEquals(cache.get(i), Integer.toOctalString(i));
 
             stats = cache.stats();
-            Assert.assertEquals(stats.getHitCount(), Utils.manyCount * 2);
-            Assert.assertEquals(stats.getSize(), Utils.manyCount);
+            Assert.assertEquals(stats.getHitCount(), TestUtils.manyCount * 2);
+            Assert.assertEquals(stats.getSize(), TestUtils.manyCount);
 
-            for (int i = 0; i < Utils.manyCount; i++)
+            for (int i = 0; i < TestUtils.manyCount; i++)
                 cache.remove(i);
 
             stats = cache.stats();
-            Assert.assertEquals(stats.getRemoveCount(), Utils.manyCount);
+            Assert.assertEquals(stats.getRemoveCount(), TestUtils.manyCount);
             Assert.assertEquals(stats.getSize(), 0);
             Assert.assertEquals(stats.getFree(), stats.getCapacity());
         }
     }
 
-    @Test(dependsOnMethods = "basic")
-    public void keyIterator() throws IOException, InterruptedException
-    {
-        try (OHCache<Integer, String> cache = cache(32))
-        {
-            long capacity = cache.capacity();
-            Assert.assertEquals(cache.freeCapacity(), capacity);
-
-            Utils.fill5(cache);
-
-            Set<Integer> returned = new TreeSet<>();
-            Iterator<Integer> iter = cache.keyIterator();
-            for (int i = 0; i < 5; i++)
-            {
-                Assert.assertTrue(iter.hasNext());
-                returned.add(iter.next());
-            }
-            Assert.assertFalse(iter.hasNext());
-            Assert.assertEquals(returned.size(), 5);
-
-            Assert.assertTrue(returned.contains(1));
-            Assert.assertTrue(returned.contains(2));
-            Assert.assertTrue(returned.contains(3));
-            Assert.assertTrue(returned.contains(4));
-            Assert.assertTrue(returned.contains(5));
-
-            returned.clear();
-
-            iter = cache.keyIterator();
-            for (int i = 0; i < 5; i++)
-                returned.add(iter.next());
-            Assert.assertFalse(iter.hasNext());
-            Assert.assertEquals(returned.size(), 5);
-
-            Assert.assertTrue(returned.contains(1));
-            Assert.assertTrue(returned.contains(2));
-            Assert.assertTrue(returned.contains(3));
-            Assert.assertTrue(returned.contains(4));
-            Assert.assertTrue(returned.contains(5));
-
-            iter = cache.keyIterator();
-            for (int i = 0; i < 5; i++)
-            {
-                iter.next();
-                iter.remove();
-            }
-
-            Assert.assertEquals(cache.freeCapacity(), capacity);
-
-            Assert.assertEquals(0, cache.size());
-            Assert.assertNull(cache.get(1));
-            Assert.assertNull(cache.get(2));
-            Assert.assertNull(cache.get(3));
-            Assert.assertNull(cache.get(4));
-            Assert.assertNull(cache.get(5));
-        }
-    }
-
-    @Test(dependsOnMethods = "basic")
-    public void hotN() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testBasics")
+    public void testHotN() throws IOException, InterruptedException
     {
         try (OHCache<Integer, String> cache = cache())
         {
-            Utils.fill5(cache);
+            TestUtils.fill5(cache);
 
             Assert.assertNotNull(cache.hotKeyIterator(1).next());
         }
     }
 
-    @Test(dependsOnMethods = "manyValues")
-    public void cleanUpTest() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testManyValues")
+    public void testCleanUp() throws IOException, InterruptedException
     {
         char[] chars = new char[900];
         for (int i = 0; i < chars.length; i++)
@@ -227,21 +170,53 @@ public class CrossCheckTest
 
             Assert.assertEquals(cache.stats().getEvictionCount(), 0L, "oops - cleanup triggered - fix the unit test!");
 
-            cache.put(i, v);
+            cache.put(i++, v);
 
             Assert.assertEquals(cache.stats().getEvictionCount(), 1L, "cleanup did not run");
+
+            for (int j = 0; j < 10000; j++, i++)
+                cache.put(i, v);
+
+            Assert.assertTrue(cache.stats().getEvictionCount() >= 10000L, "cleanup did not run");
         }
     }
 
-    @Test(dependsOnMethods = "manyValues")
-    public void lruTest() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testManyValues")
+    public void testLRU() throws IOException, InterruptedException
     {
-        // TODO add many values, reference ~50%, add more, check that (most) referenced are still there
-        Assert.fail();
+        char[] chars = new char[900];
+        for (int i = 0; i < chars.length; i++)
+            chars[i] = (char) ('A' + i % 26);
+        String v = new String(chars);
+
+        try (OHCache<Integer, String> cache = cache(4, -1, 1, -1))
+        {
+            int i;
+            for (i = 0; cache.freeCapacity() > 950; i++)
+            {
+                cache.put(i, v);
+                if ((i % 10000) == 0)
+                    Assert.assertEquals(cache.stats().getEvictionCount(), 0L, "oops - cleanup triggered - fix the unit test!");
+            }
+            int k = i;
+
+            // reference ~50%
+            for (int j = 0; j < k / 2; j++)
+                cache.get(j);
+
+            for (int j = 0; j < k / 2; j++, i++)
+                cache.put(i, v);
+
+            for (int j = 0; j < k / 2 - 1; j++)
+                Assert.assertEquals(cache.containsKey(j), true, Integer.toString(j));
+
+            for (int j = k / 2; j < k - 2; j++)
+                Assert.assertEquals(cache.containsKey(j), false, Integer.toString(j));
+        }
     }
 
-    @Test(dependsOnMethods = "basic")
-    public void putTooLarge() throws IOException, InterruptedException
+    @Test(dependsOnMethods = "testBasics")
+    public void testPutTooLarge() throws IOException, InterruptedException
     {
         char[] c940 = new char[8192];
         for (int i = 0; i < c940.length; i++)
@@ -265,9 +240,10 @@ public class CrossCheckTest
     {
         try (OHCache<Integer, String> cache = cache())
         {
-            // TODO add more elements and call more ops
+            for (int i = 0; i < TestUtils.manyCount; i++)
+                Assert.assertTrue(cache.addOrReplace(i, "", Integer.toHexString(i)));
 
-            Assert.assertTrue(cache.addOrReplace(42, "baz", "foo"));
+            Assert.assertTrue(cache.addOrReplace(42, Integer.toHexString(42), "foo"));
             Assert.assertEquals(cache.get(42), "foo");
             Assert.assertTrue(cache.addOrReplace(42, "foo", "bar"));
             Assert.assertEquals(cache.get(42), "bar");
@@ -281,11 +257,12 @@ public class CrossCheckTest
     {
         try (OHCache<Integer, String> cache = cache())
         {
-            // TODO add more elements and call more ops
+            for (int i = 0; i < TestUtils.manyCount; i++)
+                Assert.assertTrue(cache.putIfAbsent(i, Integer.toHexString(i)));
 
-            Assert.assertTrue(cache.putIfAbsent(42, "foo"));
-            Assert.assertEquals(cache.get(42), "foo");
-            Assert.assertFalse(cache.putIfAbsent(42, "foo"));
+            Assert.assertTrue(cache.putIfAbsent(-42, "foo"));
+            Assert.assertEquals(cache.get(-42), "foo");
+            Assert.assertFalse(cache.putIfAbsent(-42, "foo"));
         }
     }
 
@@ -311,12 +288,16 @@ public class CrossCheckTest
     {
         try (OHCache<Integer, String> cache = cache())
         {
-            // TODO add more elements and call more remove ops
+            TestUtils.fillMany(cache);
 
             cache.put(42, "foo");
             Assert.assertEquals(cache.get(42), "foo");
             cache.remove(42);
             Assert.assertNull(cache.get(42));
+
+            Random r = new Random();
+            for (int i = 0; i < TestUtils.manyCount; i++)
+                cache.remove(r.nextInt(TestUtils.manyCount));
         }
     }
 
@@ -437,12 +418,69 @@ public class CrossCheckTest
                     Assert.assertFalse(iCheck.hasNext());
                 }
             }
+        }
+    }
 
+    @Test(dependsOnMethods = "testBasics")
+    public void testKeyIterator1() throws IOException, InterruptedException
+    {
+        try (OHCache<Integer, String> cache = cache(32))
+        {
+            long capacity = cache.capacity();
+            Assert.assertEquals(cache.freeCapacity(), capacity);
+
+            TestUtils.fill5(cache);
+
+            Set<Integer> returned = new TreeSet<>();
+            Iterator<Integer> iter = cache.keyIterator();
+            for (int i = 0; i < 5; i++)
+            {
+                Assert.assertTrue(iter.hasNext());
+                returned.add(iter.next());
+            }
+            Assert.assertFalse(iter.hasNext());
+            Assert.assertEquals(returned.size(), 5);
+
+            Assert.assertTrue(returned.contains(1));
+            Assert.assertTrue(returned.contains(2));
+            Assert.assertTrue(returned.contains(3));
+            Assert.assertTrue(returned.contains(4));
+            Assert.assertTrue(returned.contains(5));
+
+            returned.clear();
+
+            iter = cache.keyIterator();
+            for (int i = 0; i < 5; i++)
+                returned.add(iter.next());
+            Assert.assertFalse(iter.hasNext());
+            Assert.assertEquals(returned.size(), 5);
+
+            Assert.assertTrue(returned.contains(1));
+            Assert.assertTrue(returned.contains(2));
+            Assert.assertTrue(returned.contains(3));
+            Assert.assertTrue(returned.contains(4));
+            Assert.assertTrue(returned.contains(5));
+
+            iter = cache.keyIterator();
+            for (int i = 0; i < 5; i++)
+            {
+                iter.next();
+                iter.remove();
+            }
+
+            Assert.assertEquals(cache.freeCapacity(), capacity);
+
+            Assert.assertEquals(0, cache.size());
+            Assert.assertNull(cache.get(1));
+            Assert.assertNull(cache.get(2));
+            Assert.assertNull(cache.get(3));
+            Assert.assertNull(cache.get(4));
+            Assert.assertNull(cache.get(5));
         }
     }
 
     @Test
-    public void testKeyIterator() throws Exception
+    public void testKeyIterator2() throws Exception
     {
         try (OHCache<Integer, String> cache = cache())
         {
@@ -523,7 +561,6 @@ public class CrossCheckTest
                     Assert.assertFalse(iCheck.hasNext());
                 }
             }
-
         }
     }
 
@@ -547,7 +584,7 @@ public class CrossCheckTest
                     ByteBuffer k = iter.next();
                     ByteBuffer k2 = ByteBuffer.allocate(k.remaining());
                     k2.put(k);
-                    Integer key = Utils.complexSerializer.deserialize(ByteStreams.newDataInput(k2.array()));
+                    Integer key = TestUtils.intSerializer.deserialize(ByteStreams.newDataInput(k2.array()));
                     Assert.assertTrue(keys.add(key));
                 }
             }
@@ -660,25 +697,82 @@ public class CrossCheckTest
 
             long free = cache.freeCapacity();
 
-            cache.setCapacity(cap + Utils.ONE_MB);
-            Assert.assertEquals(cache.capacity(), cap + Utils.ONE_MB);
-            Assert.assertEquals(cache.freeCapacity(), free + Utils.ONE_MB);
+            cache.setCapacity(cap + TestUtils.ONE_MB);
+            Assert.assertEquals(cache.capacity(), cap + TestUtils.ONE_MB);
+            Assert.assertEquals(cache.freeCapacity(), free + TestUtils.ONE_MB);
             try
             {
-                cache.setCapacity(cache.capacity() - Utils.ONE_MB);
+                cache.setCapacity(cache.capacity() - TestUtils.ONE_MB);
                 Assert.fail();
             }
             catch (IllegalArgumentException ignored)
             {
             }
-            Assert.assertEquals(cache.capacity(), cap + Utils.ONE_MB);
-            Assert.assertEquals(cache.freeCapacity(), free + Utils.ONE_MB);
+            Assert.assertEquals(cache.capacity(), cap + TestUtils.ONE_MB);
+            Assert.assertEquals(cache.freeCapacity(), free + TestUtils.ONE_MB);
         }
     }
 
     @Test
-    public void testResetStatistics()
+    public void testResetStatistics() throws IOException
     {
-        Assert.fail();
+        try (OHCache<Integer, String> cache = cache())
+        {
+            for (int i = 0; i < 100; i++)
+                cache.put(i, Integer.toString(i));
+
+            for (int i = 0; i < 30; i++)
+                cache.put(i, Integer.toString(i));
+
+            for (int i = 0; i < 50; i++)
+                cache.get(i);
+
+            for (int i = 100; i < 120; i++)
+                cache.get(i);
+
+            for (int i = 0; i < 25; i++)
+                cache.remove(i);
+
+            OHCacheStats stats = cache.stats();
+            Assert.assertEquals(stats.getPutAddCount(), 100);
+            Assert.assertEquals(stats.getPutReplaceCount(), 30);
+            Assert.assertEquals(stats.getHitCount(), 50);
+            Assert.assertEquals(stats.getMissCount(), 20);
+            Assert.assertEquals(stats.getRemoveCount(), 25);
+
+            cache.resetStatistics();
+
+            stats = cache.stats();
+            Assert.assertEquals(stats.getPutAddCount(), 0);
+            Assert.assertEquals(stats.getPutReplaceCount(), 0);
+            Assert.assertEquals(stats.getHitCount(), 0);
+            Assert.assertEquals(stats.getMissCount(), 0);
+            Assert.assertEquals(stats.getRemoveCount(), 0);
+        }
     }
+
+    @Test
+    public void testTooBigEntryOnPut() throws IOException
+    {
+        try (OHCache<Integer, String> cache = cache(8, -1, -1, TestUtils.intSerializer.serializedSize(1) + Util.ENTRY_OFF_DATA + Util.roundUpTo8(5)))
+        {
+            cache.put(1, new String(new byte[100]));
+            Assert.assertEquals(cache.size(), 0);
+
+            cache.putIfAbsent(1, new String(new byte[100]));
+            Assert.assertEquals(cache.size(), 0);
+
+            cache.addOrReplace(1, "foo", new String(new byte[100]));
+            Assert.assertEquals(cache.size(), 0);
+
+            cache.addOrReplace(1, "bar", "foo");
+            Assert.assertEquals(cache.size(), 1);
+            Assert.assertEquals(cache.get(1), "foo");
+
+            cache.addOrReplace(1, "foo", new String(new byte[100]));
+            Assert.assertEquals(cache.size(), 0);
+            Assert.assertEquals(cache.get(1), null);
+        }
+    }
+
 }

@@ -77,6 +77,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
         if (maxEntrySize > 0L && CheckSegment.sizeOf(keyBuffer, data) > maxEntrySize)
         {
+            remove(key);
             putFailCount++;
             return;
         }
@@ -93,6 +94,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
         if (maxEntrySize > 0L && CheckSegment.sizeOf(keyBuffer, data) > maxEntrySize)
         {
+            remove(key);
             putFailCount++;
             return false;
         }
@@ -108,6 +110,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
         if (maxEntrySize > 0L && CheckSegment.sizeOf(keyBuffer, data) > maxEntrySize)
         {
+            remove(k);
             putFailCount++;
             return false;
         }
@@ -346,6 +349,11 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     }
 
     public int serializeHotNKeys(int n, WritableByteChannel channel)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public CloseableIterator<K> deserializeKeys(ReadableByteChannel channel) throws IOException
     {
         throw new UnsupportedOperationException();
     }

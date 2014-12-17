@@ -190,20 +190,6 @@
 
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-surefire-plugin</artifactId>
-                    <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
-                    <configuration>
-                        <excludes>
-                            <exclude>**/*DeveloperTest.java</exclude>
-                        </excludes>
-                        <forkCount>1</forkCount>
-                        <reuseForks>true</reuseForks>
-                        <redirectTestOutputToFile>true</redirectTestOutputToFile>
-                    </configuration>
-                </plugin>
-
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-javadoc-plugin</artifactId>
                     <version>${version.org.apache.maven.plugins.maven-javadoc-plugin}</version>
                     <configuration>
@@ -270,6 +256,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-report-plugin</artifactId>
                 <version>${version.org.apache.maven.plugins.maven-surefire-report-plugin}</version>
+                <configuration>
+                    <reportsDirectories>
+                        <reportsDirectory>ohc-core/target/surefire-reports/noJemalloc</reportsDirectory>
+                        <reportsDirectory>ohc-core/target/surefire-reports/normal</reportsDirectory>
+                    </reportsDirectories>
+                </configuration>
                 <reportSets>
                     <reportSet>
                         <reports>

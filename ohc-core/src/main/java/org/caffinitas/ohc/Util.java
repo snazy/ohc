@@ -20,7 +20,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
-abstract class Util
+final class Util
 {
 
 // Hash entries
@@ -35,10 +35,10 @@ abstract class Util
     static final long ENTRY_OFF_REFCOUNT = 24;
     // offset of serialized hash value
     static final long ENTRY_OFF_HASH = 32;
-    // offset of serialized hash key length
-    static final long ENTRY_OFF_KEY_LENGTH = 40;
     // offset of serialized value length
-    static final long ENTRY_OFF_VALUE_LENGTH = 48;
+    static final long ENTRY_OFF_VALUE_LENGTH = 40;
+    // offset of serialized hash key length
+    static final long ENTRY_OFF_KEY_LENGTH = 48;
     // offset of data in first block
     static final long ENTRY_OFF_DATA = 56;
 
@@ -53,14 +53,18 @@ abstract class Util
 
 // Compressed entries header
 
-    // 'OHRC'
-    static final int HEADER_COMPRESSED = 0x4f485243;
-    // 'OHRC' reversed
-    static final int HEADER_COMPRESSED_WRONG = 0x4352484f;
-    // 'OHRU'
-    static final int HEADER_UNCOMPRESSED = 0x4f485255;
-    // 'OHRU' reversed
-    static final int HEADER_UNCOMPRESSED_WRONG = 0x5552484f;
+    // 'OHCC'
+    static final int HEADER_COMPRESSED = 0x4f484343;
+    // 'OHCC' reversed
+    static final int HEADER_COMPRESSED_WRONG = 0x4343484f;
+    // 'OHCE'
+    static final int HEADER_ENTRIES = 0x4f484345;
+    // 'OHCE' reversed
+    static final int HEADER_ENTRIES_WRONG = 0x4543484f;
+    // 'OHCK'
+    static final int HEADER_KEYS = 0x4f48434b;
+    // 'OHCK' reversed
+    static final int HEADER_KEYS_WRONG = 0x4b43484f;
 
     static long roundUpTo8(long val)
     {

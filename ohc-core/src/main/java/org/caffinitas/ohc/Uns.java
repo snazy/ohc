@@ -148,6 +148,8 @@ final class Uns
 
     static long getLongFromByteArray(byte[] array, int offset)
     {
+        if (offset < 0 || offset + 8 > array.length)
+            throw new ArrayIndexOutOfBoundsException();
         return unsafe.getLong(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
     }
 
@@ -298,8 +300,6 @@ final class Uns
 
     static long allocate(long bytes)
     {
-        // TODO any chance to pin the memory to RAM (i.e. never swap to disk) ?
-
         long address = allocator.allocate(bytes);
         allocated(address, bytes);
         return address > 0L ? address : 0L;

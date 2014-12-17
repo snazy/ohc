@@ -22,7 +22,7 @@ import java.util.Random;
 
 import org.testng.Assert;
 
-public class Utils
+final class TestUtils
 {
     public static final long ONE_MB = 1024 * 1024;
     public static final CacheSerializer<String> stringSerializer = new CacheSerializer<String>()
@@ -41,32 +41,67 @@ public class Utils
         {
             return writeUTFLen(s);
         }
-
-        private int writeUTFLen(String str)
+    };
+    public static final CacheSerializer<String> stringSerializerFailSerialize = new CacheSerializer<String>()
+    {
+        public void serialize(String s, DataOutput out)
         {
-            int strlen = str.length();
-            int utflen = 0;
-            int c;
+            throw new RuntimeException("foo bar");
+        }
 
-            for (int i = 0; i < strlen; i++)
-            {
-                c = str.charAt(i);
-                if ((c >= 0x0001) && (c <= 0x007F))
-                    utflen++;
-                else if (c > 0x07FF)
-                    utflen += 3;
-                else
-                    utflen += 2;
-            }
+        public String deserialize(DataInput in) throws IOException
+        {
+            return in.readUTF();
+        }
 
-            if (utflen > 65535)
-                throw new RuntimeException("encoded string too long: " + utflen + " bytes");
-
-            return utflen + 2;
+        public int serializedSize(String s)
+        {
+            return writeUTFLen(s);
         }
     };
+    public static final CacheSerializer<String> stringSerializerFailDeserialize = new CacheSerializer<String>()
+    {
+        public void serialize(String s, DataOutput out) throws IOException
+        {
+            out.writeUTF(s);
+        }
+
+        public String deserialize(DataInput in)
+        {
+            throw new RuntimeException("foo bar");
+        }
+
+        public int serializedSize(String s)
+        {
+            return writeUTFLen(s);
+        }
+    };
+
+    static int writeUTFLen(String str)
+    {
+        int strlen = str.length();
+        int utflen = 0;
+        int c;
+
+        for (int i = 0; i < strlen; i++)
+        {
+            c = str.charAt(i);
+            if ((c >= 0x0001) && (c <= 0x007F))
+                utflen++;
+            else if (c > 0x07FF)
+                utflen += 3;
+            else
+                utflen += 2;
+        }
+
+        if (utflen > 65535)
+            throw new RuntimeException("encoded string too long: " + utflen + " bytes");
+
+        return utflen + 2;
+    }
+
     public static final byte[] dummyByteArray;
-    public static final CacheSerializer<Integer> complexSerializer = new CacheSerializer<Integer>()
+    public static final CacheSerializer<Integer> intSerializer = new CacheSerializer<Integer>()
     {
         public void serialize(Integer s, DataOutput out) throws IOException
         {
@@ -106,13 +141,70 @@ public class Utils
             return 533;
         }
     };
+    public static final CacheSerializer<Integer> intSerializerFailSerialize = new CacheSerializer<Integer>()
+    {
+        public void serialize(Integer s, DataOutput out)
+        {
+            throw new RuntimeException("foo bar");
+        }
+
+        public Integer deserialize(DataInput in) throws IOException
+        {
+            Assert.assertEquals(in.readBoolean(), true);
+            Assert.assertEquals(in.readByte(), (byte) 1);
+            Assert.assertEquals(in.readChar(), 'A');
+            Assert.assertEquals(in.readDouble(), 42.42424242d);
+            Assert.assertEquals(in.readFloat(), 11.111f);
+            int r = in.readInt();
+            Assert.assertEquals(in.readLong(), Long.MAX_VALUE);
+            Assert.assertEquals(in.readShort(), 0x7654);
+            Assert.assertEquals(in.readUnsignedByte(), 0xf8);
+            Assert.assertEquals(in.readUnsignedShort(), 0xf987);
+            byte[] b = new byte[dummyByteArray.length];
+            in.readFully(b);
+            Assert.assertEquals(b, dummyByteArray);
+            return r;
+        }
+
+        public int serializedSize(Integer s)
+        {
+            return 533;
+        }
+    };
+    public static final CacheSerializer<Integer> intSerializerFailDeserialize = new CacheSerializer<Integer>()
+    {
+        public void serialize(Integer s, DataOutput out) throws IOException
+        {
+            out.writeBoolean(true);
+            out.writeByte(1);
+            out.writeChar('A');
+            out.writeDouble(42.42424242d);
+            out.writeFloat(11.111f);
+            out.writeInt(s);
+            out.writeLong(Long.MAX_VALUE);
+            out.writeShort(0x7654);
+            out.writeByte(0xf8);
+            out.writeShort(0xf987);
+            out.write(dummyByteArray);
+        }
+
+        public Integer deserialize(DataInput in)
+        {
+            throw new RuntimeException("foo bar");
+        }
+
+        public int serializedSize(Integer s)
+        {
+            return 533;
+        }
+    };
     static final String big;
     static final String bigRandom;
 
     static {
         dummyByteArray = new byte[500];
-        for (int i = 0; i < Utils.dummyByteArray.length; i++)
-            Utils.dummyByteArray[i] = (byte) ((byte) i % 199);
+        for (int i = 0; i < TestUtils.dummyByteArray.length; i++)
+            TestUtils.dummyByteArray[i] = (byte) ((byte) i % 199);
     }
 
     static int manyCount = 20000;
@@ -214,7 +306,13 @@ public class Utils
             cache.put(i, Integer.toHexString(i));
     }
 
-    static void checkManyForSerialized(OHCache<Integer, String> cache, int count)
+    static void checkManyForSerializedKeys(OHCache<Integer, String> cache, int count)
+    {
+        Assert.assertTrue(count > manyCount * 9 / 10, "count=" + count); // allow some variation
+
+    }
+
+    static void checkManyForSerializedEntries(OHCache<Integer, String> cache, int count)
     {
         Assert.assertTrue(count > manyCount * 9 / 10, "count=" + count); // allow some variation
 

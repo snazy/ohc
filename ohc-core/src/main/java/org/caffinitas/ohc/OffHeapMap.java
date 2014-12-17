@@ -443,6 +443,9 @@ final class OffHeapMap
             return (int) (hash & mask);
         }
 
+        /**
+         * Remove entry operation for eviction - that's when the previous entry is not known.
+         */
         void removeLink(long hash, long hashEntryAdr)
         {
             long next = HashEntries.getNext(hashEntryAdr);
@@ -466,6 +469,9 @@ final class OffHeapMap
             HashEntries.setNext(hashEntryAdr, 0L);
         }
 
+        /**
+         * Remove entry operation (not for eviction).
+         */
         void removeLink(long hash, long hashEntryAdr, long prevEntryAdr)
         {
             long next = HashEntries.getNext(hashEntryAdr);
@@ -513,7 +519,7 @@ final class OffHeapMap
         long hash = HashEntries.getHash(hashEntryAdr);
 
         if (prevEntryAdr == -1L)
-            // cleanUp has no information about the previous hash-entry
+            // cleanUp has no information about the previous hash-entry (during eviction)
             table.removeLink(hash, hashEntryAdr);
         else
             // other operations know about the previous hash-entry (since they walk through the entry-chain)

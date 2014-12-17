@@ -82,6 +82,7 @@ abstract class AbstractDataInput implements DataInput
 
     public String readLine() throws IOException
     {
+        // method intentionally not supported (no length prefix)
         throw new UnsupportedOperationException();
     }
 
