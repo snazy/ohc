@@ -41,6 +41,18 @@ public class JEMallocAllocator implements IAllocator
 
         void free(long pointer);
 
+        // jemalloc's configure script defaults:
+        //
+        // OSX:
+        // JEMALLOC_PREFIX    : je_
+        // JEMALLOC_PRIVATE_NAMESPACE : je_
+        //
+        // Linux:
+        // JEMALLOC_PREFIX    :
+        // JEMALLOC_PRIVATE_NAMESPACE : je_
+        //
+        // Means: mallctl is available as "je_mallctl" on OSX and as "mallctl" on Linux - need to find a solution for this
+
         //int je_mallctl(String name, Pointer oldp, Pointer oldlenp, Pointer newp, long newlen);
     }
 
