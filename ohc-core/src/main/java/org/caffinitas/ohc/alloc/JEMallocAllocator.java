@@ -28,11 +28,8 @@ import org.slf4j.LoggerFactory;
 import com.sun.jna.Function;
 import com.sun.jna.InvocationMapper;
 import com.sun.jna.Library;
-import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLibrary;
-import com.sun.jna.NativeLong;
-import com.sun.jna.Pointer;
 
 public class JEMallocAllocator implements IAllocator
 {
@@ -91,10 +88,10 @@ public class JEMallocAllocator implements IAllocator
 
     public long getTotalAllocated()
     {
+        return -1L;
 //        long allocated = mallctlSizeT("stats.allocated");
 //        long hugeAllocated = mallctlSizeT("stats.huge.allocated");
 //        return allocated + hugeAllocated;
-        return -1L;
     }
 
 //    private boolean mallctlBool(String name)
