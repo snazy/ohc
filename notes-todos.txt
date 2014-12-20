@@ -1,6 +1,9 @@
 
 THIS IS JUST AN UNORDERED LIST OF NOTES AND TODOS AND HINTS
 
+"In flight memory" can cause OOM (overcommitted) on Linux causing the process to be killed.
+At least: do not reserve too much memory for OHC - approx 50% of free RAM (during benchmark).
+
 Add burn test.
 
 Cleanup (or better: combination of entry size and trigger/target) may expose a bug. Definitely worth keeping an eye on it.

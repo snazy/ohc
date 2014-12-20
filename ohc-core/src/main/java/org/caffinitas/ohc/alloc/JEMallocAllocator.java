@@ -44,7 +44,7 @@ public class JEMallocAllocator implements IAllocator
 
         void free(long pointer);
 
-        int je_mallctl(String name, Pointer oldp, Pointer oldlenp, Pointer newp, long newlen);
+        //int je_mallctl(String name, Pointer oldp, Pointer oldlenp, Pointer newp, long newlen);
     }
 
     private final JEMLibrary library;
@@ -77,42 +77,43 @@ public class JEMallocAllocator implements IAllocator
         //
         // see `man jemalloc`
         //
-        if (mallctlBool("opt.zero"))
-            LOGGER.warn("jemalloc is has opt.fill enabled - this leads to performance penalties");
-        if (mallctlBool("opt.redzone"))
-            LOGGER.warn("jemalloc is has opt.redzone enabled - this leads to performance penalties");
-        if (mallctlBool("opt.junk"))
-            LOGGER.warn("jemalloc is has opt.junk enabled - this leads to performance penalties");
-        if (mallctlBool("config.debug"))
-            LOGGER.warn("jemalloc is compiled with debug code - this leads to performance penalties");
-        if (mallctlBool("config.fill"))
-            LOGGER.warn("jemalloc is compiled with fill code - this leads to performance penalties");
+//        if (mallctlBool("opt.zero"))
+//            LOGGER.warn("jemalloc is has opt.fill enabled - this leads to performance penalties");
+//        if (mallctlBool("opt.redzone"))
+//            LOGGER.warn("jemalloc is has opt.redzone enabled - this leads to performance penalties");
+//        if (mallctlBool("opt.junk"))
+//            LOGGER.warn("jemalloc is has opt.junk enabled - this leads to performance penalties");
+//        if (mallctlBool("config.debug"))
+//            LOGGER.warn("jemalloc is compiled with debug code - this leads to performance penalties");
+//        if (mallctlBool("config.fill"))
+//            LOGGER.warn("jemalloc is compiled with fill code - this leads to performance penalties");
     }
 
     public long getTotalAllocated()
     {
-        long allocated = mallctlSizeT("stats.allocated");
-        long hugeAllocated = mallctlSizeT("stats.huge.allocated");
-        return allocated + hugeAllocated;
+//        long allocated = mallctlSizeT("stats.allocated");
+//        long hugeAllocated = mallctlSizeT("stats.huge.allocated");
+//        return allocated + hugeAllocated;
+        return -1L;
     }
 
-    private boolean mallctlBool(String name)
-    {
-        Memory oldp = new Memory(1);
-        Memory oldlenp = new Memory(NativeLong.SIZE);
-        oldlenp.setNativeLong(0, new NativeLong(oldp.size()));
-        int r = library.je_mallctl(name, oldp, oldlenp, null, 0);
-        return r == 0 && oldp.getByte(0) != 0;
-    }
-
-    private long mallctlSizeT(String name)
-    {
-        Memory oldp = new Memory(NativeLong.SIZE);
-        Memory oldlenp = new Memory(NativeLong.SIZE);
-        oldlenp.setNativeLong(0, new NativeLong(oldp.size()));
-        int r = library.je_mallctl(name, oldp, oldlenp, null, 0);
-        return r != 0 ? 0L : oldp.getNativeLong(0).longValue();
-    }
+//    private boolean mallctlBool(String name)
+//    {
+//        Memory oldp = new Memory(1);
+//        Memory oldlenp = new Memory(NativeLong.SIZE);
+//        oldlenp.setNativeLong(0, new NativeLong(oldp.size()));
+//        int r = library.je_mallctl(name, oldp, oldlenp, null, 0);
+//        return r == 0 && oldp.getByte(0) != 0;
+//    }
+//
+//    private long mallctlSizeT(String name)
+//    {
+//        Memory oldp = new Memory(NativeLong.SIZE);
+//        Memory oldlenp = new Memory(NativeLong.SIZE);
+//        oldlenp.setNativeLong(0, new NativeLong(oldp.size()));
+//        int r = library.je_mallctl(name, oldp, oldlenp, null, 0);
+//        return r != 0 ? 0L : oldp.getNativeLong(0).longValue();
+//    }
 
     public long allocate(long size)
     {
