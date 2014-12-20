@@ -17,7 +17,6 @@ package org.caffinitas.ohc;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.LongAdder;
 
 import org.caffinitas.ohc.histo.HistogramBuilder;
 
@@ -48,9 +47,9 @@ final class OffHeapMap
     private long rehashes;
     private long evictedEntries;
 
-    private final LongAdder freeCapacity;
+    private final AtomicLong freeCapacity;
 
-    OffHeapMap(OHCacheBuilder builder, LongAdder freeCapacity)
+    OffHeapMap(OHCacheBuilder builder, AtomicLong freeCapacity)
     {
         this.freeCapacity = freeCapacity;
 
@@ -203,7 +202,7 @@ final class OffHeapMap
             break;
         }
 
-        while (freeCapacity.longValue() < bytes)
+        while (freeCapacity.get() < bytes)
             if (!removeOldest())
             {
                 if (hashEntryAdr != 0L)
@@ -219,7 +218,7 @@ final class OffHeapMap
             size++;
         }
 
-        freeCapacity.add(-bytes);
+        freeCapacity.addAndGet(-bytes);
 
         add(newHashEntryAdr);
 
@@ -645,7 +644,7 @@ final class OffHeapMap
 
             Uns.free(hashEntryAdr);
 
-            freeCapacity.add(bytes);
+            freeCapacity.addAndGet(bytes);
         }
     }
 }
