@@ -399,7 +399,7 @@ final class OffHeapMap
         {
             int msz = (int) BUCKET_ENTRY_LEN * hashTableSize;
             long address = Uns.allocate(msz);
-            return new Table(address, hashTableSize);
+            return address != 0L ? new Table(address, hashTableSize) : null;
         }
 
         private Table(long address, int hashTableSize)

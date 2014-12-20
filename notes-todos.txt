@@ -1,6 +1,7 @@
 
 THIS IS JUST AN UNORDERED LIST OF NOTES AND TODOS AND HINTS
 
+Add burn test.
 
 Cleanup (or better: combination of entry size and trigger/target) may expose a bug. Definitely worth keeping an eye on it.
 It will just "do nothing" if there's not enough off-heap memory could be allocated.
