@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 import com.google.common.collect.AbstractIterator;
 import org.slf4j.Logger;
@@ -61,7 +62,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     private final long maxEntrySize;
 
     private long capacity;
-    private final AtomicLong freeCapacity;
+    private final LongAdder freeCapacity;
 
     private volatile long putFailCount;
 
@@ -72,7 +73,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             throw new IllegalArgumentException("capacity");
 
         this.capacity = capacity;
-        freeCapacity = new AtomicLong(capacity);
+        freeCapacity = new LongAdder();
+        freeCapacity.add(capacity);
 
         // build segments
         int segments = builder.getSegmentCount();
@@ -312,7 +314,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             throw new IllegalArgumentException();
         long diff = capacity - this.capacity;
         this.capacity = capacity;
-        freeCapacity.addAndGet(diff);
+        freeCapacity.add(diff);
     }
 
     public void close()
@@ -405,7 +407,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public long freeCapacity()
     {
-        return freeCapacity.get();
+        return freeCapacity.longValue();
     }
 
     public long evictedEntries()
