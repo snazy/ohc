@@ -158,10 +158,11 @@ public final class HashEntries
         if (bytes <= MAX_BUFFERED_SIZE)
         {
             long blockAllocLen = blockAllocLen(bytes);
-            int index = (int) (blockAllocLen >> BLOCK_SHIFT);
+            int index = memBlockIndex(blockAllocLen);
             Long adr = memBufferCaches[index].poll();
             if (adr != null)
                 return adr;
+            return Uns.allocate(blockAllocLen);
         }
 
         return Uns.allocate(bytes);
@@ -173,10 +174,10 @@ public final class HashEntries
             return;
 
         long allocLen = getAllocLen(address);
-        if (allocLen < MAX_BUFFERED_SIZE)
+        if (allocLen <= MAX_BUFFERED_SIZE)
         {
             long blockAllocLen = blockAllocLen(allocLen);
-            int index = (int) (blockAllocLen >> BLOCK_SHIFT);
+            int index = memBlockIndex(blockAllocLen);
             memBufferCaches[index].add(address);
             return;
         }
@@ -184,7 +185,15 @@ public final class HashEntries
         Uns.free(address);
     }
 
-    private static long blockAllocLen(long allocLen)
+    static int memBlockIndex(long blockAllocLen)
+    {
+        int idx = (int) (blockAllocLen >> BLOCK_SHIFT);
+        if ((blockAllocLen & BLOCK_MASK) == 0L)
+            return idx - 1;
+        return idx;
+    }
+
+    static long blockAllocLen(long allocLen)
     {
         if ((allocLen & BLOCK_MASK) == 0L)
             return allocLen;

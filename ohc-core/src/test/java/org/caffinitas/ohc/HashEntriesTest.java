@@ -260,4 +260,31 @@ public class HashEntriesTest
             Uns.free(adr);
         }
     }
+
+    @Test
+    public void testBlockAllocLen()
+    {
+        for (long i = 1; i < 8192 * 4096; i++)
+        {
+            long blkDiv = i & ~4095L;
+            if ((i & 4095) != 0)
+                blkDiv += 4096;
+
+            assertEquals(HashEntries.blockAllocLen(i), blkDiv, "for size " + i);
+        }
+    }
+
+    @Test(dependsOnMethods = "testBlockAllocLen")
+    public void testMemBlockIndex()
+    {
+        for (long i = 1; i < 8192 * 4096; i++)
+        {
+            int blkDiv = (int) (i / 4096);
+            if ((i & 4095) != 0)
+                blkDiv++;
+            blkDiv--;
+
+            assertEquals(HashEntries.memBlockIndex(i), blkDiv, "for size " + i);
+        }
+    }
 }
