@@ -623,7 +623,7 @@ final class OffHeapMap
             if (bytes == 0L)
                 throw new IllegalStateException();
 
-            HashEntries.free(hashEntryAdr);
+            HashEntries.free(hashEntryAdr, bytes);
 
             freeCapacity.addAndGet(bytes);
         }

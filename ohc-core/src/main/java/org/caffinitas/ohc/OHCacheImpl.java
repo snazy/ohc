@@ -228,12 +228,12 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
             catch (RuntimeException | Error e)
             {
-                HashEntries.free(hashEntryAdr);
+                HashEntries.free(hashEntryAdr, bytes);
                 throw e;
             }
             catch (Throwable e)
             {
-                HashEntries.free(hashEntryAdr);
+                HashEntries.free(hashEntryAdr, bytes);
                 throw new IOError(e);
             }
 
@@ -245,7 +245,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, oldValueLen))
                 return true;
 
-            HashEntries.free(hashEntryAdr);
+            HashEntries.free(hashEntryAdr, bytes);
             return false;
         }
         finally

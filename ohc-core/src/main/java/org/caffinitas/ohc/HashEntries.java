@@ -15,8 +15,6 @@
  */
 package org.caffinitas.ohc;
 
-import java.util.concurrent.LinkedBlockingQueue;
-
 import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_HASH;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_KEY_LENGTH;
@@ -52,7 +50,7 @@ public final class HashEntries
         for (; p <= serKeyLen - 8; p += 8, blkOff += 8)
             if (Uns.getLong(hashEntryAdr, blkOff) != Uns.getLongFromByteArray(arr, p))
                 return false;
-        for (; p < serKeyLen; p ++, blkOff ++)
+        for (; p < serKeyLen; p++, blkOff++)
             if (Uns.getByte(hashEntryAdr, blkOff) != arr[p])
                 return false;
 
@@ -68,7 +66,7 @@ public final class HashEntries
         for (; p <= len - 8; p += 8, offset += 8, otherOffset += 8)
             if (Uns.getLong(hashEntryAdr, offset) != Uns.getLong(otherHashEntryAdr, otherOffset))
                 return false;
-        for (; p < len; p ++, offset ++, otherOffset ++)
+        for (; p < len; p++, offset++, otherOffset++)
             if (Uns.getByte(hashEntryAdr, offset) != Uns.getByte(otherHashEntryAdr, otherOffset))
                 return false;
 
@@ -140,57 +138,33 @@ public final class HashEntries
 
     //
 
-    private static final LinkedBlockingQueue<Long>[] memBufferCaches;
-    private static final long MAX_BUFFERED_SIZE = 4096L * 4096L;
-    private static final long BLOCK_SIZE = 4096;
-    private static final long BLOCK_MASK = BLOCK_SIZE - 1L;
-    private static final long BLOCK_SHIFT = Util.bitNum(BLOCK_SIZE) - 1;
+    static final int BLOCK_BUFFERS = 2048;
+    static final MemBuffer[] memBuffers = new MemBuffer[BLOCK_BUFFERS];
 
-    static
-    {
-        memBufferCaches = new LinkedBlockingQueue[4096];
-        for (int i=0;i<4096;i++)
-            memBufferCaches[i] = new LinkedBlockingQueue<>();
-    }
+    static final long BLOCK_SIZE = 4096L;
+    private static final long MAX_BUFFERED_SIZE = 4096L * BLOCK_SIZE;
+    private static final long BLOCK_MASK = BLOCK_SIZE - 1L;
 
     static long allocate(long bytes)
     {
         if (bytes <= MAX_BUFFERED_SIZE)
-        {
-            long blockAllocLen = blockAllocLen(bytes);
-            int index = memBlockIndex(blockAllocLen);
-            Long adr = memBufferCaches[index].poll();
-            if (adr != null)
-                return adr;
-            return Uns.allocate(blockAllocLen);
-        }
+            return memBufferAllocate(bytes);
 
         return Uns.allocate(bytes);
     }
 
-    static void free(long address)
+    static void free(long address, long allocLen)
     {
         if (address == 0L)
             return;
 
-        long allocLen = getAllocLen(address);
         if (allocLen <= MAX_BUFFERED_SIZE)
         {
-            long blockAllocLen = blockAllocLen(allocLen);
-            int index = memBlockIndex(blockAllocLen);
-            memBufferCaches[index].add(address);
+            memBufferFree(address, allocLen);
             return;
         }
 
         Uns.free(address);
-    }
-
-    static int memBlockIndex(long blockAllocLen)
-    {
-        int idx = (int) (blockAllocLen >> BLOCK_SHIFT);
-        if ((blockAllocLen & BLOCK_MASK) == 0L)
-            return idx - 1;
-        return idx;
     }
 
     static long blockAllocLen(long allocLen)
@@ -199,5 +173,54 @@ public final class HashEntries
             return allocLen;
 
         return (allocLen & ~BLOCK_MASK) + BLOCK_SIZE;
+    }
+
+    private static synchronized long memBufferAllocate(long bytes)
+    {
+        long blockAllocLen = blockAllocLen(bytes);
+        for (int i = 0; i < BLOCK_BUFFERS; i++)
+        {
+            MemBuffer mb = memBuffers[i];
+            if (mb != null && mb.len == blockAllocLen)
+            {
+                long adr = mb.address;
+                memBuffers[i] = null;
+                return adr;
+            }
+        }
+
+        return Uns.allocate(blockAllocLen);
+    }
+
+    private static synchronized void memBufferFree(long address, long allocLen)
+    {
+        long blockAllocLen = blockAllocLen(allocLen);
+        for (int i = 0; i < BLOCK_BUFFERS; i++)
+        {
+            if (memBuffers[i] == null)
+            {
+                memBuffers[i] = new MemBuffer(address, blockAllocLen);
+                return;
+            }
+        }
+
+        for (int i = BLOCK_BUFFERS / 2; i<BLOCK_BUFFERS; i++)
+        {
+            Uns.free(memBuffers[i].address);
+            memBuffers[i] = null;
+        }
+        memBuffers[BLOCK_BUFFERS / 2] = new MemBuffer(address, blockAllocLen);
+    }
+
+    static class MemBuffer
+    {
+        final long address;
+        final long len;
+
+        MemBuffer(long address, long len)
+        {
+            this.address = address;
+            this.len = len;
+        }
     }
 }
