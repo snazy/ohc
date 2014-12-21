@@ -137,9 +137,15 @@ public final class HashEntries
     }
 
     //
+    // malloc() or free() are very expensive operations. Write heavy workloads can consume most CPU time
+    // (system CPU usage). To reduce this effort, the following code implements a mem-buffer cache.
+    // Each free'd hash entry is added to the memBuffer array and each allocation tries to reuse such a
+    // cached mem-buffer.
+    //
 
     static final int BLOCK_BUFFERS = 2048;
-    static final MemBuffer[] memBuffers = new MemBuffer[BLOCK_BUFFERS];
+    static final long[] memBuffers = new long[BLOCK_BUFFERS * 2];
+    private static boolean memBufferHalf;
 
     static final long BLOCK_SIZE = 4096L;
     private static final long MAX_BUFFERED_SIZE = 4096L * BLOCK_SIZE;
@@ -178,14 +184,13 @@ public final class HashEntries
     private static synchronized long memBufferAllocate(long bytes)
     {
         long blockAllocLen = blockAllocLen(bytes);
-        for (int i = 0; i < BLOCK_BUFFERS; i++)
+        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
         {
-            MemBuffer mb = memBuffers[i];
-            if (mb != null && mb.len == blockAllocLen)
+            long mbAdr = memBuffers[i];
+            if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
             {
-                long adr = mb.address;
-                memBuffers[i] = null;
-                return adr;
+                memBuffers[i] = 0L;
+                return mbAdr;
             }
         }
 
@@ -195,32 +200,30 @@ public final class HashEntries
     private static synchronized void memBufferFree(long address, long allocLen)
     {
         long blockAllocLen = blockAllocLen(allocLen);
-        for (int i = 0; i < BLOCK_BUFFERS; i++)
+        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
         {
-            if (memBuffers[i] == null)
+            if (memBuffers[i] == 0L)
             {
-                memBuffers[i] = new MemBuffer(address, blockAllocLen);
+                memBuffers[i] = address;
+                memBuffers[i + 1] = blockAllocLen;
                 return;
             }
         }
 
-        for (int i = BLOCK_BUFFERS / 2; i<BLOCK_BUFFERS; i++)
+        memBufferHalf = !memBufferHalf;
+        if (memBufferHalf)
         {
-            Uns.free(memBuffers[i].address);
-            memBuffers[i] = null;
+            for (int i = BLOCK_BUFFERS; i < BLOCK_BUFFERS * 2; i += 2)
+                memBuffers[i] = 0L;
+            memBuffers[BLOCK_BUFFERS] = address;
+            memBuffers[BLOCK_BUFFERS + 1] = blockAllocLen;
         }
-        memBuffers[BLOCK_BUFFERS / 2] = new MemBuffer(address, blockAllocLen);
-    }
-
-    static class MemBuffer
-    {
-        final long address;
-        final long len;
-
-        MemBuffer(long address, long len)
+        else
         {
-            this.address = address;
-            this.len = len;
+            for (int i = 0; i < BLOCK_BUFFERS; i += 2)
+                memBuffers[i] = 0L;
+            memBuffers[0] = address;
+            memBuffers[1] = blockAllocLen;
         }
     }
 }

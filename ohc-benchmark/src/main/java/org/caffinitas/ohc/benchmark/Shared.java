@@ -109,7 +109,7 @@ final class Shared
 
     static void printStats(String title)
     {
-        System.out.println(String.format("%s%n     %s entries, %d/%d free, %s", title, cache.size(), cache.freeCapacity(), cache.capacity(), cache.stats()));
+        System.out.println(String.format("%s%n     %s", title, cache.stats()));
         for (Map.Entry<String, GCStats> gcStat : gcStats.entrySet())
         {
             GCStats gs = gcStat.getValue();
