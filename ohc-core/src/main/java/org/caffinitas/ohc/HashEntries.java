@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import java.util.concurrent.LinkedBlockingQueue;
+
 import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_HASH;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_KEY_LENGTH;
@@ -134,5 +136,59 @@ public final class HashEntries
     static boolean dereference(long hashEntryAdr)
     {
         return Uns.decrement(hashEntryAdr, ENTRY_OFF_REFCOUNT);
+    }
+
+    //
+
+    private static final LinkedBlockingQueue<Long>[] memBufferCaches;
+    private static final long MAX_BUFFERED_SIZE = 4096L * 4096L;
+    private static final long BLOCK_SIZE = 4096;
+    private static final long BLOCK_MASK = BLOCK_SIZE - 1L;
+    private static final long BLOCK_SHIFT = Util.bitNum(BLOCK_SIZE) - 1;
+
+    static
+    {
+        memBufferCaches = new LinkedBlockingQueue[4096];
+        for (int i=0;i<4096;i++)
+            memBufferCaches[i] = new LinkedBlockingQueue<>();
+    }
+
+    static long allocate(long bytes)
+    {
+        if (bytes <= MAX_BUFFERED_SIZE)
+        {
+            long blockAllocLen = blockAllocLen(bytes);
+            int index = (int) (blockAllocLen >> BLOCK_SHIFT);
+            Long adr = memBufferCaches[index].poll();
+            if (adr != null)
+                return adr;
+        }
+
+        return Uns.allocate(bytes);
+    }
+
+    static void free(long address)
+    {
+        if (address == 0L)
+            return;
+
+        long allocLen = getAllocLen(address);
+        if (allocLen < MAX_BUFFERED_SIZE)
+        {
+            long blockAllocLen = blockAllocLen(allocLen);
+            int index = (int) (blockAllocLen >> BLOCK_SHIFT);
+            memBufferCaches[index].add(address);
+            return;
+        }
+
+        Uns.free(address);
+    }
+
+    private static long blockAllocLen(long allocLen)
+    {
+        if ((allocLen & BLOCK_MASK) == 0L)
+            return allocLen;
+
+        return (allocLen & ~BLOCK_MASK) + BLOCK_SIZE;
     }
 }
