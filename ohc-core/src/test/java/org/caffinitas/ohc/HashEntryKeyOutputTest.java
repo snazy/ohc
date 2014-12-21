@@ -48,8 +48,6 @@ public class HashEntryKeyOutputTest
             hasher.putBytes(ref);
             hasher.putByte((byte) 0xf0);
 
-            out.finish();
-
             assertEquals(out.hash(), hasher.hash().asLong());
         }
         finally

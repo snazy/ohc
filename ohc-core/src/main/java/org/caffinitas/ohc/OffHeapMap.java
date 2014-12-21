@@ -126,7 +126,7 @@ final class OffHeapMap
         return evictedEntries;
     }
 
-    synchronized long getEntry(KeyBuffer key)
+    synchronized long getEntry(KeyBuffer key, boolean reference)
     {
         for (long hashEntryAdr = table.first(key.hash());
              hashEntryAdr != 0L;
@@ -139,7 +139,8 @@ final class OffHeapMap
 
             touch(hashEntryAdr);
 
-            HashEntries.reference(hashEntryAdr);
+            if (reference)
+                HashEntries.reference(hashEntryAdr);
 
             hitCount++;
             return hashEntryAdr;
@@ -148,28 +149,6 @@ final class OffHeapMap
         // not found
         missCount++;
         return 0L;
-    }
-
-    synchronized boolean containsEntry(KeyBuffer key)
-    {
-        for (long hashEntryAdr = table.first(key.hash());
-             hashEntryAdr != 0L;
-             hashEntryAdr = HashEntries.getNext(hashEntryAdr))
-        {
-            if (notSameKey(key, hashEntryAdr))
-                continue;
-
-            // return existing entry
-
-            touch(hashEntryAdr);
-
-            hitCount++;
-            return true;
-        }
-
-        // not found
-        missCount++;
-        return false;
     }
 
     synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
@@ -296,9 +275,7 @@ final class OffHeapMap
 
     private static boolean notSameKey(KeyBuffer key, long hashEntryAdr)
     {
-        long hashEntryHash = HashEntries.getHash(hashEntryAdr);
-        if (hashEntryHash != key.hash())
-            return true;
+        if (notSameHash(key.hash(), hashEntryAdr)) return true;
 
         long serKeyLen = HashEntries.getKeyLen(hashEntryAdr);
         return serKeyLen != key.size()
@@ -307,13 +284,17 @@ final class OffHeapMap
 
     private static boolean notSameKey(long newHashEntryAdr, long newHash, long newKeyLen, long hashEntryAdr)
     {
-        long hashEntryHash = HashEntries.getHash(hashEntryAdr);
-        if (hashEntryHash != newHash)
-            return true;
+        if (notSameHash(newHash, hashEntryAdr)) return true;
 
         long serKeyLen = HashEntries.getKeyLen(hashEntryAdr);
         return serKeyLen != newKeyLen
                || !HashEntries.compare(hashEntryAdr, ENTRY_OFF_DATA, newHashEntryAdr, ENTRY_OFF_DATA, serKeyLen);
+    }
+
+    private static boolean notSameHash(long newHash, long hashEntryAdr)
+    {
+        long hashEntryHash = HashEntries.getHash(hashEntryAdr);
+        return hashEntryHash != newHash;
     }
 
     private void rehash()

@@ -35,12 +35,7 @@ final class HashEntryKeyOutput extends AbstractOffHeapDataOutput
 
     long hash()
     {
-        return hash;
-    }
-
-    void finish()
-    {
-        hash = hasher.hash().asLong();
+        return hasher.hash().asLong();
     }
 
     public void write(int b) throws IOException

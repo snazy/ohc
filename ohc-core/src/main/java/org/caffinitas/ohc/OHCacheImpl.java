@@ -128,7 +128,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer keySource = keySource(key);
 
         OffHeapMap segment = segment(keySource.hash());
-        long hashEntryAdr = segment.getEntry(keySource);
+        long hashEntryAdr = segment.getEntry(keySource, true);
 
         if (hashEntryAdr == 0L)
             return null;
@@ -154,7 +154,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         KeyBuffer keySource = keySource(key);
 
-        return segment(keySource.hash()).containsEntry(keySource);
+        return segment(keySource.hash()).getEntry(keySource, false) != 0L;
     }
 
     public void put(K k, V v)
@@ -236,14 +236,13 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 Uns.free(hashEntryAdr);
                 throw new IOError(e);
             }
-            key.finish();
-
-            // initialize hash entry
-            HashEntries.init(key.hash(), keyLen, valueLen, hashEntryAdr);
 
             long hash = key.hash();
 
-            if (segment(hash).putEntry(hashEntryAdr, key.hash(), keyLen, bytes, ifAbsent, oldValueAdr, oldValueLen))
+            // initialize hash entry
+            HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
+
+            if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, oldValueLen))
                 return true;
 
             Uns.free(hashEntryAdr);
@@ -262,11 +261,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         KeyBuffer key = keySource(k);
 
-        removeInternal(key);
-    }
-
-    private void removeInternal(KeyBuffer key)
-    {
         segment(key.hash()).removeEntry(key);
     }
 
@@ -635,7 +629,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer keySource = keySource(key);
 
         OffHeapMap segment = segment(keySource.hash());
-        long hashEntryAdr = segment.getEntry(keySource);
+        long hashEntryAdr = segment.getEntry(keySource, true);
 
         return hashEntryAdr != 0L && serializeEntry(segment, channel, hashEntryAdr);
     }
