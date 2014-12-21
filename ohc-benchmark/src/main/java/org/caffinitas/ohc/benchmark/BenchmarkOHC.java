@@ -20,9 +20,9 @@ import java.lang.management.ThreadMXBean;
 import java.util.Date;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -52,7 +52,7 @@ import org.caffinitas.ohc.benchmark.distribution.OptionDistribution;
 
 import static java.lang.Thread.sleep;
 
-public class BenchmarkOHC
+public final class BenchmarkOHC
 {
     public static final String THREADS = "t";
     public static final String CAPACITY = "cap";
@@ -175,7 +175,7 @@ public class BenchmarkOHC
             if (warmUpSecs > 0)
             {
                 printMessage("Start warm-up...");
-                runFor(exec, warmUpSecs, readWriteRatio, readKeyDist, writeKeyDist, valueSizeDist);
+                runFor(exec, queue, warmUpSecs, readWriteRatio, readKeyDist, writeKeyDist, valueSizeDist);
                 printMessage("");
                 logMemoryUse(cache);
             }
@@ -191,7 +191,7 @@ public class BenchmarkOHC
             // benchmark
 
             printMessage("Start benchmark...");
-            runFor(exec, duration, readWriteRatio, readKeyDist, writeKeyDist, valueSizeDist);
+            runFor(exec, queue, duration, readWriteRatio, readKeyDist, writeKeyDist, valueSizeDist);
             printMessage("");
             logMemoryUse(cache);
 
@@ -220,7 +220,7 @@ public class BenchmarkOHC
 //        return System.nanoTime();
     }
 
-    private static void runFor(ThreadPoolExecutor exec, int duration,
+    private static void runFor(ThreadPoolExecutor exec, BlockingQueue<Runnable> queue, int duration,
                                double readWriteRatio,
                                Distribution readKeyDist, Distribution writeKeyDist,
                                Distribution valueSizeDist) throws InterruptedException
@@ -250,9 +250,9 @@ public class BenchmarkOHC
             boolean read = rnd.nextLong() >>> 1 <= writeTrigger;
 
             if (read)
-                submit(exec, new ReadTask(readKeyDist.next()));
+                submit(queue, new ReadTask(readKeyDist.next()));
             else
-                submit(exec, new WriteTask(writeKeyDist.next(), (int) valueSizeDist.next()));
+                submit(queue, new WriteTask(writeKeyDist.next(), (int) valueSizeDist.next()));
 
             if (fatal.get())
             {
@@ -320,18 +320,11 @@ public class BenchmarkOHC
                           timer.durationUnit());
     }
 
-    private static void submit(ThreadPoolExecutor exec, Runnable task) throws InterruptedException
+    private static void submit(BlockingQueue<Runnable> queue, Runnable task) throws InterruptedException
     {
         while (true)
-            try
-            {
-                exec.execute(task);
+            if (queue.offer(task, 10, TimeUnit.MILLISECONDS))
                 return;
-            }
-            catch (RejectedExecutionException e)
-            {
-                Thread.sleep(10);
-            }
     }
 
     private static Distribution parseDistribution(String optionValue)
