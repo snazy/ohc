@@ -210,26 +210,12 @@ public final class HashEntries
             }
         }
 
-        memBufferHalf = !memBufferHalf;
-        if (memBufferHalf)
+        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
         {
-            for (int i = BLOCK_BUFFERS; i < BLOCK_BUFFERS * 2; i += 2)
-            {
-                Uns.free(memBuffers[i]);
-                memBuffers[i] = 0L;
-            }
-            memBuffers[BLOCK_BUFFERS] = address;
-            memBuffers[BLOCK_BUFFERS + 1] = blockAllocLen;
+            Uns.free(memBuffers[i]);
+            memBuffers[i] = 0L;
         }
-        else
-        {
-            for (int i = 0; i < BLOCK_BUFFERS; i += 2)
-            {
-                Uns.free(memBuffers[i]);
-                memBuffers[i] = 0L;
-            }
-            memBuffers[0] = address;
-            memBuffers[1] = blockAllocLen;
-        }
+        memBuffers[0] = address;
+        memBuffers[1] = blockAllocLen;
     }
 }
