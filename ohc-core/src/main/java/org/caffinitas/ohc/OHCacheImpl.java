@@ -23,6 +23,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -33,7 +34,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.caffinitas.ohc.histo.EstimatedHistogram;
-import org.caffinitas.ohc.histo.HistogramBuilder;
 
 import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_HASH;
@@ -448,10 +448,31 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public EstimatedHistogram getBucketHistogram()
     {
-        HistogramBuilder builder = new HistogramBuilder();
+        EstimatedHistogram hist = new EstimatedHistogram();
         for (OffHeapMap map : maps)
-            map.updateBucketHistogram(builder);
-        return builder.buildWithStdevRangesAroundMean();
+            map.updateBucketHistogram(hist);
+
+        long[] offsets = hist.getBucketOffsets();
+        long[] buckets = hist.getBuckets(false);
+
+        for (int i=buckets.length-1;i>0;i--)
+        {
+            if (buckets[i] != 0L)
+            {
+                offsets = Arrays.copyOf(offsets, i + 3);
+                buckets = Arrays.copyOf(buckets, i + 3);
+                System.arraycopy(offsets, 0, offsets, 1, i + 2);
+                System.arraycopy(buckets, 0, buckets, 1, i + 2);
+                offsets[0] = 0L;
+                buckets[0] = 0L;
+                break;
+            }
+        }
+
+        for (int i = 0; i < offsets.length; i++)
+            offsets[i]--;
+
+        return new EstimatedHistogram(offsets, buckets);
     }
 
     //

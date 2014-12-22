@@ -18,7 +18,7 @@ package org.caffinitas.ohc;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.caffinitas.ohc.histo.HistogramBuilder;
+import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 import static org.caffinitas.ohc.Util.BUCKET_ENTRY_LEN;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
@@ -350,9 +350,9 @@ final class OffHeapMap
         return table.size();
     }
 
-    synchronized void updateBucketHistogram(HistogramBuilder builder)
+    synchronized void updateBucketHistogram(EstimatedHistogram hist)
     {
-        table.updateBucketHistogram(builder);
+        table.updateBucketHistogram(hist);
     }
 
     synchronized void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
@@ -464,14 +464,14 @@ final class OffHeapMap
             return mask + 1;
         }
 
-        void updateBucketHistogram(HistogramBuilder h)
+        void updateBucketHistogram(EstimatedHistogram h)
         {
             for (int i = 0; i < size(); i++)
             {
                 int len = 0;
                 for (long adr = getFirst(i); adr != 0L; adr = HashEntries.getNext(adr))
                     len++;
-                h.add(len);
+                h.add(len + 1);
             }
         }
     }
