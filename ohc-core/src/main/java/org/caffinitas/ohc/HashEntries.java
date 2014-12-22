@@ -155,6 +155,8 @@ public final class HashEntries
     static long memBufferFree;
     static long memBufferClear;
 
+    private static long memBufferClearThrottle;
+
     static long allocate(long bytes)
     {
         if (bytes <= MAX_BUFFERED_SIZE)
@@ -219,10 +221,16 @@ public final class HashEntries
             }
         }
 
-        memBufferClear();
+        memBufferClearThrottle++;
+        if ((memBufferClearThrottle & 0x1f)==0)
+        {
+            memBufferClear();
 
-        memBuffers[0] = address;
-        memBuffers[1] = blockAllocLen;
+            memBuffers[0] = address;
+            memBuffers[1] = blockAllocLen;
+        }
+        else
+            Uns.free(address);
     }
 
     static synchronized void memBufferClear()
