@@ -152,6 +152,7 @@ public final class OHCacheStats
                       .add("memBufferHit", HashEntries.memBufferHit)
                       .add("memBufferMiss", HashEntries.memBufferMiss)
                       .add("memBufferFree", HashEntries.memBufferFree)
+                      .add("memBufferExpires", HashEntries.memBufferExpires)
                       .add("memBufferClear", HashEntries.memBufferClear)
                       .toString();
     }

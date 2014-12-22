@@ -153,9 +153,8 @@ public final class HashEntries
     static long memBufferHit;
     static long memBufferMiss;
     static long memBufferFree;
+    static long memBufferExpires;
     static long memBufferClear;
-
-    private static long memBufferClearThrottle;
 
     static long allocate(long bytes)
     {
@@ -211,26 +210,38 @@ public final class HashEntries
         memBufferFree++;
 
         long blockAllocLen = blockAllocLen(allocLen);
+        long least = Long.MAX_VALUE;
+        int min = -1;
         for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
         {
             if (memBuffers[i] == 0L)
             {
                 memBuffers[i] = address;
                 memBuffers[i + 1] = blockAllocLen;
+                Uns.putLong(address, 0L, System.currentTimeMillis());
                 return;
+            }
+            else
+            {
+                long ts = Uns.getLong(memBuffers[i], 0L);
+                if (ts < least)
+                {
+                    least = ts;
+                    min = i;
+                }
             }
         }
 
-        memBufferClearThrottle++;
-        if ((memBufferClearThrottle & 0x1f)==0)
-        {
-            memBufferClear();
+        memBufferExpires++;
 
-            memBuffers[0] = address;
-            memBuffers[1] = blockAllocLen;
-        }
-        else
+        if (min == -1)
+        {
             Uns.free(address);
+            return;
+        }
+
+        memBuffers[min] = address;
+        memBuffers[min + 1] = blockAllocLen;
     }
 
     static synchronized void memBufferClear()
