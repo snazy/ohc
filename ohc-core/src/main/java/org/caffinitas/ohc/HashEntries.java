@@ -240,8 +240,6 @@ public final class HashEntries
     static long memBufferExpires;
     static long memBufferClear;
 
-    private static volatile int pad00,pad01,pad02,pad03,pad04,pad05,pad06,pad07;
-    private static volatile int pad10,pad11,pad12,pad13,pad14,pad15,pad16,pad17;
     private static volatile int bufferIndex;
 
     static long allocate(long bytes)
