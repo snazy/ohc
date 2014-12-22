@@ -146,9 +146,9 @@ public final class HashEntries
     static final int BLOCK_BUFFERS = 512;
     static final long[] memBuffers = new long[BLOCK_BUFFERS * 2];
 
-    static final long BLOCK_SIZE = 4096L;
-    private static final long MAX_BUFFERED_SIZE = 4096L * BLOCK_SIZE;
+    static final long BLOCK_SIZE = 16384L;
     private static final long BLOCK_MASK = BLOCK_SIZE - 1L;
+    private static final long MAX_BUFFERED_SIZE = 8L * 1024 * 1024;
 
     static long memBufferHit;
     static long memBufferMiss;
