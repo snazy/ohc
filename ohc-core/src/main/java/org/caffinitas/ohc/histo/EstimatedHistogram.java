@@ -260,6 +260,41 @@ public class EstimatedHistogram
         }
     }
 
+    public String toString()
+    {
+        // only print overflow if there is any
+        int nameCount;
+        if (buckets.get(buckets.length() - 1) == 0)
+            nameCount = buckets.length() - 1;
+        else
+            nameCount = buckets.length();
+        String[] names = new String[nameCount];
+
+        int maxNameLength = 0;
+        for (int i = 0; i < nameCount; i++)
+        {
+            names[i] = nameOfRange(bucketOffsets, i);
+            maxNameLength = Math.max(maxNameLength, names[i].length());
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        // emit log records
+        String formatstr = "%" + maxNameLength + "s: %d\n";
+        for (int i = 0; i < nameCount; i++)
+        {
+            long count = buckets.get(i);
+            // sort-of-hack to not print empty ranges at the start that are only used to demarcate the
+            // first populated range. for code clarity we don't omit this record from the maxNameLength
+            // calculation, and accept the unnecessary whitespace prefixes that will occasionally occur
+            if (i == 0 && count == 0)
+                continue;
+            sb.append(String.format(formatstr, names[i], count));
+        }
+
+        return sb.toString();
+    }
+
     private static String nameOfRange(long[] bucketOffsets, int index)
     {
         StringBuilder sb = new StringBuilder();

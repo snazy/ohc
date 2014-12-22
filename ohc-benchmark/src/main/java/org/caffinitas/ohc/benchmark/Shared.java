@@ -109,7 +109,8 @@ final class Shared
 
     static void printStats(String title)
     {
-        System.out.println(String.format("%s%n     %s", title, cache.stats()));
+        System.out.println(String.format("%s%n     %s%n" +
+                                         "   Histogram:%n%s", title, cache.stats(), cache.getBucketHistogram()));
         for (Map.Entry<String, GCStats> gcStat : gcStats.entrySet())
         {
             GCStats gs = gcStat.getValue();

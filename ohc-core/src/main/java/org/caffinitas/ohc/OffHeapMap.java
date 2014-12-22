@@ -128,7 +128,7 @@ final class OffHeapMap
 
     synchronized long getEntry(KeyBuffer key, boolean reference)
     {
-        for (long hashEntryAdr = table.first(key.hash());
+        for (long hashEntryAdr = table.getFirst(key.hash());
              hashEntryAdr != 0L;
              hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
@@ -155,7 +155,7 @@ final class OffHeapMap
     {
         long hashEntryAdr;
         long prevEntryAdr = 0L;
-        for (hashEntryAdr = table.first(hash);
+        for (hashEntryAdr = table.getFirst(hash);
              hashEntryAdr != 0L;
              prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
@@ -215,7 +215,7 @@ final class OffHeapMap
 
         long next;
         for (int p = 0; p < table.size(); p++)
-            for (long hashEntryAdr = table.first(p);
+            for (long hashEntryAdr = table.getFirst(p);
                  hashEntryAdr != 0L;
                  hashEntryAdr = next)
             {
@@ -231,7 +231,7 @@ final class OffHeapMap
     {
         long hash = HashEntries.getHash(removeHashEntryAdr);
         long prevEntryAdr = 0L;
-        for (long hashEntryAdr = table.first(hash);
+        for (long hashEntryAdr = table.getFirst(hash);
              hashEntryAdr != 0L;
              prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
@@ -252,7 +252,7 @@ final class OffHeapMap
     synchronized void removeEntry(KeyBuffer key)
     {
         long prevEntryAdr = 0L;
-        for (long hashEntryAdr = table.first(key.hash());
+        for (long hashEntryAdr = table.getFirst(key.hash());
              hashEntryAdr != 0L;
              prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
@@ -310,7 +310,7 @@ final class OffHeapMap
         long next;
 
         for (int part = 0; part < tableSize; part++)
-            for (long hashEntryAdr = tab.first(part);
+            for (long hashEntryAdr = tab.getFirst(part);
                  hashEntryAdr != 0L;
                  hashEntryAdr = next)
             {
@@ -332,7 +332,7 @@ final class OffHeapMap
         int i = 0;
         for (long hashEntryAdr = lruHead;
              hashEntryAdr != 0L && i < n;
-             hashEntryAdr = getLruNext(hashEntryAdr))
+             hashEntryAdr = HashEntries.getLRUNext(hashEntryAdr))
         {
             r[i++] = hashEntryAdr;
             HashEntries.reference(hashEntryAdr);
@@ -358,7 +358,7 @@ final class OffHeapMap
     synchronized void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
     {
         for (; nSegments-- > 0 && mapSegmentIndex < table.size(); mapSegmentIndex++)
-            for (long hashEntryAdr = table.first(mapSegmentIndex);
+            for (long hashEntryAdr = table.getFirst(mapSegmentIndex);
                  hashEntryAdr != 0L;
                  hashEntryAdr = HashEntries.getNext(hashEntryAdr))
             {
@@ -407,12 +407,12 @@ final class OffHeapMap
             super.finalize();
         }
 
-        long first(long hash)
+        long getFirst(long hash)
         {
             return Uns.getLong(address, bucketOffset(hash));
         }
 
-        void first(long hash, long hashEntryAdr)
+        void setFirst(long hash, long hashEntryAdr)
         {
             Uns.putLong(address, bucketOffset(hash), hashEntryAdr);
         }
@@ -427,54 +427,36 @@ final class OffHeapMap
             return (int) (hash & mask);
         }
 
-        /**
-         * Remove entry operation for eviction - that's when the previous entry is not known.
-         */
-        void removeLink(long hash, long hashEntryAdr)
-        {
-            long next = HashEntries.getNext(hashEntryAdr);
-            long head = first(hash);
-
-            if (head == hashEntryAdr)
-                first(hash, next);
-            else
-            {
-                long prevEntryAdr = 0L;
-                for (long adr = head;
-                     adr != 0L;
-                     prevEntryAdr = adr, adr = HashEntries.getNext(adr))
-                {
-                    if (adr == hashEntryAdr)
-                        HashEntries.setNext(prevEntryAdr, next);
-                }
-            }
-
-            // just for safety
-            HashEntries.setNext(hashEntryAdr, 0L);
-        }
-
-        /**
-         * Remove entry operation (not for eviction).
-         */
         void removeLink(long hash, long hashEntryAdr, long prevEntryAdr)
         {
             long next = HashEntries.getNext(hashEntryAdr);
 
-            long head = first(hash);
+            long head = getFirst(hash);
             if (head == hashEntryAdr)
-                first(hash, next);
+            {
+                setFirst(hash, next);
+            }
             else if (prevEntryAdr != 0L)
+            {
+                if (prevEntryAdr == -1L)
+                {
+                    for (long adr = head;
+                         adr != 0L;
+                         prevEntryAdr = adr, adr = HashEntries.getNext(adr))
+                    {
+                        if (adr == hashEntryAdr)
+                            break;
+                    }
+                }
                 HashEntries.setNext(prevEntryAdr, next);
-
-            // just for safety
-            HashEntries.setNext(hashEntryAdr, 0L);
+            }
         }
 
         void addAsHead(long hash, long hashEntryAdr)
         {
-            long head = first(hash);
+            long head = getFirst(hash);
             HashEntries.setNext(hashEntryAdr, head);
-            first(hash, hashEntryAdr);
+            setFirst(hash, hashEntryAdr);
         }
 
         int size()
@@ -487,7 +469,7 @@ final class OffHeapMap
             for (int i = 0; i < size(); i++)
             {
                 int len = 0;
-                for (long adr = first(i); adr != 0L; adr = HashEntries.getNext(adr))
+                for (long adr = getFirst(i); adr != 0L; adr = HashEntries.getNext(adr))
                     len++;
                 h.add(len);
             }
@@ -502,17 +484,12 @@ final class OffHeapMap
     {
         long hash = HashEntries.getHash(hashEntryAdr);
 
-        if (prevEntryAdr == -1L)
-            // cleanUp has no information about the previous hash-entry (during eviction)
-            table.removeLink(hash, hashEntryAdr);
-        else
-            // other operations know about the previous hash-entry (since they walk through the entry-chain)
-            table.removeLink(hash, hashEntryAdr, prevEntryAdr);
+        table.removeLink(hash, hashEntryAdr, prevEntryAdr);
 
         // LRU stuff
 
-        long next = getLruNext(hashEntryAdr);
-        long prev = getLruPrev(hashEntryAdr);
+        long next = HashEntries.getLRUNext(hashEntryAdr);
+        long prev = HashEntries.getLRUPrev(hashEntryAdr);
 
         if (lruHead == hashEntryAdr)
             lruHead = next;
@@ -520,9 +497,9 @@ final class OffHeapMap
             lruTail = prev;
 
         if (next != 0L)
-            setLruPrev(next, prev);
+            HashEntries.setLRUPrev(next, prev);
         if (prev != 0L)
-            setLruNext(prev, next);
+            HashEntries.setLRUNext(prev, next);
 
         dereference(hashEntryAdr);
     }
@@ -534,10 +511,10 @@ final class OffHeapMap
         // LRU stuff
 
         long h = lruHead;
-        setLruNext(hashEntryAdr, h);
+        HashEntries.setLRUNext(hashEntryAdr, h);
         if (h != 0L)
-            setLruPrev(h, hashEntryAdr);
-        setLruPrev(hashEntryAdr, 0L);
+            HashEntries.setLRUPrev(h, hashEntryAdr);
+        HashEntries.setLRUPrev(hashEntryAdr, 0L);
         lruHead = hashEntryAdr;
 
         if (lruTail == 0L)
@@ -546,54 +523,33 @@ final class OffHeapMap
 
     private void touch(long hashEntryAdr)
     {
-        if (lruHead == hashEntryAdr)
+        long head = lruHead;
+
+        if (head == hashEntryAdr)
             // short-cut - entry already at LRU head
             return;
 
-        // LRU stuff (basically a remove from LRU linked list)
+        // LRU stuff
 
-        long next = getLruNext(hashEntryAdr);
-        long prev = getLruPrev(hashEntryAdr);
+        long next = HashEntries.getAndSetLRUNext(hashEntryAdr, head);
+        long prev = HashEntries.getAndSetLRUPrev(hashEntryAdr, 0L);
 
-        if (lruTail == hashEntryAdr)
-            lruTail = prev;
+        long tail = lruTail;
+        if (tail == hashEntryAdr)
+            lruTail = prev == 0L ? hashEntryAdr : prev;
+        else if (tail == 0L)
+            lruTail = hashEntryAdr;
 
         if (next != 0L)
-            setLruPrev(next, prev);
+            HashEntries.setLRUPrev(next, prev);
         if (prev != 0L)
-            setLruNext(prev, next);
+            HashEntries.setLRUNext(prev, next);
 
         // LRU stuff (basically an add to LRU linked list)
 
-        long head = lruHead;
-        setLruNext(hashEntryAdr, head);
         if (head != 0L)
-            setLruPrev(head, hashEntryAdr);
-        setLruPrev(hashEntryAdr, 0L);
+            HashEntries.setLRUPrev(head, hashEntryAdr);
         lruHead = hashEntryAdr;
-
-        if (lruTail == 0L)
-            lruTail = hashEntryAdr;
-    }
-
-    private static long getLruNext(long hashEntryAdr)
-    {
-        return HashEntries.getLRUNext(hashEntryAdr);
-    }
-
-    private static long getLruPrev(long hashEntryAdr)
-    {
-        return HashEntries.getLRUPrev(hashEntryAdr);
-    }
-
-    private static void setLruNext(long hashEntryAdr, long next)
-    {
-        HashEntries.setLRUNext(hashEntryAdr, next);
-    }
-
-    private static void setLruPrev(long hashEntryAdr, long prev)
-    {
-        HashEntries.setLRUPrev(hashEntryAdr, prev);
     }
 
     private boolean removeOldest()

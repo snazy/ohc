@@ -153,6 +153,12 @@ final class Uns
         return unsafe.getLong(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
     }
 
+    static long getAndPutLong(long address, long offset, long value)
+    {
+        validate(address, offset, 8L);
+        return unsafe.getAndSetLong(null, address + offset, value);
+    }
+
     static void putLong(long address, long offset, long value)
     {
         validate(address, offset, 8L);

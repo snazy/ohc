@@ -85,6 +85,11 @@ public final class HashEntries
         Uns.putLong(hashEntryAdr, ENTRY_OFF_LRU_NEXT, replacement);
     }
 
+    public static long getAndSetLRUNext(long hashEntryAdr, long replacement)
+    {
+        return Uns.getAndPutLong(hashEntryAdr, ENTRY_OFF_LRU_NEXT, replacement);
+    }
+
     public static long getLRUPrev(long hashEntryAdr)
     {
         return Uns.getLong(hashEntryAdr, ENTRY_OFF_LRU_PREV);
@@ -93,6 +98,11 @@ public final class HashEntries
     public static void setLRUPrev(long hashEntryAdr, long replacement)
     {
         Uns.putLong(hashEntryAdr, ENTRY_OFF_LRU_PREV, replacement);
+    }
+
+    public static long getAndSetLRUPrev(long hashEntryAdr, long replacement)
+    {
+        return Uns.getAndPutLong(hashEntryAdr, ENTRY_OFF_LRU_PREV, replacement);
     }
 
     static long getHash(long hashEntryAdr)
