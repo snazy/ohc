@@ -143,11 +143,11 @@ public final class HashEntries
     // cached mem-buffer.
     //
 
-    static final int BLOCK_BUFFERS = 512;
-    static final long[] memBuffers = new long[BLOCK_BUFFERS * 2];
+    private static final int BLOCK_BUFFERS = 512;
+    private static final long[] memBuffers = new long[BLOCK_BUFFERS * 2];
 
     static final long BLOCK_SIZE = 16384L;
-    private static final long BLOCK_MASK = BLOCK_SIZE - 1L;
+    static final long BLOCK_MASK = BLOCK_SIZE - 1L;
     private static final long MAX_BUFFERED_SIZE = 8L * 1024 * 1024;
 
     static long memBufferHit;
