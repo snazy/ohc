@@ -25,8 +25,8 @@ import com.google.common.hash.Hashing;
  */
 final class HashEntryKeyOutput extends AbstractOffHeapDataOutput
 {
+    // TODO implement own hash impl because Guava's Hashing murmur3_128 uses its own byte buffer, which implies unnecessary copying
     private final Hasher hasher = Hashing.murmur3_128().newHasher();
-    private long hash;
 
     HashEntryKeyOutput(long hashEntryAdr, long keyLen)
     {

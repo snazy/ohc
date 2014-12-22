@@ -275,6 +275,7 @@ final class Uns
                 throw new IllegalStateException("Must not decrement 0");
             if (unsafe.compareAndSwapLong(null, address, v, v - 1))
                 return v == 1;
+            unsafe.park(false, 1000);
         }
     }
 

@@ -15,6 +15,7 @@
  */
 package org.caffinitas.ohc;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -48,6 +49,14 @@ final class OffHeapMap
     private long evictedEntries;
 
     private final AtomicLong freeCapacity;
+
+    private final ThreadLocal<List<Long>> dereferenceList = new ThreadLocal<List<Long>>()
+    {
+        protected List<Long> initialValue()
+        {
+            return new ArrayList<>();
+        }
+    };
 
     OffHeapMap(OHCacheBuilder builder, AtomicLong freeCapacity)
     {
@@ -151,7 +160,14 @@ final class OffHeapMap
         return 0L;
     }
 
-    synchronized boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
+    boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
+    {
+        boolean r = putEntryInt(newHashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, oldValueLen);
+        processDereferences();
+        return r;
+    }
+
+    private synchronized boolean putEntryInt(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
     {
         long hashEntryAdr;
         long prevEntryAdr = 0L;
@@ -181,7 +197,7 @@ final class OffHeapMap
         }
 
         while (freeCapacity.get() < bytes)
-            if (!removeOldest())
+            if (!removeEldest())
             {
                 if (hashEntryAdr != 0L)
                     size--;
@@ -227,7 +243,19 @@ final class OffHeapMap
         table.clear();
     }
 
-    synchronized void removeEntry(long removeHashEntryAdr)
+    void removeEntry(long removeHashEntryAdr)
+    {
+        removeEntryInt(removeHashEntryAdr);
+        processDereferences();
+    }
+
+    void removeEntry(KeyBuffer key)
+    {
+        removeEntryInt(key);
+        processDereferences();
+    }
+
+    private synchronized void removeEntryInt(long removeHashEntryAdr)
     {
         long hash = HashEntries.getHash(removeHashEntryAdr);
         long prevEntryAdr = 0L;
@@ -249,7 +277,7 @@ final class OffHeapMap
         }
     }
 
-    synchronized void removeEntry(KeyBuffer key)
+    private synchronized void removeEntryInt(KeyBuffer key)
     {
         long prevEntryAdr = 0L;
         for (long hashEntryAdr = table.getFirst(key.hash());
@@ -470,10 +498,6 @@ final class OffHeapMap
         }
     }
 
-    //
-    // eviction/replacement/cleanup
-    //
-
     private void removeAndDereference(long hashEntryAdr, long prevEntryAdr)
     {
         long hash = HashEntries.getHash(hashEntryAdr);
@@ -495,7 +519,29 @@ final class OffHeapMap
         if (prev != 0L)
             HashEntries.setLRUNext(prev, next);
 
-        dereference(hashEntryAdr);
+        // add to a ThreadLocal deref list since a dereference can become very expensive if a free() is involved
+        dereferenceList.get().add(hashEntryAdr);
+    }
+
+    private void processDereferences()
+    {
+        // process ThreadLocal deref list since a dereference can become very expensive if a free() is involved
+        List<Long> derefList = dereferenceList.get();
+        for (long hashEntryAdr : derefList)
+            dereference(hashEntryAdr);
+        derefList.clear();
+    }
+
+    void dereference(long hashEntryAdr)
+    {
+        if (HashEntries.dereference(hashEntryAdr))
+        {
+            long bytes = HashEntries.getAllocLen(hashEntryAdr);
+
+            HashEntries.free(hashEntryAdr, bytes);
+
+            freeCapacity.addAndGet(bytes);
+        }
     }
 
     private void add(long hashEntryAdr, long hash)
@@ -546,7 +592,7 @@ final class OffHeapMap
         lruHead = hashEntryAdr;
     }
 
-    private boolean removeOldest()
+    private boolean removeEldest()
     {
         long hashEntryAdr = lruTail;
         if (hashEntryAdr == 0L)
@@ -559,17 +605,5 @@ final class OffHeapMap
         evictedEntries ++;
 
         return true;
-    }
-
-    void dereference(long hashEntryAdr)
-    {
-        if (HashEntries.dereference(hashEntryAdr))
-        {
-            long bytes = HashEntries.getAllocLen(hashEntryAdr);
-
-            HashEntries.free(hashEntryAdr, bytes);
-
-            freeCapacity.addAndGet(bytes);
-        }
     }
 }
