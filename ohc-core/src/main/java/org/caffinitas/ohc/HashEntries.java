@@ -192,61 +192,58 @@ public final class HashEntries
 
     private static synchronized long memBufferAllocate(long bytes)
     {
-        long blockAllocLen = blockAllocLen(bytes);
-        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
-        {
-            long mbAdr = memBuffers[i];
-            if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
-            {
-                memBufferHit ++;
-                memBuffers[i] = 0L;
-                return mbAdr;
-            }
-        }
-
-        memBufferMiss ++;
+//        long blockAllocLen = blockAllocLen(bytes);
+//        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
+//        {
+//            long mbAdr = memBuffers[i];
+//            if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
+//            {
+//                memBufferHit ++;
+//                memBuffers[i] = 0L;
+//                return mbAdr;
+//            }
+//        }
+//
+//        memBufferMiss ++;
 
         return 0L;
     }
 
     private static synchronized void memBufferFree(long address, long allocLen)
     {
-        memBufferFree++;
-
-        long blockAllocLen = blockAllocLen(allocLen);
-        long least = Long.MAX_VALUE;
-        int min = -1;
-        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
-        {
-            if (memBuffers[i] == 0L)
-            {
-                memBuffers[i] = address;
-                memBuffers[i + 1] = blockAllocLen;
-                Uns.putLong(address, 0L, System.currentTimeMillis());
-                return;
-            }
-            else
-            {
-                long ts = Uns.getLong(memBuffers[i], 0L);
-                if (ts < least)
-                {
-                    least = ts;
-                    min = i;
-                }
-            }
-        }
-
-        memBufferExpires++;
-
-        if (min == -1)
-        {
-            queuedFree(address);
-            return;
-        }
-
-        queuedFree(memBuffers[min]);
-        memBuffers[min] = address;
-        memBuffers[min + 1] = blockAllocLen;
+        queuedFree(address);
+//        memBufferFree++;
+//
+//        long blockAllocLen = blockAllocLen(allocLen);
+//        long least = Long.MAX_VALUE;
+//        int min = -1;
+//        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
+//        {
+//            if (memBuffers[i] == 0L)
+//            {
+//                memBuffers[i] = address;
+//                memBuffers[i + 1] = blockAllocLen;
+//                Uns.putLong(address, 0L, System.currentTimeMillis());
+//                return;
+//            }
+//            else
+//            {
+//                long ts = Uns.getLong(memBuffers[i], 0L);
+//                if (ts < least)
+//                {
+//                    least = ts;
+//                    min = i;
+//                }
+//            }
+//        }
+//
+//        assert min != -1;
+//
+//        memBufferExpires++;
+//
+//        queuedFree(memBuffers[min]);
+//        memBuffers[min] = address;
+//        memBuffers[min + 1] = blockAllocLen;
     }
 
     static synchronized void memBufferClear()
