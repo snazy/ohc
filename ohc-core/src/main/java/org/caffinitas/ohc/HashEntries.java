@@ -139,10 +139,13 @@ public final class HashEntries
     }
 
     //
-    // malloc() or free() are very expensive operations. Write heavy workloads can consume most CPU time
-    // (system CPU usage). To reduce this effort, the following code implements a mem-buffer cache.
-    // Each free'd hash entry is added to the memBuffer array and each allocation tries to reuse such a
+    // malloc() or free() are very expensive operations. Write heavy workloads can spend most CPU time
+    // in system (OS). To reduce this, the following code implements a mem-buffer cache.
+    // Each free'd hash entry is added to a memBuffer array and each allocation tries to reuse such a
     // cached mem-buffer.
+    // "Eviction" is performed on a free() operation - the oldest mem-buffer is released.
+    //
+    // Using direct calls to malloc()/free() can consume up to 70% in OS (system CPU usage).
     //
 
     private static class MemBuffer
@@ -236,6 +239,9 @@ public final class HashEntries
     static long memBufferFree;
     static long memBufferExpires;
     static long memBufferClear;
+
+    private static volatile int pad00,pad01,pad02,pad03,pad04,pad05,pad06,pad07;
+    private static volatile int pad10,pad11,pad12,pad13,pad14,pad15,pad16,pad17;
     private static volatile int bufferIndex;
 
     static long allocate(long bytes)
@@ -290,7 +296,7 @@ public final class HashEntries
         return (allocLen & ~BLOCK_MASK) + BLOCK_SIZE;
     }
 
-    static synchronized void memBufferClear()
+    static void memBufferClear()
     {
         memBufferClear++;
 
