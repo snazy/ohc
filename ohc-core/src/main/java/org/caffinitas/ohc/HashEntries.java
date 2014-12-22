@@ -161,13 +161,10 @@ public final class HashEntries
                 long mbAdr = memBuffers[i];
                 if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
                 {
-                    memBufferHit++;
                     memBuffers[i] = 0L;
                     return mbAdr;
                 }
             }
-
-            memBufferMiss++;
 
             return 0L;
         }
@@ -251,11 +248,17 @@ public final class HashEntries
             {
                 long adr = buffers[bi].allocate(blockAllocLen);
                 if (adr != 0L)
+                {
+                    memBufferHit++;
                     return adr;
+                }
                 bi++;
                 if (bi == buffers.length)
                     bi = 0;
             }
+
+            memBufferMiss++;
+
             return Uns.allocate(blockAllocLen);
         }
 
