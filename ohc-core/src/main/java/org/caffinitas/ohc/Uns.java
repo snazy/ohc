@@ -156,7 +156,13 @@ final class Uns
     static long getAndPutLong(long address, long offset, long value)
     {
         validate(address, offset, 8L);
-        return unsafe.getAndSetLong(null, address + offset, value);
+
+        // TODO replace with Java8 Unsafe.getAndSetLong()
+        // return unsafe.getAndSetLong(null, address + offset, value);
+
+        long r = unsafe.getLong(null, address + offset);
+        unsafe.putLong(null, address + offset, value);
+        return r;
     }
 
     static void putLong(long address, long offset, long value)
@@ -257,6 +263,8 @@ final class Uns
 
     static boolean decrement(long address, long offset)
     {
+        // increment + decrement are used in concurrent contexts - so Java8 Unsafe.getAndAddLong is not applicable
+
         validate(address, offset, 8L);
         address += offset;
         long v;
@@ -272,6 +280,8 @@ final class Uns
 
     static void increment(long address, long offset)
     {
+        // increment + decrement are used in concurrent contexts - so Java8 Unsafe.getAndAddLong is not applicable
+
         validate(address, offset, 8L);
         address += offset;
         long v;
