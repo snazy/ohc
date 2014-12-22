@@ -145,8 +145,88 @@ public final class HashEntries
     // cached mem-buffer.
     //
 
+    private static class MemBuffer
+    {
+        private final long[] memBuffers;
+
+        MemBuffer(int bufferCount)
+        {
+            memBuffers = new long[bufferCount * 2];
+        }
+
+        synchronized long allocate(long blockAllocLen)
+        {
+            for (int i = 0; i < memBuffers.length; i += 2)
+            {
+                long mbAdr = memBuffers[i];
+                if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
+                {
+                    memBufferHit ++;
+                    memBuffers[i] = 0L;
+                    return mbAdr;
+                }
+            }
+
+            memBufferMiss ++;
+
+            return 0L;
+        }
+
+        synchronized long free(long address, long allocLen)
+        {
+            memBufferFree++;
+
+            long blockAllocLen = blockAllocLen(allocLen);
+            long least = Long.MAX_VALUE;
+            int min = -1;
+            for (int i = 0; i < memBuffers.length; i += 2)
+            {
+                if (memBuffers[i] == 0L)
+                {
+                    memBuffers[i] = address;
+                    memBuffers[i + 1] = blockAllocLen;
+                    Uns.putLong(address, 0L, System.currentTimeMillis());
+                    return 0L;
+                }
+                else
+                {
+                    long ts = Uns.getLong(memBuffers[i], 0L);
+                    if (ts < least)
+                    {
+                        least = ts;
+                        min = i;
+                    }
+                }
+            }
+
+            assert min != -1;
+
+            memBufferExpires++;
+
+            long freeAddress = memBuffers[min];
+
+            memBuffers[min] = address;
+            memBuffers[min + 1] = blockAllocLen;
+
+            return freeAddress;
+        }
+
+        synchronized void clear()
+        {
+            for (int i = 0; i < memBuffers.length; i += 2)
+                Uns.free(memBuffers[i]);
+
+            Arrays.fill(memBuffers, 0L);
+        }
+    }
+
     private static final int BLOCK_BUFFERS = 512;
-    private static final long[] memBuffers = new long[BLOCK_BUFFERS * 2];
+    private static final MemBuffer[] buffers;
+    static {
+        buffers = new MemBuffer[Runtime.getRuntime().availableProcessors()];
+        for (int i = 0; i < buffers.length; i++)
+            buffers[i] = new MemBuffer(BLOCK_BUFFERS / buffers.length);
+    }
 
     static final long BLOCK_SIZE = 16384L;
     static final long BLOCK_MASK = BLOCK_SIZE - 1L;
@@ -157,17 +237,24 @@ public final class HashEntries
     static long memBufferFree;
     static long memBufferExpires;
     static long memBufferClear;
+    private static volatile int bufferIndex;
 
     static long allocate(long bytes)
     {
         if (bytes <= MAX_BUFFERED_SIZE)
         {
             long blockAllocLen = blockAllocLen(bytes);
-            long adr = memBufferAllocate(blockAllocLen);
+            long adr = buffers[(bufferIndex())].allocate(blockAllocLen);
             return adr != 0L ? adr : Uns.allocate(blockAllocLen);
         }
 
         return Uns.allocate(bytes);
+    }
+
+    private static int bufferIndex()
+    {
+        int idx = bufferIndex++;
+        return idx % buffers.length;
     }
 
     static void free(long address, long allocLen)
@@ -176,7 +263,7 @@ public final class HashEntries
             return;
 
         if (allocLen <= MAX_BUFFERED_SIZE)
-            address = memBufferFree(address, allocLen);
+            address = buffers[bufferIndex()].free(address, allocLen);
 
         Uns.free(address);
     }
@@ -189,70 +276,11 @@ public final class HashEntries
         return (allocLen & ~BLOCK_MASK) + BLOCK_SIZE;
     }
 
-    private static synchronized long memBufferAllocate(long blockAllocLen)
-    {
-        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
-        {
-            long mbAdr = memBuffers[i];
-            if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
-            {
-                memBufferHit ++;
-                memBuffers[i] = 0L;
-                return mbAdr;
-            }
-        }
-
-        memBufferMiss ++;
-
-        return 0L;
-    }
-
-    private static synchronized long memBufferFree(long address, long allocLen)
-    {
-        memBufferFree++;
-
-        long blockAllocLen = blockAllocLen(allocLen);
-        long least = Long.MAX_VALUE;
-        int min = -1;
-        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
-        {
-            if (memBuffers[i] == 0L)
-            {
-                memBuffers[i] = address;
-                memBuffers[i + 1] = blockAllocLen;
-                Uns.putLong(address, 0L, System.currentTimeMillis());
-                return 0L;
-            }
-            else
-            {
-                long ts = Uns.getLong(memBuffers[i], 0L);
-                if (ts < least)
-                {
-                    least = ts;
-                    min = i;
-                }
-            }
-        }
-
-        assert min != -1;
-
-        memBufferExpires++;
-
-        long freeAddress = memBuffers[min];
-
-        memBuffers[min] = address;
-        memBuffers[min + 1] = blockAllocLen;
-
-        return freeAddress;
-    }
-
     static synchronized void memBufferClear()
     {
         memBufferClear++;
 
-        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
-            Uns.free(memBuffers[i]);
-
-        Arrays.fill(memBuffers, 0L);
+        for (MemBuffer buffer : buffers)
+            buffer.clear();
     }
 }
