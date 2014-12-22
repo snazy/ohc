@@ -176,10 +176,7 @@ public final class HashEntries
             return;
 
         if (allocLen <= MAX_BUFFERED_SIZE)
-        {
-            memBufferFree(address, allocLen);
-            return;
-        }
+            address = memBufferFree(address, allocLen);
 
         Uns.free(address);
     }
@@ -210,7 +207,7 @@ public final class HashEntries
         return 0L;
     }
 
-    private static synchronized void memBufferFree(long address, long allocLen)
+    private static synchronized long memBufferFree(long address, long allocLen)
     {
         memBufferFree++;
 
@@ -224,7 +221,7 @@ public final class HashEntries
                 memBuffers[i] = address;
                 memBuffers[i + 1] = blockAllocLen;
                 Uns.putLong(address, 0L, System.currentTimeMillis());
-                return;
+                return 0L;
             }
             else
             {
@@ -241,9 +238,12 @@ public final class HashEntries
 
         memBufferExpires++;
 
-        Uns.free(memBuffers[min]);
+        long freeAddress = memBuffers[min];
+
         memBuffers[min] = address;
         memBuffers[min + 1] = blockAllocLen;
+
+        return freeAddress;
     }
 
     static synchronized void memBufferClear()
