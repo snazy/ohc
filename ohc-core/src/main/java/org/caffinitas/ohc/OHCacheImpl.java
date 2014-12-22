@@ -459,9 +459,9 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             if (buckets[i] != 0L)
             {
-                offsets = Arrays.copyOf(offsets, i + 3);
+                offsets = Arrays.copyOf(offsets, i + 2);
                 buckets = Arrays.copyOf(buckets, i + 3);
-                System.arraycopy(offsets, 0, offsets, 1, i + 2);
+                System.arraycopy(offsets, 0, offsets, 1, i + 1);
                 System.arraycopy(buckets, 0, buckets, 1, i + 2);
                 offsets[0] = 0L;
                 buckets[0] = 0L;

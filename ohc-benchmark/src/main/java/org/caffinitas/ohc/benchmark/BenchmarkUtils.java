@@ -18,12 +18,10 @@ package org.caffinitas.ohc.benchmark;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.List;
-import java.util.concurrent.Future;
 
 import org.caffinitas.ohc.CacheSerializer;
 
-public class BenchmarkUtils {
+public final class BenchmarkUtils {
     public static final CacheSerializer<byte[]> serializer = new CacheSerializer<byte[]>() {
         public void serialize(byte[] bytes, DataOutput stream) throws IOException {
             stream.writeInt(bytes.length);
@@ -40,6 +38,7 @@ public class BenchmarkUtils {
             return t.length + 4;
         }
     };
+
     public static final CacheSerializer<Long> longSerializer = new CacheSerializer<Long>()
     {
         public void serialize(Long val, DataOutput out) throws IOException
@@ -57,10 +56,4 @@ public class BenchmarkUtils {
             return 8;
         }
     };
-
-    public static <T> void waitOnFuture(List<Future<T>> futures) throws Exception {
-        for (Future<T> future : futures)
-            future.get();
-        futures.clear();
-    }
 }

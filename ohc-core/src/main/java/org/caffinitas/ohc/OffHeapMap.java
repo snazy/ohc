@@ -272,7 +272,7 @@ final class OffHeapMap
 
     private static boolean notSameKey(KeyBuffer key, long hashEntryAdr)
     {
-        if (notSameHash(key.hash(), hashEntryAdr)) return true;
+        if (HashEntries.getHash(hashEntryAdr) != key.hash()) return true;
 
         long serKeyLen = HashEntries.getKeyLen(hashEntryAdr);
         return serKeyLen != key.size()
@@ -281,17 +281,11 @@ final class OffHeapMap
 
     private static boolean notSameKey(long newHashEntryAdr, long newHash, long newKeyLen, long hashEntryAdr)
     {
-        if (notSameHash(newHash, hashEntryAdr)) return true;
+        if (HashEntries.getHash(hashEntryAdr) != newHash) return true;
 
         long serKeyLen = HashEntries.getKeyLen(hashEntryAdr);
         return serKeyLen != newKeyLen
                || !HashEntries.compare(hashEntryAdr, ENTRY_OFF_DATA, newHashEntryAdr, ENTRY_OFF_DATA, serKeyLen);
-    }
-
-    private static boolean notSameHash(long newHash, long hashEntryAdr)
-    {
-        long hashEntryHash = HashEntries.getHash(hashEntryAdr);
-        return hashEntryHash != newHash;
     }
 
     private void rehash()
