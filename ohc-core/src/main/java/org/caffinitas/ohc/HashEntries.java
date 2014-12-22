@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import java.util.Arrays;
+
 import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_HASH;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_KEY_LENGTH;
@@ -160,9 +162,9 @@ public final class HashEntries
     {
         if (bytes <= MAX_BUFFERED_SIZE)
         {
-            long adr = memBufferAllocate(bytes);
-            if (adr != 0L)
-                return adr;
+            long blockAllocLen = blockAllocLen(bytes);
+            long adr = memBufferAllocate(blockAllocLen);
+            return adr != 0L ? adr : Uns.allocate(blockAllocLen);
         }
 
         return Uns.allocate(bytes);
@@ -190,60 +192,58 @@ public final class HashEntries
         return (allocLen & ~BLOCK_MASK) + BLOCK_SIZE;
     }
 
-    private static synchronized long memBufferAllocate(long bytes)
+    private static synchronized long memBufferAllocate(long blockAllocLen)
     {
-//        long blockAllocLen = blockAllocLen(bytes);
-//        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
-//        {
-//            long mbAdr = memBuffers[i];
-//            if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
-//            {
-//                memBufferHit ++;
-//                memBuffers[i] = 0L;
-//                return mbAdr;
-//            }
-//        }
-//
-//        memBufferMiss ++;
+        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
+        {
+            long mbAdr = memBuffers[i];
+            if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
+            {
+                memBufferHit ++;
+                memBuffers[i] = 0L;
+                return mbAdr;
+            }
+        }
+
+        memBufferMiss ++;
 
         return 0L;
     }
 
     private static synchronized void memBufferFree(long address, long allocLen)
     {
-        queuedFree(address);
-//        memBufferFree++;
-//
-//        long blockAllocLen = blockAllocLen(allocLen);
-//        long least = Long.MAX_VALUE;
-//        int min = -1;
-//        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
-//        {
-//            if (memBuffers[i] == 0L)
-//            {
-//                memBuffers[i] = address;
-//                memBuffers[i + 1] = blockAllocLen;
-//                Uns.putLong(address, 0L, System.currentTimeMillis());
-//                return;
-//            }
-//            else
-//            {
-//                long ts = Uns.getLong(memBuffers[i], 0L);
-//                if (ts < least)
-//                {
-//                    least = ts;
-//                    min = i;
-//                }
-//            }
-//        }
-//
-//        assert min != -1;
-//
-//        memBufferExpires++;
-//
-//        queuedFree(memBuffers[min]);
-//        memBuffers[min] = address;
-//        memBuffers[min + 1] = blockAllocLen;
+        memBufferFree++;
+
+        long blockAllocLen = blockAllocLen(allocLen);
+        long least = Long.MAX_VALUE;
+        int min = -1;
+        for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
+        {
+            if (memBuffers[i] == 0L)
+            {
+                memBuffers[i] = address;
+                memBuffers[i + 1] = blockAllocLen;
+                Uns.putLong(address, 0L, System.currentTimeMillis());
+                return;
+            }
+            else
+            {
+                long ts = Uns.getLong(memBuffers[i], 0L);
+                if (ts < least)
+                {
+                    least = ts;
+                    min = i;
+                }
+            }
+        }
+
+        assert min != -1;
+
+        memBufferExpires++;
+
+        Uns.free(memBuffers[min]);
+        memBuffers[min] = address;
+        memBuffers[min + 1] = blockAllocLen;
     }
 
     static synchronized void memBufferClear()
@@ -251,29 +251,8 @@ public final class HashEntries
         memBufferClear++;
 
         for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
-        {
-            queuedFree(memBuffers[i]);
-            memBuffers[i] = 0L;
-        }
+            Uns.free(memBuffers[i]);
 
-        drainFreeQueue();
-    }
-
-    private static int freeQueueIndex;
-    private static final long[] freeQueue = new long[32];
-
-    private static void queuedFree(long adr)
-    {
-        freeQueue[freeQueueIndex++] = adr;
-
-        if (freeQueueIndex == freeQueue.length)
-            drainFreeQueue();
-    }
-
-    private static void drainFreeQueue()
-    {
-        for (int i = 0; i < freeQueueIndex; i++)
-            Uns.free(freeQueue[i]);
-        freeQueueIndex = 0;
+        Arrays.fill(memBuffers, 0L);
     }
 }
