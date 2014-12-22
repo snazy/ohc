@@ -240,6 +240,7 @@ public final class HashEntries
             return;
         }
 
+        Uns.free(memBuffers[min]);
         memBuffers[min] = address;
         memBuffers[min + 1] = blockAllocLen;
     }
