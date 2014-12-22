@@ -175,8 +175,8 @@ public final class HashEntries
 
         if (allocLen <= MAX_BUFFERED_SIZE)
         {
-            if (memBufferFree(address, allocLen))
-                return;
+            memBufferFree(address, allocLen);
+            return;
         }
 
         Uns.free(address);
@@ -209,7 +209,7 @@ public final class HashEntries
         return 0L;
     }
 
-    private static synchronized boolean memBufferFree(long address, long allocLen)
+    private static synchronized void memBufferFree(long address, long allocLen)
     {
         memBufferFree++;
 
@@ -223,7 +223,7 @@ public final class HashEntries
                 memBuffers[i] = address;
                 memBuffers[i + 1] = blockAllocLen;
                 Uns.putLong(address, 0L, System.currentTimeMillis());
-                return false;
+                return;
             }
             else
             {
@@ -239,12 +239,14 @@ public final class HashEntries
         memBufferExpires++;
 
         if (min == -1)
-            return false;
+        {
+            queuedFree(address);
+            return;
+        }
 
-        Uns.free(memBuffers[min]);
+        queuedFree(memBuffers[min]);
         memBuffers[min] = address;
         memBuffers[min + 1] = blockAllocLen;
-        return true;
     }
 
     static synchronized void memBufferClear()
@@ -253,8 +255,28 @@ public final class HashEntries
 
         for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
         {
-            Uns.free(memBuffers[i]);
+            queuedFree(memBuffers[i]);
             memBuffers[i] = 0L;
         }
+
+        drainFreeQueue();
+    }
+
+    private static int freeQueueIndex;
+    private static final long[] freeQueue = new long[32];
+
+    private static void queuedFree(long adr)
+    {
+        freeQueue[freeQueueIndex++] = adr;
+
+        if (freeQueueIndex == freeQueue.length)
+            drainFreeQueue();
+    }
+
+    private static void drainFreeQueue()
+    {
+        for (int i = 0; i < freeQueueIndex; i++)
+            Uns.free(freeQueue[i]);
+        freeQueueIndex = 0;
     }
 }
