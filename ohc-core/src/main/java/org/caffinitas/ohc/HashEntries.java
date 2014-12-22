@@ -143,12 +143,17 @@ public final class HashEntries
     // cached mem-buffer.
     //
 
-    static final int BLOCK_BUFFERS = 128;
+    static final int BLOCK_BUFFERS = 512;
     static final long[] memBuffers = new long[BLOCK_BUFFERS * 2];
 
     static final long BLOCK_SIZE = 4096L;
     private static final long MAX_BUFFERED_SIZE = 4096L * BLOCK_SIZE;
     private static final long BLOCK_MASK = BLOCK_SIZE - 1L;
+
+    static long memBufferHit;
+    static long memBufferMiss;
+    static long memBufferFree;
+    static long memBufferClear;
 
     static long allocate(long bytes)
     {
@@ -188,16 +193,21 @@ public final class HashEntries
             long mbAdr = memBuffers[i];
             if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
             {
+                memBufferHit ++;
                 memBuffers[i] = 0L;
                 return mbAdr;
             }
         }
+
+        memBufferMiss ++;
 
         return Uns.allocate(blockAllocLen);
     }
 
     private static synchronized void memBufferFree(long address, long allocLen)
     {
+        memBufferFree++;
+
         long blockAllocLen = blockAllocLen(allocLen);
         for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
         {
@@ -217,6 +227,8 @@ public final class HashEntries
 
     static synchronized void memBufferClear()
     {
+        memBufferClear++;
+
         for (int i = 0; i < BLOCK_BUFFERS * 2; i += 2)
         {
             Uns.free(memBuffers[i]);

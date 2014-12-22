@@ -15,7 +15,6 @@
  */
 package org.caffinitas.ohc.benchmark;
 
-import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -39,7 +38,7 @@ final class Driver implements Runnable
     long endAt;
     Future<?> future;
 
-    public Driver(Distribution readKeyDist, Distribution writeKeyDist, Distribution valueSizeDist, double readWriteRatio, int threads)
+    Driver(Distribution readKeyDist, Distribution writeKeyDist, Distribution valueSizeDist, double readWriteRatio, int threads, long seed)
     {
         queue = new LinkedBlockingQueue<>(5000);
         exec = new ThreadPoolExecutor(threads, threads,
@@ -53,7 +52,7 @@ final class Driver implements Runnable
         this.readWriteRatio = readWriteRatio;
 
         rnd = new FasterRandom();
-        rnd.setSeed(new Random().nextLong());
+        rnd.setSeed(seed);
 
     }
 

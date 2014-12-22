@@ -16,6 +16,7 @@
 package org.caffinitas.ohc.benchmark;
 
 import java.util.Date;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,7 +30,7 @@ import org.apache.commons.cli.PosixParser;
 
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
-import org.caffinitas.ohc.benchmark.distribution.Distribution;
+import org.caffinitas.ohc.benchmark.distribution.DistributionFactory;
 import org.caffinitas.ohc.benchmark.distribution.OptionDistribution;
 
 import static java.lang.Thread.sleep;
@@ -85,16 +86,17 @@ public final class BenchmarkOHC
 
             Driver[] drivers = new Driver[driverCount];
             int remainingThreads = threads;
+            Random rnd = new Random();
+            DistributionFactory readKeyDist = OptionDistribution.get(cmd.getOptionValue(READ_KEY_DIST, DEFAULT_KEY_DIST));
+            DistributionFactory writeKeyDist = OptionDistribution.get(cmd.getOptionValue(WRITE_KEY_DIST, DEFAULT_KEY_DIST));
+            DistributionFactory valueSizeDist = OptionDistribution.get(cmd.getOptionValue(VALUE_SIZE_DIST, DEFAULT_VALUE_SIZE_DIST));
             for (int i=0;i<driverCount;i++)
             {
-                Distribution readKeyDist = parseDistribution(cmd.getOptionValue(READ_KEY_DIST, DEFAULT_KEY_DIST));
-                Distribution writeKeyDist = parseDistribution(cmd.getOptionValue(WRITE_KEY_DIST, DEFAULT_KEY_DIST));
-                Distribution valueSizeDist = parseDistribution(cmd.getOptionValue(VALUE_SIZE_DIST, DEFAULT_VALUE_SIZE_DIST));
-
                 int driverThreads = Math.min(threadsPerDriver, remainingThreads);
                 remainingThreads -= driverThreads;
 
-                drivers[i] = new Driver(readKeyDist, writeKeyDist, valueSizeDist, readWriteRatio, driverThreads);
+                drivers[i] = new Driver(readKeyDist.get(), writeKeyDist.get(), valueSizeDist.get(),
+                                        readWriteRatio, driverThreads, rnd.nextLong());
             }
 
             printMessage("Starting benchmark with%n" +
@@ -209,11 +211,6 @@ public final class BenchmarkOHC
             driver.future.get();
 
         Shared.printStats("Final");
-    }
-
-    private static Distribution parseDistribution(String optionValue)
-    {
-        return OptionDistribution.get(optionValue).get();
     }
 
     private static CommandLine parseArguments(String[] args) throws ParseException
