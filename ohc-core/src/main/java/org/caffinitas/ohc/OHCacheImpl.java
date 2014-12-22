@@ -294,6 +294,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         for (OffHeapMap map : maps)
             map.clear();
+
+        HashEntries.memBufferClear();
     }
 
     //
