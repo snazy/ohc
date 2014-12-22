@@ -175,8 +175,7 @@ final class OffHeapMap
                     return false;
             }
 
-            remove(hashEntryAdr, prevEntryAdr);
-            dereference(hashEntryAdr);
+            removeAndDereference(hashEntryAdr, prevEntryAdr);
 
             break;
         }
@@ -199,7 +198,7 @@ final class OffHeapMap
 
         freeCapacity.addAndGet(-bytes);
 
-        add(newHashEntryAdr);
+        add(newHashEntryAdr, hash);
 
         if (hashEntryAdr == 0L)
             putAddCount++;
@@ -241,8 +240,7 @@ final class OffHeapMap
 
             // remove existing entry
 
-            remove(hashEntryAdr, prevEntryAdr);
-            dereference(hashEntryAdr);
+            removeAndDereference(hashEntryAdr, prevEntryAdr);
 
             size--;
             removeCount++;
@@ -263,8 +261,7 @@ final class OffHeapMap
 
             // remove existing entry
 
-            remove(hashEntryAdr, prevEntryAdr);
-            dereference(hashEntryAdr);
+            removeAndDereference(hashEntryAdr, prevEntryAdr);
 
             size--;
             removeCount++;
@@ -321,7 +318,7 @@ final class OffHeapMap
 
                 HashEntries.setNext(hashEntryAdr, 0L);
 
-                newTable.addLinkAsHead(HashEntries.getHash(hashEntryAdr), hashEntryAdr);
+                newTable.addAsHead(HashEntries.getHash(hashEntryAdr), hashEntryAdr);
             }
 
         threshold = (long) ((float) newTable.size() * loadFactor);
@@ -473,7 +470,7 @@ final class OffHeapMap
             HashEntries.setNext(hashEntryAdr, 0L);
         }
 
-        void addLinkAsHead(long hash, long hashEntryAdr)
+        void addAsHead(long hash, long hashEntryAdr)
         {
             long head = first(hash);
             HashEntries.setNext(hashEntryAdr, head);
@@ -501,7 +498,7 @@ final class OffHeapMap
     // eviction/replacement/cleanup
     //
 
-    private void remove(long hashEntryAdr, long prevEntryAdr)
+    private void removeAndDereference(long hashEntryAdr, long prevEntryAdr)
     {
         long hash = HashEntries.getHash(hashEntryAdr);
 
@@ -526,13 +523,13 @@ final class OffHeapMap
             setLruPrev(next, prev);
         if (prev != 0L)
             setLruNext(prev, next);
+
+        dereference(hashEntryAdr);
     }
 
-    private void add(long hashEntryAdr)
+    private void add(long hashEntryAdr, long hash)
     {
-        long hash = HashEntries.getHash(hashEntryAdr);
-
-        table.addLinkAsHead(hash, hashEntryAdr);
+        table.addAsHead(hash, hashEntryAdr);
 
         // LRU stuff
 
@@ -605,8 +602,7 @@ final class OffHeapMap
         if (hashEntryAdr == 0L)
             return false;
 
-        remove(hashEntryAdr, -1L);
-        dereference(hashEntryAdr);
+        removeAndDereference(hashEntryAdr, -1L);
 
         size--;
 
@@ -620,8 +616,6 @@ final class OffHeapMap
         if (HashEntries.dereference(hashEntryAdr))
         {
             long bytes = HashEntries.getAllocLen(hashEntryAdr);
-            if (bytes == 0L)
-                throw new IllegalStateException();
 
             HashEntries.free(hashEntryAdr, bytes);
 

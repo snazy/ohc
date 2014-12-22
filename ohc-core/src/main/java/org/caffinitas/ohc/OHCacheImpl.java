@@ -781,14 +781,14 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void putAll(Map<? extends K, ? extends V> m)
     {
-        // TODO could be improved by grouping puts by segment - but increases heap pressure and complexity - decide later
+        // could be improved by grouping puts by segment - but increases heap pressure and complexity - decide later
         for (Map.Entry<? extends K, ? extends V> entry : m.entrySet())
             put(entry.getKey(), entry.getValue());
     }
 
     public void removeAll(Iterable<K> iterable)
     {
-        // TODO could be improved by grouping removes by segment - but increases heap pressure and complexity - decide later
+        // could be improved by grouping removes by segment - but increases heap pressure and complexity - decide later
         for (K o : iterable)
             remove(o);
     }
