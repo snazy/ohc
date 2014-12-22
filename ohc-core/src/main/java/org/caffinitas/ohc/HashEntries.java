@@ -161,13 +161,13 @@ public final class HashEntries
                 long mbAdr = memBuffers[i];
                 if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
                 {
-                    memBufferHit ++;
+                    memBufferHit++;
                     memBuffers[i] = 0L;
                     return mbAdr;
                 }
             }
 
-            memBufferMiss ++;
+            memBufferMiss++;
 
             return 0L;
         }
@@ -222,7 +222,9 @@ public final class HashEntries
 
     private static final int BLOCK_BUFFERS = 512;
     private static final MemBuffer[] buffers;
-    static {
+
+    static
+    {
         buffers = new MemBuffer[Runtime.getRuntime().availableProcessors()];
         for (int i = 0; i < buffers.length; i++)
             buffers[i] = new MemBuffer(BLOCK_BUFFERS / buffers.length);
@@ -244,8 +246,17 @@ public final class HashEntries
         if (bytes <= MAX_BUFFERED_SIZE)
         {
             long blockAllocLen = blockAllocLen(bytes);
-            long adr = buffers[(bufferIndex())].allocate(blockAllocLen);
-            return adr != 0L ? adr : Uns.allocate(blockAllocLen);
+            int bi = bufferIndex();
+            for (int i = 0; i < buffers.length; i++)
+            {
+                long adr = buffers[bi].allocate(blockAllocLen);
+                if (adr != 0L)
+                    return adr;
+                bi++;
+                if (bi == buffers.length)
+                    bi = 0;
+            }
+            return Uns.allocate(blockAllocLen);
         }
 
         return Uns.allocate(bytes);
