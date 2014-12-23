@@ -144,6 +144,9 @@ final class Uns
             if (unsafe.addressSize() > 8)
                 throw new RuntimeException("Address size " + unsafe.addressSize() + " not supported yet (max 8 bytes)");
 
+            if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
+                LOGGER.warn("Degraded performance due to off-heap memory allocations and access guarded by debug code enabled via system property DEBUG_OFF_HEAP_MEMORY_ACCESS=true");
+
             IAllocator alloc = null;
             if (!__DISABLE_JEMALLOC)
                 try
@@ -154,6 +157,8 @@ final class Uns
                 {
                     LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
                 }
+            else
+                LOGGER.warn("jemalloc disabled by system property setting DISABLE_JEMALLOC=true");
             if (alloc == null)
                 alloc = new NativeAllocator();
             allocator = alloc;
