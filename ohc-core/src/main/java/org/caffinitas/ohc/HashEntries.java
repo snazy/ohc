@@ -16,7 +16,6 @@
 package org.caffinitas.ohc;
 
 import java.util.Arrays;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static org.caffinitas.ohc.Util.ENTRY_OFF_DATA;
 import static org.caffinitas.ohc.Util.ENTRY_OFF_HASH;
@@ -168,97 +167,71 @@ public final class HashEntries
     {
         private final long[] memBuffers;
 
-        final ReentrantLock lock = new ReentrantLock();
-
         MemBuffer(int bufferCount)
         {
             memBuffers = new long[bufferCount * 2];
         }
 
-        long allocate(long blockAllocLen)
+        synchronized long allocate(long blockAllocLen)
         {
-            lock.lock();
-            try
+            for (int i = 0; i < memBuffers.length; i += 2)
             {
-                for (int i = 0; i < memBuffers.length; i += 2)
+                long mbAdr = memBuffers[i];
+                if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
                 {
-                    long mbAdr = memBuffers[i];
-                    if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
-                    {
-                        memBuffers[i] = 0L;
-                        return mbAdr;
-                    }
+                    memBuffers[i] = 0L;
+                    return mbAdr;
                 }
+            }
 
-                return 0L;
-            }
-            finally
-            {
-                lock.unlock();
-            }
+            return 0L;
         }
 
-        long free(long address, long allocLen)
+        synchronized long free(long address, long allocLen)
         {
-            lock.lock();
-            try
-            {
-                memBufferFree++;
+            memBufferFree++;
 
-                long blockAllocLen = blockAllocLen(allocLen);
-                long least = Long.MAX_VALUE;
-                int min = -1;
-                for (int i = 0; i < memBuffers.length; i += 2)
+            long blockAllocLen = blockAllocLen(allocLen);
+            long least = Long.MAX_VALUE;
+            int min = -1;
+            for (int i = 0; i < memBuffers.length; i += 2)
+            {
+                if (memBuffers[i] == 0L)
                 {
-                    if (memBuffers[i] == 0L)
+                    memBuffers[i] = address;
+                    memBuffers[i + 1] = blockAllocLen;
+                    Uns.putLong(address, 0L, System.currentTimeMillis());
+                    return 0L;
+                }
+                else
+                {
+                    long ts = Uns.getLong(memBuffers[i], 0L);
+                    if (ts < least)
                     {
-                        memBuffers[i] = address;
-                        memBuffers[i + 1] = blockAllocLen;
-                        Uns.putLong(address, 0L, System.currentTimeMillis());
-                        return 0L;
-                    }
-                    else
-                    {
-                        long ts = Uns.getLong(memBuffers[i], 0L);
-                        if (ts < least)
-                        {
-                            least = ts;
-                            min = i;
-                        }
+                        least = ts;
+                        min = i;
                     }
                 }
-
-                assert min != -1;
-
-                memBufferExpires++;
-
-                long freeAddress = memBuffers[min];
-
-                memBuffers[min] = address;
-                memBuffers[min + 1] = blockAllocLen;
-
-                return freeAddress;
             }
-            finally
-            {
-                lock.unlock();
-            }
+
+            assert min != -1;
+
+            memBufferExpires++;
+
+            long freeAddress = memBuffers[min];
+
+            memBuffers[min] = address;
+            memBuffers[min + 1] = blockAllocLen;
+
+            return freeAddress;
         }
 
         synchronized void clear()
         {
-            lock.lock();
-            try
-            {
-                for (int i = 0; i < memBuffers.length; i += 2)
-                    Uns.free(memBuffers[i]);
+            for (int i = 0; i < memBuffers.length; i += 2)
+                Uns.free(memBuffers[i]);
 
-                Arrays.fill(memBuffers, 0L);
-            }
-            finally
-            {
-                lock.unlock();
-            }
+            Arrays.fill(memBuffers, 0L);
         }
     }
 
