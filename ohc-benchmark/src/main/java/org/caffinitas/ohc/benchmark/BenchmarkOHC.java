@@ -19,7 +19,10 @@ import java.util.Date;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -90,12 +93,12 @@ public final class BenchmarkOHC
             DistributionFactory readKeyDist = OptionDistribution.get(cmd.getOptionValue(READ_KEY_DIST, DEFAULT_KEY_DIST));
             DistributionFactory writeKeyDist = OptionDistribution.get(cmd.getOptionValue(WRITE_KEY_DIST, DEFAULT_KEY_DIST));
             DistributionFactory valueSizeDist = OptionDistribution.get(cmd.getOptionValue(VALUE_SIZE_DIST, DEFAULT_VALUE_SIZE_DIST));
-            for (int i=0;i<driverCount;i++)
+            for (int i = 0; i < driverCount; i++)
             {
                 int driverThreads = Math.min(threadsPerDriver, remainingThreads);
                 remainingThreads -= driverThreads;
 
-                drivers[i] = new Driver(readKeyDist.get(), writeKeyDist.get(), valueSizeDist.get(),
+                drivers[i] = new Driver(i, readKeyDist.get(), writeKeyDist.get(), valueSizeDist.get(),
                                         readWriteRatio, driverThreads, rnd.nextLong());
             }
 
@@ -109,13 +112,13 @@ public final class BenchmarkOHC
 
             printMessage("Initializing OHC cache...");
             Shared.cache = OHCacheBuilder.<Long, byte[]>newBuilder()
-                                  .keySerializer(BenchmarkUtils.longSerializer)
-                                  .valueSerializer(BenchmarkUtils.serializer)
-                                  .hashTableSize(hashTableSize)
-                                  .loadFactor(loadFactor)
-                                  .segmentCount(segmentCount)
-                                  .capacity(capacity)
-                                  .build();
+                                         .keySerializer(BenchmarkUtils.longSerializer)
+                                         .valueSerializer(BenchmarkUtils.serializer)
+                                         .hashTableSize(hashTableSize)
+                                         .loadFactor(loadFactor)
+                                         .segmentCount(segmentCount)
+                                         .capacity(capacity)
+                                         .build();
 
             printMessage("Cache configuration: hash-table-size: %d%n" +
                          "                     load-factor    : %.3f%n" +
@@ -126,7 +129,17 @@ public final class BenchmarkOHC
                          Shared.cache.segments(),
                          Shared.cache.capacity());
 
-            ExecutorService main = Executors.newFixedThreadPool(driverCount);
+            ThreadPoolExecutor main = new ThreadPoolExecutor(driverCount, driverCount, coldSleepSecs + 1, TimeUnit.SECONDS,
+                                                             new LinkedBlockingQueue<Runnable>(), new ThreadFactory()
+            {
+                volatile int threadNo;
+
+                public Thread newThread(Runnable r)
+                {
+                    return new Thread(r, "driver-main-" + threadNo++);
+                }
+            });
+            main.prestartAllCoreThreads();
 
             // warm up
 
