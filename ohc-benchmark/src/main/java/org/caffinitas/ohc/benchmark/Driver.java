@@ -42,8 +42,8 @@ final class Driver implements Runnable
     {
         queue = new LinkedBlockingQueue<>(5000);
         exec = new ThreadPoolExecutor(threads, threads,
-                                                         0L, TimeUnit.MILLISECONDS,
-                                                         queue);
+                                      0L, TimeUnit.MILLISECONDS,
+                                      queue);
         exec.prestartAllCoreThreads();
 
         this.readKeyDist = readKeyDist;
@@ -94,7 +94,7 @@ final class Driver implements Runnable
     private static void submit(BlockingQueue<Runnable> queue, Runnable task) throws InterruptedException
     {
         while (true)
-            if (queue.offer(task, 10, TimeUnit.MILLISECONDS))
+            if (queue.offer(task, 1, TimeUnit.SECONDS))
                 return;
     }
 

@@ -145,10 +145,22 @@ final class KeyBuffer extends AbstractDataOutput
 
     private long getLong(int o)
     {
-        long l = Uns.getLongFromByteArray(array, o);
-        return Uns.littleEndian
-               ? l
-               : Long.reverseBytes(l);
+        long l = Murmur3.toInt(array[o + 7]);
+        l <<= 8;
+        l |= Murmur3.toInt(array[o + 6]);
+        l <<= 8;
+        l |= Murmur3.toInt(array[o + 5]);
+        l <<= 8;
+        l |= Murmur3.toInt(array[o + 4]);
+        l <<= 8;
+        l |= Murmur3.toInt(array[o + 3]);
+        l <<= 8;
+        l |= Murmur3.toInt(array[o + 2]);
+        l <<= 8;
+        l |= Murmur3.toInt(array[o + 1]);
+        l <<= 8;
+        l |= Murmur3.toInt(array[o]);
+        return l;
     }
 
     public void write(int b)

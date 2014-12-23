@@ -51,6 +51,8 @@ final class OffHeapMap
 
     private final AtomicLong freeCapacity;
 
+    // ReentrantLock behaves better (much less contention visible in thread dumps)
+    // than 'synchronized' on systems with multiple CPU packages
     private final ReentrantLock lock = new ReentrantLock();
 
     private final ThreadLocal<List<Long>> dereferenceList = new ThreadLocal<List<Long>>()

@@ -39,12 +39,12 @@ final class HashEntryKeyOutput extends AbstractOffHeapDataOutput
         long h2 = 0L;
         long k1, k2;
 
-        for (; r >= 16; r-=16)
+        for (; r >= 16; r -= 16)
         {
             k1 = getLong(o);
-            o+=8;
+            o += 8;
             k2 = getLong(o);
-            o+=8;
+            o += 8;
 
             // bmix64()
 
@@ -63,7 +63,8 @@ final class HashEntryKeyOutput extends AbstractOffHeapDataOutput
 
         k1 = 0;
         k2 = 0;
-        switch ((int)r) {
+        switch ((int) r)
+        {
             case 15:
                 k2 ^= (long) Murmur3.toInt(Uns.getByte(blkAdr, o + 14)) << 48; // fall through
             case 14:
@@ -124,10 +125,23 @@ final class HashEntryKeyOutput extends AbstractOffHeapDataOutput
 
     private long getLong(long o)
     {
-        long l = Uns.getLong(blkAdr, o);
-        return Uns.littleEndian
-               ? l
-               : Long.reverseBytes(l);
+
+        long l = Murmur3.toInt(Uns.getByte(blkAdr, o + 7));
+        l <<= 8;
+        l |= Murmur3.toInt(Uns.getByte(blkAdr, o + 6));
+        l <<= 8;
+        l |= Murmur3.toInt(Uns.getByte(blkAdr, o + 5));
+        l <<= 8;
+        l |= Murmur3.toInt(Uns.getByte(blkAdr, o + 4));
+        l <<= 8;
+        l |= Murmur3.toInt(Uns.getByte(blkAdr, o + 3));
+        l <<= 8;
+        l |= Murmur3.toInt(Uns.getByte(blkAdr, o + 2));
+        l <<= 8;
+        l |= Murmur3.toInt(Uns.getByte(blkAdr, o + 1));
+        l <<= 8;
+        l |= Murmur3.toInt(Uns.getByte(blkAdr, o));
+        return l;
     }
 
     //
