@@ -163,7 +163,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <systemProperties>
-                        <DISABLE_JEMALLOC>true</DISABLE_JEMALLOC>
+                        <DISABLE_JEMALLOC>false</DISABLE_JEMALLOC>
                         <DEBUG_OFF_HEAP_MEMORY_ACCESS>true</DEBUG_OFF_HEAP_MEMORY_ACCESS>
                     </systemProperties>
                     <reportsDirectory>${project.build.directory}/surefire-reports/normal</reportsDirectory>
