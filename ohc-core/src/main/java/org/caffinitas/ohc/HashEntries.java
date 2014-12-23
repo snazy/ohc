@@ -284,12 +284,6 @@ public final class HashEntries
         return Uns.allocate(bytes);
     }
 
-    private static int bufferIndex()
-    {
-        int idx = bufferIndex++;
-        return idx % buffers.length;
-    }
-
     static void free(long address, long allocLen)
     {
         if (address == 0L)
@@ -299,6 +293,12 @@ public final class HashEntries
             address = buffers[bufferIndex()].free(address, allocLen);
 
         Uns.free(address);
+    }
+
+    private static int bufferIndex()
+    {
+        int idx = bufferIndex++;
+        return idx % buffers.length;
     }
 
     static long blockAllocLen(long allocLen)

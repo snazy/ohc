@@ -64,6 +64,27 @@ final class Uns
     private static final ConcurrentMap<Long, Long> ohDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, Long>(16384) : null;
     private static final Map<Long, Throwable> ohFreeDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, Throwable>(16384) : null;
 
+    static void clearUnsDebugForTest()
+    {
+        if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
+        {
+            try
+            {
+                if (!ohDebug.isEmpty())
+                {
+                    for (Map.Entry<Long, Long> addrSize : ohDebug.entrySet())
+                        System.err.printf("  still allocated: address=%d, size=%d%n", addrSize.getKey(), addrSize.getValue());
+                    throw new RuntimeException("Not all allocated memory has been freed!");
+                }
+            }
+            finally
+            {
+                ohDebug.clear();
+                ohFreeDebug.clear();
+            }
+        }
+    }
+
     private static void freed(long address)
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
@@ -85,6 +106,7 @@ final class Uns
             Long allocatedLen = ohDebug.putIfAbsent(address, bytes);
             if (allocatedLen != null)
                 throw new Error("Oops - allocate() got duplicate address");
+            ohFreeDebug.remove(address);
         }
     }
 
@@ -318,7 +340,8 @@ final class Uns
     static long allocate(long bytes)
     {
         long address = allocator.allocate(bytes);
-        allocated(address, bytes);
+        if (address != 0L)
+            allocated(address, bytes);
         return address > 0L ? address : 0L;
     }
 

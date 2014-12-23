@@ -18,10 +18,17 @@ package org.caffinitas.ohc;
 import java.io.IOException;
 
 import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 public class CacheSerializerTest
 {
+    @AfterMethod(alwaysRun = true)
+    public void deinit()
+    {
+        HashEntries.memBufferClear();
+        Uns.clearUnsDebugForTest();
+    }
 
     @Test
     public void testFailingKeySerializer() throws IOException, InterruptedException

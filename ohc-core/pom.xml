@@ -162,6 +162,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <systemProperties>
+                        <DISABLE_JEMALLOC>true</DISABLE_JEMALLOC>
+                        <DEBUG_OFF_HEAP_MEMORY_ACCESS>true</DEBUG_OFF_HEAP_MEMORY_ACCESS>
+                    </systemProperties>
                     <reportsDirectory>${project.build.directory}/surefire-reports/normal</reportsDirectory>
                 </configuration>
             </plugin>
@@ -186,12 +190,9 @@
                                     <goal>test</goal>
                                 </goals>
                                 <configuration>
-                                    <excludes>
-                                        <exclude>**/BatchCasTest.java</exclude>
-                                        <exclude>**/OptionsTest.java</exclude>
-                                    </excludes>
                                     <systemProperties>
                                         <DISABLE_JEMALLOC>true</DISABLE_JEMALLOC>
+                                        <DEBUG_OFF_HEAP_MEMORY_ACCESS>true</DEBUG_OFF_HEAP_MEMORY_ACCESS>
                                     </systemProperties>
                                     <reportsDirectory>${project.build.directory}/surefire-reports/noJemalloc</reportsDirectory>
                                 </configuration>

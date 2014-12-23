@@ -22,12 +22,19 @@ import com.google.common.hash.Hashing;
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteStreams;
 
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
 
 public class KeyBufferTest
 {
+    @AfterMethod(alwaysRun = true)
+    public void deinit()
+    {
+        HashEntries.memBufferClear();
+        Uns.clearUnsDebugForTest();
+    }
 
     @Test
     public void testHashFinish() throws Exception

@@ -159,20 +159,20 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void put(K k, V v)
     {
-        put(k, v, false, null);
+        putInternal(k, v, false, null);
     }
 
     public boolean addOrReplace(K key, V old, V value)
     {
-        return put(key, value, false, old);
+        return putInternal(key, value, false, old);
     }
 
     public boolean putIfAbsent(K k, V v)
     {
-        return put(k, v, true, null);
+        return putInternal(k, v, true, null);
     }
 
-    private boolean put(K k, V v, boolean ifAbsent, V old)
+    private boolean putInternal(K k, V v, boolean ifAbsent, V old)
     {
         if (k == null || v == null)
             throw new NullPointerException();

@@ -21,12 +21,20 @@ import java.util.Arrays;
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
 
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
 
 public class HashEntryKeyInputTest
 {
+    @AfterMethod(alwaysRun = true)
+    public void deinit()
+    {
+        HashEntries.memBufferClear();
+        Uns.clearUnsDebugForTest();
+    }
+
     static final long MIN_ALLOC_LEN = 1024;
 
     @Test

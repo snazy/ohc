@@ -20,14 +20,25 @@ import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.Random;
 
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 import sun.misc.Unsafe;
 import sun.nio.ch.DirectBuffer;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertTrue;
 
 public class UnsTest
 {
+    @AfterMethod(alwaysRun = true)
+    public void deinit()
+    {
+        HashEntries.memBufferClear();
+        Uns.clearUnsDebugForTest();
+    }
+
     private static final Unsafe unsafe;
 
     static final int CAPACITY = 65536;

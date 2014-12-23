@@ -31,12 +31,20 @@ import com.google.common.io.ByteStreams;
 
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 // This unit test uses the production cache implementation and an independent OHCache implementation used to
 // cross-check the production implementation.
 public class CrossCheckTest
 {
+    @AfterMethod(alwaysRun = true)
+    public void deinit()
+    {
+        HashEntries.memBufferClear();
+        Uns.clearUnsDebugForTest();
+    }
+
     static DoubleCheckCacheImpl<Integer, String> cache()
     {
         return cache(256);
@@ -146,7 +154,10 @@ public class CrossCheckTest
         {
             TestUtils.fill5(cache);
 
-            Assert.assertNotNull(cache.hotKeyIterator(1).next());
+            try (CloseableIterator<Integer> iter = cache.hotKeyIterator(1))
+            {
+                Assert.assertNotNull(iter.next());
+            }
         }
     }
 

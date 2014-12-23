@@ -18,12 +18,19 @@ package org.caffinitas.ohc;
 import java.io.EOFException;
 import java.util.Arrays;
 
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
 
 public class HashEntryValueInputOutputTest
 {
+    @AfterMethod(alwaysRun = true)
+    public void deinit()
+    {
+        HashEntries.memBufferClear();
+        Uns.clearUnsDebugForTest();
+    }
 
     @Test
     public void testReadBoolean() throws Exception

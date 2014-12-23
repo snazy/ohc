@@ -345,6 +345,7 @@ final class OffHeapMap
             }
 
         threshold = (long) ((float) newTable.size() * loadFactor);
+        table.release();
         table = newTable;
         rehashes++;
     }

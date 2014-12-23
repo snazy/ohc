@@ -15,18 +15,29 @@
  */
 package org.caffinitas.ohc;
 
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 public class HashEntriesTest
 {
+    @AfterMethod(alwaysRun = true)
+    public void deinit()
+    {
+        HashEntries.memBufferClear();
+        Uns.clearUnsDebugForTest();
+    }
+
     static final long MIN_ALLOC_LEN = 128;
 
     @Test
     public void testInit() throws Exception
     {
         long adr = Uns.allocate(MIN_ALLOC_LEN);
+        boolean ok = false;
         try
         {
             HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr);
@@ -39,10 +50,12 @@ public class HashEntriesTest
             assertEquals(HashEntries.getKeyLen(adr), 5L);
             assertEquals(HashEntries.getValueLen(adr), 10L);
             assertTrue(HashEntries.dereference(adr));
+            ok = true;
         }
         finally
         {
-            Uns.free(adr);
+            if (!ok)
+                Uns.free(adr);
         }
     }
 
@@ -224,6 +237,7 @@ public class HashEntriesTest
     public void testReferenceDereference() throws Exception
     {
         long adr = Uns.allocate(MIN_ALLOC_LEN);
+        boolean ok = false;
         try
         {
             HashEntries.init(0x98765432abcddeafL, 0L, 10L, adr);
@@ -236,28 +250,34 @@ public class HashEntriesTest
             assertFalse(HashEntries.dereference(adr)); // to 2
             assertFalse(HashEntries.dereference(adr)); // to 1
             assertTrue(HashEntries.dereference(adr)); // to 0
+            ok = true;
         }
         finally
         {
-            Uns.free(adr);
+            if (!ok)
+                Uns.free(adr);
         }
     }
 
-    @Test(expectedExceptions = IllegalStateException.class)
+    @Test
     public void testDereferenceFail() throws Exception
     {
         long adr = Uns.allocate(MIN_ALLOC_LEN);
+        boolean ok = false;
         try
         {
             HashEntries.init(0x98765432abcddeafL, 0L, 10L, adr);
 
             assertTrue(HashEntries.dereference(adr)); // to 0
+            ok = true;
 
-            HashEntries.dereference(adr);
+            // must NOT dereference another time - memory has been free()'d !!!!
+            //HashEntries.dereference(adr);
         }
         finally
         {
-            Uns.free(adr);
+            if (!ok)
+                Uns.free(adr);
         }
     }
 

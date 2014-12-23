@@ -21,12 +21,19 @@ import java.util.Arrays;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
-import static org.testng.Assert.*;
+import static org.testng.Assert.assertEquals;
 
 public class HashEntryKeyOutputTest
 {
+    @AfterMethod(alwaysRun = true)
+    public void deinit()
+    {
+        HashEntries.memBufferClear();
+        Uns.clearUnsDebugForTest();
+    }
 
     @Test
     public void testHashFinish() throws Exception
