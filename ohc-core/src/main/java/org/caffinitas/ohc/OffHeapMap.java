@@ -191,7 +191,7 @@ final class OffHeapMap
                     return false;
             }
 
-            removeAndDereference(hashEntryAdr, prevEntryAdr);
+            removeInternal(hashEntryAdr, prevEntryAdr);
 
             break;
         }
@@ -237,7 +237,8 @@ final class OffHeapMap
             {
                 next = HashEntries.getNext(hashEntryAdr);
 
-                dereference(hashEntryAdr);
+                freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
+                HashEntries.dereference(hashEntryAdr);
             }
 
         table.clear();
@@ -268,7 +269,7 @@ final class OffHeapMap
 
             // remove existing entry
 
-            removeAndDereference(hashEntryAdr, prevEntryAdr);
+            removeInternal(hashEntryAdr, prevEntryAdr);
 
             size--;
             removeCount++;
@@ -289,7 +290,7 @@ final class OffHeapMap
 
             // remove existing entry
 
-            removeAndDereference(hashEntryAdr, prevEntryAdr);
+            removeInternal(hashEntryAdr, prevEntryAdr);
 
             size--;
             removeCount++;
@@ -498,7 +499,7 @@ final class OffHeapMap
         }
     }
 
-    private void removeAndDereference(long hashEntryAdr, long prevEntryAdr)
+    private void removeInternal(long hashEntryAdr, long prevEntryAdr)
     {
         long hash = HashEntries.getHash(hashEntryAdr);
 
@@ -521,6 +522,8 @@ final class OffHeapMap
 
         // add to a ThreadLocal deref list since a dereference can become very expensive if a free() is involved
         dereferenceList.get().add(hashEntryAdr);
+
+        freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
     }
 
     private void processDereferences()
@@ -528,20 +531,8 @@ final class OffHeapMap
         // process ThreadLocal deref list since a dereference can become very expensive if a free() is involved
         List<Long> derefList = dereferenceList.get();
         for (long hashEntryAdr : derefList)
-            dereference(hashEntryAdr);
+            HashEntries.dereference(hashEntryAdr);
         derefList.clear();
-    }
-
-    void dereference(long hashEntryAdr)
-    {
-        if (HashEntries.dereference(hashEntryAdr))
-        {
-            long bytes = HashEntries.getAllocLen(hashEntryAdr);
-
-            HashEntries.free(hashEntryAdr, bytes);
-
-            freeCapacity.addAndGet(bytes);
-        }
     }
 
     private void add(long hashEntryAdr, long hash)
@@ -598,7 +589,7 @@ final class OffHeapMap
         if (hashEntryAdr == 0L)
             return false;
 
-        removeAndDereference(hashEntryAdr, -1L);
+        removeInternal(hashEntryAdr, -1L);
 
         size--;
 

@@ -145,7 +145,12 @@ public final class HashEntries
 
     static boolean dereference(long hashEntryAdr)
     {
-        return Uns.decrement(hashEntryAdr, ENTRY_OFF_REFCOUNT);
+        if (Uns.decrement(hashEntryAdr, ENTRY_OFF_REFCOUNT))
+        {
+            HashEntries.free(hashEntryAdr, HashEntries.getAllocLen(hashEntryAdr));
+            return true;
+        }
+        return false;
     }
 
     //

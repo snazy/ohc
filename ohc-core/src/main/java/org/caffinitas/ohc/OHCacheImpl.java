@@ -143,7 +143,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            segment.dereference(hashEntryAdr);
+            HashEntries.dereference(hashEntryAdr);
         }
     }
 
@@ -654,7 +654,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         OffHeapMap segment = segment(keySource.hash());
         long hashEntryAdr = segment.getEntry(keySource, true);
 
-        return hashEntryAdr != 0L && serializeEntry(segment, channel, hashEntryAdr);
+        return hashEntryAdr != 0L && serializeEntry(channel, hashEntryAdr);
     }
 
     public int deserializeEntries(ReadableByteChannel channel) throws IOException
@@ -734,9 +734,9 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                     try
                     {
                         if (entries)
-                            serializeEntry(map, channel, hashEntryAdr);
+                            serializeEntry(channel, hashEntryAdr);
                         else
-                            serializeKey(map, channel, hashEntryAdr);
+                            serializeKey(channel, hashEntryAdr);
                     }
                     finally
                     {
@@ -750,14 +750,14 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             {
                 for (long hashEntryAdr : hotPerMap)
                     if (hashEntryAdr != 0L)
-                        map.dereference(hashEntryAdr);
+                        HashEntries.dereference(hashEntryAdr);
             }
         }
 
         return cnt;
     }
 
-    private static boolean serializeEntry(OffHeapMap segment, WritableByteChannel channel, long hashEntryAdr) throws IOException
+    private static boolean serializeEntry(WritableByteChannel channel, long hashEntryAdr) throws IOException
     {
         try
         {
@@ -773,11 +773,11 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            segment.dereference(hashEntryAdr);
+            HashEntries.dereference(hashEntryAdr);
         }
     }
 
-    private static boolean serializeKey(OffHeapMap segment, WritableByteChannel channel, long hashEntryAdr) throws IOException
+    private static boolean serializeKey(WritableByteChannel channel, long hashEntryAdr) throws IOException
     {
         try
         {
@@ -792,7 +792,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         finally
         {
-            segment.dereference(hashEntryAdr);
+            HashEntries.dereference(hashEntryAdr);
         }
     }
 
@@ -902,7 +902,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             if (lastHashEntryAdr != 0L)
             {
-                lastSegment.dereference(lastHashEntryAdr);
+                HashEntries.dereference(lastHashEntryAdr);
                 lastHashEntryAdr = 0L;
                 lastSegment = null;
             }
@@ -1008,7 +1008,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             if (lastHashEntryAdr != 0L)
             {
-                lastSegment.dereference(lastHashEntryAdr);
+                HashEntries.dereference(lastHashEntryAdr);
                 lastHashEntryAdr = 0L;
                 lastSegment = null;
             }
