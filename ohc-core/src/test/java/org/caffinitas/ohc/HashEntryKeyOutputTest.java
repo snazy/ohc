@@ -16,11 +16,13 @@
 package org.caffinitas.ohc;
 
 import java.io.EOFException;
+import java.io.IOException;
 import java.util.Arrays;
 
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 
+import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
@@ -287,5 +289,42 @@ public class HashEntryKeyOutputTest
         HashEntryKeyOutput out = new HashEntryKeyOutput(adr, len);
         assertEquals(out.avail(), len);
         return out;
+    }
+
+    @Test
+    public void testOwnHash() throws IOException
+    {
+        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf ";
+        int len = ref.length() + 2;
+        HashEntryKeyOutput out = build(len);
+        try
+        {
+            long off = out.blkOff;
+
+            out.writeUTF(ref);
+            assertEquals(out.avail(), 0);
+
+            long h2 = out.hash();
+
+            KeyBuffer kb = new KeyBuffer(len);
+            kb.writeUTF(ref);
+            kb.finish();
+
+            long h3 = kb.hash();
+
+            Hasher hasher = Hashing.murmur3_128().newHasher();
+
+            for (int i = 0; i < len; i++)
+                hasher.putByte(Uns.getByte(out.blkAdr, off + i));
+
+            long h1 = hasher.hash().asLong();
+
+            Assert.assertEquals(h2, h1);
+            Assert.assertEquals(h3, h1);
+        }
+        finally
+        {
+            Uns.free(out.blkAdr);
+        }
     }
 }

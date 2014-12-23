@@ -17,12 +17,8 @@ package org.caffinitas.ohc;
 
 import java.util.Arrays;
 
-import com.google.common.hash.Hasher;
-import com.google.common.hash.Hashing;
-
 final class KeyBuffer extends AbstractDataOutput
 {
-    private final Hasher hasher = Hashing.murmur3_128().newHasher();
     private final byte[] array;
     private int p;
     private long hash;
@@ -54,19 +50,114 @@ final class KeyBuffer extends AbstractDataOutput
 
     KeyBuffer finish()
     {
-        hash = hasher.hash().asLong();
+        int o = 0;
+        int r = size();
+
+        long h1 = 0L;
+        long h2 = 0L;
+        long k1, k2;
+
+        for (; r >= 16; r -= 16)
+        {
+            k1 = getLong(o);
+            o += 8;
+            k2 = getLong(o);
+            o += 8;
+
+            // bmix64()
+
+            h1 ^= Murmur3.mixK1(k1);
+
+            h1 = Long.rotateLeft(h1, 27);
+            h1 += h2;
+            h1 = h1 * 5 + 0x52dce729;
+
+            h2 ^= Murmur3.mixK2(k2);
+
+            h2 = Long.rotateLeft(h2, 31);
+            h2 += h1;
+            h2 = h2 * 5 + 0x38495ab5;
+        }
+
+        k1 = 0;
+        k2 = 0;
+        switch (r)
+        {
+            case 15:
+                k2 ^= (long) Murmur3.toInt(array[o + 14]) << 48; // fall through
+            case 14:
+                k2 ^= (long) Murmur3.toInt(array[o + 13]) << 40; // fall through
+            case 13:
+                k2 ^= (long) Murmur3.toInt(array[o + 12]) << 32; // fall through
+            case 12:
+                k2 ^= (long) Murmur3.toInt(array[o + 11]) << 24; // fall through
+            case 11:
+                k2 ^= (long) Murmur3.toInt(array[o + 10]) << 16; // fall through
+            case 10:
+                k2 ^= (long) Murmur3.toInt(array[o + 9]) << 8; // fall through
+            case 9:
+                k2 ^= (long) Murmur3.toInt(array[o + 8]); // fall through
+            case 8:
+                k1 ^= getLong(o);
+                break;
+            case 7:
+                k1 ^= (long) Murmur3.toInt(array[o + 6]) << 48; // fall through
+            case 6:
+                k1 ^= (long) Murmur3.toInt(array[o + 5]) << 40; // fall through
+            case 5:
+                k1 ^= (long) Murmur3.toInt(array[o + 4]) << 32; // fall through
+            case 4:
+                k1 ^= (long) Murmur3.toInt(array[o + 3]) << 24; // fall through
+            case 3:
+                k1 ^= (long) Murmur3.toInt(array[o + 2]) << 16; // fall through
+            case 2:
+                k1 ^= (long) Murmur3.toInt(array[o + 1]) << 8; // fall through
+            case 1:
+                k1 ^= (long) Murmur3.toInt(array[o]);
+                break;
+            default:
+                throw new AssertionError("Should never get here.");
+        }
+
+        h1 ^= Murmur3.mixK1(k1);
+        h2 ^= Murmur3.mixK2(k2);
+
+        // makeHash()
+
+        h1 ^= size();
+        h2 ^= size();
+
+        h1 += h2;
+        h2 += h1;
+
+        h1 = Murmur3.fmix64(h1);
+        h2 = Murmur3.fmix64(h2);
+
+        h1 += h2;
+        //h2 += h1;
+
+        // padToLong()
+
+        hash = h1;
+
         return this;
+    }
+
+    private long getLong(int o)
+    {
+        long l = Uns.getLongFromByteArray(array, o);
+        return Uns.littleEndian
+               ? l
+               : Long.reverseBytes(l);
     }
 
     public void write(int b)
     {
-        hasher.putByte((byte) b);
         array[p++] = (byte) b;
     }
 
     public void write(byte[] b, int off, int len)
     {
-        hasher.putBytes(b, off, len);
         System.arraycopy(b, off, array, p, len);
         p += len;
     }
@@ -120,9 +211,7 @@ final class KeyBuffer extends AbstractDataOutput
 
         KeyBuffer keyBuffer = (KeyBuffer) o;
 
-        if (!Arrays.equals(array, keyBuffer.array)) return false;
-
-        return true;
+        return Arrays.equals(array, keyBuffer.array);
     }
 
     public int hashCode()

@@ -134,6 +134,8 @@ final class Uns
     // #endif
     //
 
+    static final boolean littleEndian;
+
     static
     {
         try
@@ -162,6 +164,22 @@ final class Uns
             if (alloc == null)
                 alloc = new NativeAllocator();
             allocator = alloc;
+
+            long adr = allocate(8);
+            unsafe.putLong(adr, 0x0102030405060708L);
+            byte b = unsafe.getByte(adr);
+            free(adr);
+            switch (b)
+            {
+                case 0x01:
+                    littleEndian = false;
+                    break;
+                case 0x08:
+                    littleEndian = true;
+                    break;
+                default:
+                    throw new RuntimeException("unknown byte order");
+            }
         }
         catch (Exception e)
         {
