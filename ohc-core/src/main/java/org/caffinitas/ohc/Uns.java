@@ -13,21 +13,6 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-/*
- *      Copyright (C) 2014 Robert Stupp, Koeln, Germany, robert-stupp.de
- *
- *   Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *   See the License for the specific language governing permissions and
- *   limitations under the License.
- */
 package org.caffinitas.ohc;
 
 import java.io.IOException;
@@ -134,8 +119,6 @@ final class Uns
     // #endif
     //
 
-    static final boolean littleEndian;
-
     static
     {
         try
@@ -164,22 +147,6 @@ final class Uns
             if (alloc == null)
                 alloc = new NativeAllocator();
             allocator = alloc;
-
-            long adr = allocate(8);
-            unsafe.putLong(adr, 0x0102030405060708L);
-            byte b = unsafe.getByte(adr);
-            free(adr);
-            switch (b)
-            {
-                case 0x01:
-                    littleEndian = false;
-                    break;
-                case 0x08:
-                    littleEndian = true;
-                    break;
-                default:
-                    throw new RuntimeException("unknown byte order");
-            }
         }
         catch (Exception e)
         {
@@ -320,7 +287,6 @@ final class Uns
                 throw new IllegalStateException("Must not decrement 0");
             if (unsafe.compareAndSwapLong(null, address, v, v - 1))
                 return v == 1;
-            unsafe.park(false, 1000);
         }
     }
 
@@ -331,10 +297,12 @@ final class Uns
         validate(address, offset, 8L);
         address += offset;
         long v;
-        do
+        while (true)
         {
             v = unsafe.getLongVolatile(null, address);
-        } while (!unsafe.compareAndSwapLong(null, address, v, v + 1));
+            if (unsafe.compareAndSwapLong(null, address, v, v + 1))
+                return;
+        }
     }
 
     static void copyMemory(byte[] arr, int off, long address, long offset, long len)

@@ -84,36 +84,36 @@ final class KeyBuffer extends AbstractDataOutput
         switch (r)
         {
             case 15:
-                k2 ^= (long) Murmur3.toInt(array[o + 14]) << 48; // fall through
+                k2 ^= Murmur3.toLong(array[o + 14]) << 48; // fall through
             case 14:
-                k2 ^= (long) Murmur3.toInt(array[o + 13]) << 40; // fall through
+                k2 ^= Murmur3.toLong(array[o + 13]) << 40; // fall through
             case 13:
-                k2 ^= (long) Murmur3.toInt(array[o + 12]) << 32; // fall through
+                k2 ^= Murmur3.toLong(array[o + 12]) << 32; // fall through
             case 12:
-                k2 ^= (long) Murmur3.toInt(array[o + 11]) << 24; // fall through
+                k2 ^= Murmur3.toLong(array[o + 11]) << 24; // fall through
             case 11:
-                k2 ^= (long) Murmur3.toInt(array[o + 10]) << 16; // fall through
+                k2 ^= Murmur3.toLong(array[o + 10]) << 16; // fall through
             case 10:
-                k2 ^= (long) Murmur3.toInt(array[o + 9]) << 8; // fall through
+                k2 ^= Murmur3.toLong(array[o + 9]) << 8; // fall through
             case 9:
-                k2 ^= (long) Murmur3.toInt(array[o + 8]); // fall through
+                k2 ^= Murmur3.toLong(array[o + 8]); // fall through
             case 8:
                 k1 ^= getLong(o);
                 break;
             case 7:
-                k1 ^= (long) Murmur3.toInt(array[o + 6]) << 48; // fall through
+                k1 ^= Murmur3.toLong(array[o + 6]) << 48; // fall through
             case 6:
-                k1 ^= (long) Murmur3.toInt(array[o + 5]) << 40; // fall through
+                k1 ^= Murmur3.toLong(array[o + 5]) << 40; // fall through
             case 5:
-                k1 ^= (long) Murmur3.toInt(array[o + 4]) << 32; // fall through
+                k1 ^= Murmur3.toLong(array[o + 4]) << 32; // fall through
             case 4:
-                k1 ^= (long) Murmur3.toInt(array[o + 3]) << 24; // fall through
+                k1 ^= Murmur3.toLong(array[o + 3]) << 24; // fall through
             case 3:
-                k1 ^= (long) Murmur3.toInt(array[o + 2]) << 16; // fall through
+                k1 ^= Murmur3.toLong(array[o + 2]) << 16; // fall through
             case 2:
-                k1 ^= (long) Murmur3.toInt(array[o + 1]) << 8; // fall through
+                k1 ^= Murmur3.toLong(array[o + 1]) << 8; // fall through
             case 1:
-                k1 ^= (long) Murmur3.toInt(array[o]);
+                k1 ^= Murmur3.toLong(array[o]);
                 break;
             default:
                 throw new AssertionError("Should never get here.");
@@ -145,21 +145,14 @@ final class KeyBuffer extends AbstractDataOutput
 
     private long getLong(int o)
     {
-        long l = Murmur3.toInt(array[o + 7]);
-        l <<= 8;
-        l |= Murmur3.toInt(array[o + 6]);
-        l <<= 8;
-        l |= Murmur3.toInt(array[o + 5]);
-        l <<= 8;
-        l |= Murmur3.toInt(array[o + 4]);
-        l <<= 8;
-        l |= Murmur3.toInt(array[o + 3]);
-        l <<= 8;
-        l |= Murmur3.toInt(array[o + 2]);
-        l <<= 8;
-        l |= Murmur3.toInt(array[o + 1]);
-        l <<= 8;
-        l |= Murmur3.toInt(array[o]);
+        long l = Murmur3.toLong(array[o + 7]) << 56;
+        l |= Murmur3.toLong(array[o + 6]) << 48;
+        l |= Murmur3.toLong(array[o + 5]) << 40;
+        l |= Murmur3.toLong(array[o + 4]) << 32;
+        l |= Murmur3.toLong(array[o + 3]) << 24;
+        l |= Murmur3.toLong(array[o + 2]) << 16;
+        l |= Murmur3.toLong(array[o + 1]) << 8;
+        l |= Murmur3.toLong(array[o]);
         return l;
     }
 

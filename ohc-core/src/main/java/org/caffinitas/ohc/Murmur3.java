@@ -43,7 +43,7 @@ final class Murmur3
         return k2;
     }
 
-    static int toInt(byte value) {
+    static long toLong(byte value) {
         return value & 0xff;
     }
 }

@@ -18,7 +18,6 @@ package org.caffinitas.ohc;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.ReentrantLock;
 
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
@@ -51,10 +50,6 @@ final class OffHeapMap
 
     private final AtomicLong freeCapacity;
 
-    // ReentrantLock behaves better (much less contention visible in thread dumps)
-    // than 'synchronized' on systems with multiple CPU packages
-    private final ReentrantLock lock = new ReentrantLock();
-
     private final ThreadLocal<List<Long>> dereferenceList = new ThreadLocal<List<Long>>()
     {
         protected List<Long> initialValue()
@@ -83,18 +78,10 @@ final class OffHeapMap
         threshold = (long) ((double) table.size() * loadFactor);
     }
 
-    void release()
+    synchronized void release()
     {
-        lock.lock();
-        try
-        {
-            table.release();
-            table = null;
-        }
-        finally
-        {
-            lock.unlock();
-        }
+        table.release();
+        table = null;
     }
 
     long size()
@@ -148,37 +135,29 @@ final class OffHeapMap
         return evictedEntries;
     }
 
-    long getEntry(KeyBuffer key, boolean reference)
+    synchronized long getEntry(KeyBuffer key, boolean reference)
     {
-        lock.lock();
-        try
+        for (long hashEntryAdr = table.getFirst(key.hash());
+             hashEntryAdr != 0L;
+             hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
-            for (long hashEntryAdr = table.getFirst(key.hash());
-                 hashEntryAdr != 0L;
-                 hashEntryAdr = HashEntries.getNext(hashEntryAdr))
-            {
-                if (notSameKey(key, hashEntryAdr))
-                    continue;
+            if (notSameKey(key, hashEntryAdr))
+                continue;
 
-                // return existing entry
+            // return existing entry
 
-                touch(hashEntryAdr);
+            touch(hashEntryAdr);
 
-                if (reference)
-                    HashEntries.reference(hashEntryAdr);
+            if (reference)
+                HashEntries.reference(hashEntryAdr);
 
-                hitCount++;
-                return hashEntryAdr;
-            }
-
-            // not found
-            missCount++;
-            return 0L;
+            hitCount++;
+            return hashEntryAdr;
         }
-        finally
-        {
-            lock.unlock();
-        }
+
+        // not found
+        missCount++;
+        return 0L;
     }
 
     boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
@@ -188,97 +167,81 @@ final class OffHeapMap
         return r;
     }
 
-    private boolean putEntryInt(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
+    private synchronized boolean putEntryInt(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
     {
-        lock.lock();
-        try
+        long hashEntryAdr;
+        long prevEntryAdr = 0L;
+        for (hashEntryAdr = table.getFirst(hash);
+             hashEntryAdr != 0L;
+             prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
-            long hashEntryAdr;
-            long prevEntryAdr = 0L;
-            for (hashEntryAdr = table.getFirst(hash);
-                 hashEntryAdr != 0L;
-                 prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+            if (notSameKey(newHashEntryAdr, hash, keyLen, hashEntryAdr))
+                continue;
+
+            // replace existing entry
+
+            if (ifAbsent)
+                return false;
+
+            if (oldValueAdr != 0L)
             {
-                if (notSameKey(newHashEntryAdr, hash, keyLen, hashEntryAdr))
-                    continue;
-
-                // replace existing entry
-
-                if (ifAbsent)
+                // code for replace() operation
+                long valueLen = HashEntries.getValueLen(hashEntryAdr);
+                if (valueLen != oldValueLen || !HashEntries.compare(hashEntryAdr, ENTRY_OFF_DATA + roundUpTo8(keyLen), oldValueAdr, 0L, oldValueLen))
                     return false;
-
-                if (oldValueAdr != 0L)
-                {
-                    // code for replace() operation
-                    long valueLen = HashEntries.getValueLen(hashEntryAdr);
-                    if (valueLen != oldValueLen || !HashEntries.compare(hashEntryAdr, ENTRY_OFF_DATA + roundUpTo8(keyLen), oldValueAdr, 0L, oldValueLen))
-                        return false;
-                }
-
-                removeInternal(hashEntryAdr, prevEntryAdr);
-
-                break;
             }
 
-            while (freeCapacity.get() < bytes)
-                if (!removeEldest())
-                {
-                    if (hashEntryAdr != 0L)
-                        size--;
-                    return false;
-                }
+            removeInternal(hashEntryAdr, prevEntryAdr);
 
-            if (hashEntryAdr == 0L)
+            break;
+        }
+
+        while (freeCapacity.get() < bytes)
+            if (!removeEldest())
             {
-                if (size >= threshold)
-                    rehash();
-
-                size++;
+                if (hashEntryAdr != 0L)
+                    size--;
+                return false;
             }
 
-            freeCapacity.addAndGet(-bytes);
-
-            add(newHashEntryAdr, hash);
-
-            if (hashEntryAdr == 0L)
-                putAddCount++;
-            else
-                putReplaceCount++;
-
-            return true;
-        }
-        finally
+        if (hashEntryAdr == 0L)
         {
-            lock.unlock();
+            if (size >= threshold)
+                rehash();
+
+            size++;
         }
+
+        freeCapacity.addAndGet(-bytes);
+
+        add(newHashEntryAdr, hash);
+
+        if (hashEntryAdr == 0L)
+            putAddCount++;
+        else
+            putReplaceCount++;
+
+        return true;
     }
 
-    void clear()
+    synchronized void clear()
     {
-        lock.lock();
-        try
-        {
-            lruHead = lruTail = 0L;
-            size = 0L;
+        lruHead = lruTail = 0L;
+        size = 0L;
 
-            long next;
-            for (int p = 0; p < table.size(); p++)
-                for (long hashEntryAdr = table.getFirst(p);
-                     hashEntryAdr != 0L;
-                     hashEntryAdr = next)
-                {
-                    next = HashEntries.getNext(hashEntryAdr);
+        long next;
+        for (int p = 0; p < table.size(); p++)
+            for (long hashEntryAdr = table.getFirst(p);
+                 hashEntryAdr != 0L;
+                 hashEntryAdr = next)
+            {
+                next = HashEntries.getNext(hashEntryAdr);
 
-                    freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
-                    HashEntries.dereference(hashEntryAdr);
-                }
+                freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
+                HashEntries.dereference(hashEntryAdr);
+            }
 
-            table.clear();
-        }
-        finally
-        {
-            lock.unlock();
-        }
+        table.clear();
     }
 
     void removeEntry(long removeHashEntryAdr)
@@ -293,62 +256,46 @@ final class OffHeapMap
         processDereferences();
     }
 
-    private void removeEntryInt(long removeHashEntryAdr)
+    private synchronized void removeEntryInt(long removeHashEntryAdr)
     {
-        lock.lock();
-        try
+        long hash = HashEntries.getHash(removeHashEntryAdr);
+        long prevEntryAdr = 0L;
+        for (long hashEntryAdr = table.getFirst(hash);
+             hashEntryAdr != 0L;
+             prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
-            long hash = HashEntries.getHash(removeHashEntryAdr);
-            long prevEntryAdr = 0L;
-            for (long hashEntryAdr = table.getFirst(hash);
-                 hashEntryAdr != 0L;
-                 prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
-            {
-                if (hashEntryAdr != removeHashEntryAdr)
-                    continue;
+            if (hashEntryAdr != removeHashEntryAdr)
+                continue;
 
-                // remove existing entry
+            // remove existing entry
 
-                removeInternal(hashEntryAdr, prevEntryAdr);
+            removeInternal(hashEntryAdr, prevEntryAdr);
 
-                size--;
-                removeCount++;
+            size--;
+            removeCount++;
 
-                return;
-            }
-        }
-        finally
-        {
-            lock.unlock();
+            return;
         }
     }
 
-    private void removeEntryInt(KeyBuffer key)
+    private synchronized void removeEntryInt(KeyBuffer key)
     {
-        lock.lock();
-        try
+        long prevEntryAdr = 0L;
+        for (long hashEntryAdr = table.getFirst(key.hash());
+             hashEntryAdr != 0L;
+             prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
         {
-            long prevEntryAdr = 0L;
-            for (long hashEntryAdr = table.getFirst(key.hash());
-                 hashEntryAdr != 0L;
-                 prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
-            {
-                if (notSameKey(key, hashEntryAdr))
-                    continue;
+            if (notSameKey(key, hashEntryAdr))
+                continue;
 
-                // remove existing entry
+            // remove existing entry
 
-                removeInternal(hashEntryAdr, prevEntryAdr);
+            removeInternal(hashEntryAdr, prevEntryAdr);
 
-                size--;
-                removeCount++;
+            size--;
+            removeCount++;
 
-                return;
-            }
-        }
-        finally
-        {
-            lock.unlock();
+            return;
         }
     }
 
@@ -403,26 +350,18 @@ final class OffHeapMap
         rehashes++;
     }
 
-    long[] hotN(int n)
+    synchronized long[] hotN(int n)
     {
-        lock.lock();
-        try
+        long[] r = new long[n];
+        int i = 0;
+        for (long hashEntryAdr = lruHead;
+             hashEntryAdr != 0L && i < n;
+             hashEntryAdr = HashEntries.getLRUNext(hashEntryAdr))
         {
-            long[] r = new long[n];
-            int i = 0;
-            for (long hashEntryAdr = lruHead;
-                 hashEntryAdr != 0L && i < n;
-                 hashEntryAdr = HashEntries.getLRUNext(hashEntryAdr))
-            {
-                r[i++] = hashEntryAdr;
-                HashEntries.reference(hashEntryAdr);
-            }
-            return r;
+            r[i++] = hashEntryAdr;
+            HashEntries.reference(hashEntryAdr);
         }
-        finally
-        {
-            lock.unlock();
-        }
+        return r;
     }
 
     float loadFactor()
@@ -435,37 +374,21 @@ final class OffHeapMap
         return table.size();
     }
 
-    void updateBucketHistogram(EstimatedHistogram hist)
+    synchronized void updateBucketHistogram(EstimatedHistogram hist)
     {
-        lock.lock();
-        try
-        {
-            table.updateBucketHistogram(hist);
-        }
-        finally
-        {
-            lock.unlock();
-        }
+        table.updateBucketHistogram(hist);
     }
 
-    void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
+    synchronized void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
     {
-        lock.lock();
-        try
-        {
-            for (; nSegments-- > 0 && mapSegmentIndex < table.size(); mapSegmentIndex++)
-                for (long hashEntryAdr = table.getFirst(mapSegmentIndex);
-                     hashEntryAdr != 0L;
-                     hashEntryAdr = HashEntries.getNext(hashEntryAdr))
-                {
-                    hashEntryAdrs.add(hashEntryAdr);
-                    HashEntries.reference(hashEntryAdr);
-                }
-        }
-        finally
-        {
-            lock.unlock();
-        }
+        for (; nSegments-- > 0 && mapSegmentIndex < table.size(); mapSegmentIndex++)
+            for (long hashEntryAdr = table.getFirst(mapSegmentIndex);
+                 hashEntryAdr != 0L;
+                 hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+            {
+                hashEntryAdrs.add(hashEntryAdr);
+                HashEntries.reference(hashEntryAdr);
+            }
     }
 
     static final class Table
