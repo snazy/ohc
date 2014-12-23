@@ -41,7 +41,7 @@ final class Driver implements Runnable
 
     Driver(final int driverNo, Distribution readKeyDist, Distribution writeKeyDist, Distribution valueSizeDist, double readWriteRatio, int threads, long seed)
     {
-        queue = new ArrayBlockingQueue<>(5000);
+        queue = new ArrayBlockingQueue<>(500);
         exec = new ThreadPoolExecutor(threads, threads,
                                       1, TimeUnit.SECONDS,
                                       queue, new ThreadFactory()
