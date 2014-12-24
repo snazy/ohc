@@ -531,21 +531,4 @@ public class UnsTest
             Uns.free(adr);
         }
     }
-
-    @Test(expectedExceptions = IllegalStateException.class)
-    public void testDecrementFail() throws Exception
-    {
-        long adr = Uns.allocate(128);
-        try
-        {
-            Uns.putLong(adr, 8, 1L);
-
-            assertTrue(Uns.decrement(adr, 8));
-            Uns.decrement(adr, 8);
-        }
-        finally
-        {
-            Uns.free(adr);
-        }
-    }
 }

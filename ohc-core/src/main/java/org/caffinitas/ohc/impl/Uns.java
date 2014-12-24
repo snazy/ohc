@@ -119,6 +119,8 @@ final class Uns
     // #endif
     //
 
+    private static final Ext ext;
+
     static
     {
         try
@@ -128,6 +130,19 @@ final class Uns
             unsafe = (Unsafe) field.get(null);
             if (unsafe.addressSize() > 8)
                 throw new RuntimeException("Address size " + unsafe.addressSize() + " not supported yet (max 8 bytes)");
+
+            Ext e;
+            try
+            {
+                Unsafe.class.getDeclaredMethod("getAndAddLong", Object.class, long.class, long.class);
+                // use new Java8 methods in sun.misc.Unsafe
+                e = new Ext8();
+            }
+            catch (NoSuchMethodException ignored)
+            {
+                e = new Ext7();
+            }
+            ext = e;
 
             if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
                 LOGGER.warn("Degraded performance due to off-heap memory allocations and access guarded by debug code enabled via system property DEBUG_OFF_HEAP_MEMORY_ACCESS=true");
@@ -169,12 +184,7 @@ final class Uns
     {
         validate(address, offset, 8L);
 
-        // TODO replace with Java8 Unsafe.getAndSetLong()
-        // return unsafe.getAndSetLong(null, address + offset, value);
-
-        long r = unsafe.getLong(null, address + offset);
-        unsafe.putLong(null, address + offset, value);
-        return r;
+        return ext.getAndPutLong(address, offset, value);
     }
 
     static void putLong(long address, long offset, long value)
@@ -275,34 +285,15 @@ final class Uns
 
     static boolean decrement(long address, long offset)
     {
-        // increment + decrement are used in concurrent contexts - so Java8 Unsafe.getAndAddLong is not applicable
-
         validate(address, offset, 8L);
-        address += offset;
-        long v;
-        while (true)
-        {
-            v = unsafe.getLongVolatile(null, address);
-            if (v == 0)
-                throw new IllegalStateException("Must not decrement 0");
-            if (unsafe.compareAndSwapLong(null, address, v, v - 1))
-                return v == 1;
-        }
+        long v = ext.getAndAddLong(address, offset, -1);
+        return v == 1;
     }
 
     static void increment(long address, long offset)
     {
-        // increment + decrement are used in concurrent contexts - so Java8 Unsafe.getAndAddLong is not applicable
-
         validate(address, offset, 8L);
-        address += offset;
-        long v;
-        while (true)
-        {
-            v = unsafe.getLongVolatile(null, address);
-            if (unsafe.compareAndSwapLong(null, address, v, v + 1))
-                return;
-        }
+        long v = ext.getAndAddLong(address, offset, 1);
     }
 
     static void copyMemory(byte[] arr, int off, long address, long offset, long len)
@@ -389,6 +380,48 @@ final class Uns
         catch (Throwable t)
         {
             throw new RuntimeException(t);
+        }
+    }
+
+    // Java version dependent implementations
+
+    private static interface Ext
+    {
+        long getAndPutLong(long address, long offset, long value);
+
+        long getAndAddLong(long address, long offset, long value);
+    }
+    private static final class Ext7 implements Ext
+    {
+        public long getAndPutLong(long address, long offset, long value)
+        {
+            long r = unsafe.getLong(null, address + offset);
+            unsafe.putLong(null, address + offset, value);
+            return r;
+        }
+
+        public long getAndAddLong(long address, long offset, long value)
+        {
+            address += offset;
+            long v;
+            while (true)
+            {
+                v = unsafe.getLongVolatile(null, address);
+                if (unsafe.compareAndSwapLong(null, address, v, v - 1))
+                    return v;
+            }
+        }
+    }
+    private static final class Ext8 implements Ext
+    {
+        public long getAndPutLong(long address, long offset, long value)
+        {
+            return unsafe.getAndSetLong(null, address + offset, value);
+        }
+
+        public long getAndAddLong(long address, long offset, long value)
+        {
+            return unsafe.getAndAddLong(null, address + offset, value);
         }
     }
 }
