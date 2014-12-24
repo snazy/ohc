@@ -15,9 +15,9 @@
  */
 package org.caffinitas.ohc.benchmark;
 
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -41,7 +41,7 @@ final class Driver implements Runnable
 
     Driver(final int driverNo, Distribution readKeyDist, Distribution writeKeyDist, Distribution valueSizeDist, double readWriteRatio, int threads, long seed)
     {
-        queue = new ArrayBlockingQueue<>(500);
+        queue = new LinkedBlockingQueue<>(500);
         exec = new ThreadPoolExecutor(threads, threads,
                                       1, TimeUnit.SECONDS,
                                       queue, new ThreadFactory()

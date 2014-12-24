@@ -149,11 +149,6 @@ public final class OHCacheStats
                       .add("removeCount", removeCount)
                       .add("segmentSizes(#/min/max/avg)", String.format("%d/%d/%d/%.2f", segmentSizes.length, getMinSegmentSize(), getMaxSegmentSize(), getAverageSegmentSize()))
                       .add("totalAllocated", totalAllocated)
-                      .add("memBufferHit", HashEntries.memBufferHit)
-                      .add("memBufferMiss", HashEntries.memBufferMiss)
-                      .add("memBufferFree", HashEntries.memBufferFree)
-                      .add("memBufferExpires", HashEntries.memBufferExpires)
-                      .add("memBufferClear", HashEntries.memBufferClear)
                       .toString();
     }
 
