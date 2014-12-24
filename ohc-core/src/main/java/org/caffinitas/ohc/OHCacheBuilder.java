@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc;
 
+import org.caffinitas.ohc.impl.OHCacheImpl;
+
 public class OHCacheBuilder<K, V>
 {
     private int segmentCount;
@@ -27,7 +29,14 @@ public class OHCacheBuilder<K, V>
 
     private OHCacheBuilder()
     {
-        segmentCount = (int) Util.roundUpToPowerOf2(Runtime.getRuntime().availableProcessors() * 2, 1 << 30);
+        segmentCount = roundUpToPowerOf2(Runtime.getRuntime().availableProcessors() * 2, 1 << 30);
+    }
+
+    static int roundUpToPowerOf2(int number, int max)
+    {
+        return number >= max
+               ? max
+               : (number > 1) ? Integer.highestOneBit((number - 1) << 1) : 1;
     }
 
     public static <K, V> OHCacheBuilder<K, V> newBuilder()
