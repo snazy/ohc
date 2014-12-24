@@ -15,17 +15,21 @@
  */
 package org.caffinitas.ohc;
 
-import org.caffinitas.ohc.impl.OHCacheImpl;
+import java.lang.reflect.InvocationTargetException;
+
+import org.caffinitas.ohc.linked.OHCacheImpl;
 
 public class OHCacheBuilder<K, V>
 {
     private int segmentCount;
     private int hashTableSize = 8192;
+    private int bucketLength = 8;
     private long capacity = 64L * 1024L * 1024L;
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
     private float loadFactor = .75f;
     private long maxEntrySize;
+    private Class<? extends OHCache> type = OHCacheImpl.class;
 
     private OHCacheBuilder()
     {
@@ -46,7 +50,25 @@ public class OHCacheBuilder<K, V>
 
     public OHCache<K, V> build()
     {
-        return new OHCacheImpl<>(this);
+        try
+        {
+            return type.getDeclaredConstructor(OHCacheBuilder.class).newInstance(this);
+        }
+        catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Class<? extends OHCache> getType()
+    {
+        return type;
+    }
+
+    public OHCacheBuilder<K, V> type(Class<? extends OHCache> type)
+    {
+        this.type = type;
+        return this;
     }
 
     public int getHashTableSize()
@@ -57,6 +79,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> hashTableSize(int hashTableSize)
     {
         this.hashTableSize = hashTableSize;
+        return this;
+    }
+
+    public int getBucketLength()
+    {
+        return bucketLength;
+    }
+
+    public OHCacheBuilder<K, V> setBucketLength(int bucketLength)
+    {
+        this.bucketLength = bucketLength;
         return this;
     }
 

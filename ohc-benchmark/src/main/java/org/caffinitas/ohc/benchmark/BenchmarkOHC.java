@@ -52,6 +52,7 @@ public final class BenchmarkOHC
     public static final String WRITE_KEY_DIST = "wkd";
     public static final String VALUE_SIZE_DIST = "vs";
     public static final String DRIVERS = "dr";
+    public static final String TYPE = "type";
 
     public static final String DEFAULT_VALUE_SIZE_DIST = "fixed(512)";
     public static final String DEFAULT_KEY_DIST = "uniform(1..10000)";
@@ -85,6 +86,8 @@ public final class BenchmarkOHC
             if (driverCount < 1)
                 driverCount = 1;
 
+            String type = cmd.getOptionValue(TYPE, "linked");
+
             int threadsPerDriver = threads / driverCount;
 
             Driver[] drivers = new Driver[driverCount];
@@ -112,6 +115,7 @@ public final class BenchmarkOHC
 
             printMessage("Initializing OHC cache...");
             Shared.cache = OHCacheBuilder.<Long, byte[]>newBuilder()
+                                         .type((Class<? extends OHCache>) Class.forName("org.caffinitas.ohc."+type+".OHCacheImpl"))
                                          .keySerializer(BenchmarkUtils.longSerializer)
                                          .valueSerializer(BenchmarkUtils.serializer)
                                          .hashTableSize(hashTableSize)
@@ -248,6 +252,8 @@ public final class BenchmarkOHC
         options.addOption(WRITE_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);
 
         options.addOption(DRIVERS, true, "number of drivers - default: # of cores divided by 4");
+
+        options.addOption(TYPE, true, "implementation type - default: linked - option: tables");
 
         CommandLine cmd = parser.parse(options, args);
         if (cmd.hasOption("h"))
