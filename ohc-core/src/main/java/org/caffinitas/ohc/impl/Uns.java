@@ -119,7 +119,7 @@ final class Uns
     // #endif
     //
 
-    private static final Ext ext;
+    private static final UnsExt ext;
 
     static
     {
@@ -131,16 +131,18 @@ final class Uns
             if (unsafe.addressSize() > 8)
                 throw new RuntimeException("Address size " + unsafe.addressSize() + " not supported yet (max 8 bytes)");
 
-            Ext e;
+            UnsExt e;
             try
             {
                 Unsafe.class.getDeclaredMethod("getAndAddLong", Object.class, long.class, long.class);
                 // use new Java8 methods in sun.misc.Unsafe
-                e = new Ext8();
+                Class<? extends UnsExt> cls = (Class<? extends UnsExt>) Class.forName(UnsExt7.class.getName().replace('7', '8'));
+                e = cls.getDeclaredConstructor(Class.class).newInstance(unsafe);
+                LOGGER.info("OHC using Java8 Unsafe API");
             }
-            catch (NoSuchMethodException ignored)
+            catch (Exception ignored)
             {
-                e = new Ext7();
+                e = new UnsExt7(unsafe);
             }
             ext = e;
 
@@ -293,7 +295,7 @@ final class Uns
     static void increment(long address, long offset)
     {
         validate(address, offset, 8L);
-        long v = ext.getAndAddLong(address, offset, 1);
+        ext.getAndAddLong(address, offset, 1);
     }
 
     static void copyMemory(byte[] arr, int off, long address, long offset, long len)
@@ -380,48 +382,6 @@ final class Uns
         catch (Throwable t)
         {
             throw new RuntimeException(t);
-        }
-    }
-
-    // Java version dependent implementations
-
-    private static interface Ext
-    {
-        long getAndPutLong(long address, long offset, long value);
-
-        long getAndAddLong(long address, long offset, long value);
-    }
-    private static final class Ext7 implements Ext
-    {
-        public long getAndPutLong(long address, long offset, long value)
-        {
-            long r = unsafe.getLong(null, address + offset);
-            unsafe.putLong(null, address + offset, value);
-            return r;
-        }
-
-        public long getAndAddLong(long address, long offset, long value)
-        {
-            address += offset;
-            long v;
-            while (true)
-            {
-                v = unsafe.getLongVolatile(null, address);
-                if (unsafe.compareAndSwapLong(null, address, v, v - 1))
-                    return v;
-            }
-        }
-    }
-    private static final class Ext8 implements Ext
-    {
-        public long getAndPutLong(long address, long offset, long value)
-        {
-            return unsafe.getAndSetLong(null, address + offset, value);
-        }
-
-        public long getAndAddLong(long address, long offset, long value)
-        {
-            return unsafe.getAndAddLong(null, address + offset, value);
         }
     }
 }

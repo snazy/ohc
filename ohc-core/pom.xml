@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>ohc-core</artifactId>
-    <version>0.1-SNAPSHOT</version>
+    <version>0.2-SNAPSHOT</version>
 
     <name>OHC core</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
@@ -34,8 +34,8 @@
     </developers>
     <contributors>
         <contributor>
-            <name>Michal Budzyn</name>
-            <email>michalbudzyn@gmx.de</email>
+            <name>Robert Stupp</name>
+            <email>robert@caffinitas.org</email>
         </contributor>
     </contributors>
 

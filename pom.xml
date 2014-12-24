@@ -59,6 +59,7 @@
 
     <modules>
         <module>ohc-core</module>
+        <module>ohc-core-j8</module>
         <module>ohc-benchmark</module>
     </modules>
 
@@ -209,6 +210,12 @@
                             </goals>
                         </execution>
                     </executions>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                 </plugin>
 
             </plugins>
