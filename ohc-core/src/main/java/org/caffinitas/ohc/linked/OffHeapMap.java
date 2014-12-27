@@ -368,7 +368,7 @@ final class OffHeapMap
         int tableSize = tab.size();
         if (tableSize > MAX_TABLE_SIZE)
         {
-            // already at max hash table size - keep rehashTrigger field true
+            // already at max hash table size
             return;
         }
 

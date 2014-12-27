@@ -41,10 +41,10 @@ public class RehashTest
                                                             .keySerializer(TestUtils.intSerializer)
                                                             .valueSerializer(TestUtils.stringSerializer)
                                                             .hashTableSize(64)
-                                                            .segmentCount(4)
+                                                            .segmentCount(1)
                                                             .build())
         {
-            for (int i = 0; i < 1000000; i++)
+            for (int i = 0; i < 1000; i++)
                 cache.put(i, Integer.toOctalString(i));
 
             assertTrue(cache.stats().getRehashCount() > 0);

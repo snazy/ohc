@@ -121,7 +121,7 @@ public class HashEntriesTest
     }
 
     @Test
-    public void testGetSetLRUNext() throws Exception
+    public void testGetSetLRUIndex() throws Exception
     {
         long adr = Uns.allocate(MIN_ALLOC_LEN);
         try
@@ -129,32 +129,11 @@ public class HashEntriesTest
             Uns.setMemory(adr, 0, MIN_ALLOC_LEN, (byte) 0);
             HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr);
 
-            Uns.putLong(adr, Util.ENTRY_OFF_LRU_NEXT, 0x98765432abdffeedL);
-            assertEquals(HashEntries.getLRUNext(adr), 0x98765432abdffeedL);
+            Uns.putLong(adr, Util.ENTRY_OFF_LRU_INDEX, 0x98765432);
+            assertEquals(HashEntries.getLRUIndex(adr), 0x98765432);
 
-            HashEntries.setLRUNext(adr, 0xfafefcfb23242526L);
-            assertEquals(Uns.getLong(adr, Util.ENTRY_OFF_LRU_NEXT), 0xfafefcfb23242526L);
-        }
-        finally
-        {
-            Uns.free(adr);
-        }
-    }
-
-    @Test
-    public void testGetSetLRUPrev() throws Exception
-    {
-        long adr = Uns.allocate(MIN_ALLOC_LEN);
-        try
-        {
-            Uns.setMemory(adr, 0, MIN_ALLOC_LEN, (byte) 0);
-            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr);
-
-            Uns.putLong(adr, Util.ENTRY_OFF_LRU_PREV, 0x98765432abdffeedL);
-            assertEquals(HashEntries.getLRUPrev(adr), 0x98765432abdffeedL);
-
-            HashEntries.setLRUPrev(adr, 0xfafefcfb23242526L);
-            assertEquals(Uns.getLong(adr, Util.ENTRY_OFF_LRU_PREV), 0xfafefcfb23242526L);
+            HashEntries.setLRUIndex(adr, 0xfafefcfb);
+            assertEquals(Uns.getLong(adr, Util.ENTRY_OFF_LRU_INDEX), 0xfafefcfb);
         }
         finally
         {

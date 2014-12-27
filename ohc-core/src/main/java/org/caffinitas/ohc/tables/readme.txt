@@ -41,19 +41,20 @@ Each write has to:
 - Eventually set OffHeapMap's LRU tail (if it's the first entry in the table)
 - Modify the LRU prev value of the previous LRU head
 
-Both reads and writes have one bad characteristic: they have to access memory that might be gigabytes away from the
-last accessed value. This is a bad behaviour since many distinct regions in whole RAM need to be read and written.
+Both reads and writes have one bad characteristic: they have to a lot of different memory locations that force the
+CPU to load and evict its cache contents. This is a bad behaviour since many distinct regions in whole RAM need to
+be read and written.
 
 'table' implementation:
 
 Assumption: Stress tests showed that each hash bucket has at most 8 entries (maybe nine in very rare cases).
 
 1st change: Blow up per-OffHeapMap table.
-The table shall include pointers to _all_ entries of the whole OffHeapMap - i.e.
+The table shall include pointers and the hashes of _all_ entries of the whole OffHeapMap - i.e.
 eliminate the 'pointer to next entry' in 'linked' implementation.
 Size estimation on 32 core system:
 - 'linked' implementation : 4MB (= 8192 * 8 * 64 with default configuration)
-- 'table' implementation  : 32MB (= 8192 * 8 * 8 * 64 with default configuration)
+- 'table' implementation  : 32MB (= 8192 * (8 + 8) * 8 * 64 with default configuration)
 
 2nd change: Condense LRU information.
 Per-OffHeapMap LRU information shall be in multiple smaller tables.

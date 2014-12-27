@@ -64,34 +64,14 @@ final class HashEntries
         return true;
     }
 
-    public static long getLRUNext(long hashEntryAdr)
+    static int getLRUIndex(long hashEntryAdr)
     {
-        return Uns.getLong(hashEntryAdr, Util.ENTRY_OFF_LRU_NEXT);
+        return Uns.getInt(hashEntryAdr, Util.ENTRY_OFF_LRU_INDEX);
     }
 
-    public static void setLRUNext(long hashEntryAdr, long replacement)
+    static void setLRUIndex(long hashEntryAdr, int lruIndex)
     {
-        Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_LRU_NEXT, replacement);
-    }
-
-    public static long getAndSetLRUNext(long hashEntryAdr, long replacement)
-    {
-        return Uns.getAndPutLong(hashEntryAdr, Util.ENTRY_OFF_LRU_NEXT, replacement);
-    }
-
-    public static long getLRUPrev(long hashEntryAdr)
-    {
-        return Uns.getLong(hashEntryAdr, Util.ENTRY_OFF_LRU_PREV);
-    }
-
-    public static void setLRUPrev(long hashEntryAdr, long replacement)
-    {
-        Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_LRU_PREV, replacement);
-    }
-
-    public static long getAndSetLRUPrev(long hashEntryAdr, long replacement)
-    {
-        return Uns.getAndPutLong(hashEntryAdr, Util.ENTRY_OFF_LRU_PREV, replacement);
+        Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_LRU_INDEX, lruIndex);
     }
 
     static long getHash(long hashEntryAdr)

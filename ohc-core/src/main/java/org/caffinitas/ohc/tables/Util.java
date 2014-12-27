@@ -22,23 +22,22 @@ import java.nio.channels.WritableByteChannel;
 
 final class Util
 {
+    static final int POINTER_LEN = 8;
 
 // Hash entries
 
-    // offset of LRU replacement strategy next pointer
-    static final long ENTRY_OFF_LRU_NEXT = 0;
-    // offset of LRU replacement strategy previous pointer
-    static final long ENTRY_OFF_LRU_PREV = 8;
     // offset of entry reference counter
-    static final long ENTRY_OFF_REFCOUNT = 16;
+    static final long ENTRY_OFF_REFCOUNT = 0;
     // offset of serialized hash value
-    static final long ENTRY_OFF_HASH = 24;
+    static final long ENTRY_OFF_LRU_INDEX = 8;
+    // offset of serialized hash value
+    static final long ENTRY_OFF_HASH = 16;
     // offset of serialized value length
-    static final long ENTRY_OFF_VALUE_LENGTH = 32;
+    static final long ENTRY_OFF_VALUE_LENGTH = 24;
     // offset of serialized hash key length
-    static final long ENTRY_OFF_KEY_LENGTH = 40;
+    static final long ENTRY_OFF_KEY_LENGTH = 32;
     // offset of data in first block
-    static final long ENTRY_OFF_DATA = 48;
+    static final long ENTRY_OFF_DATA = 40;
 
     // Note: keep ENTRY_OFF_HASH, ENTRY_OFF_KEY_LENGTH, ENTRY_OFF_VALUE_LENGTH in exact that order
     // and together and at the end of the header because

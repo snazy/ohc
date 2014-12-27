@@ -28,9 +28,6 @@ final class OffHeapMap
     // maximum hash table size
     private static final int MAX_TABLE_SIZE = 1 << 30;
 
-    private long lruHead;
-    private long lruTail;
-
     private final int entriesPerBucket;
     private long size;
     private Table table;
@@ -72,6 +69,8 @@ final class OffHeapMap
         float lf = builder.getLoadFactor();
         if (lf <= .0d)
             lf = .75f;
+        if (lf >= 1d)
+            throw new IllegalArgumentException("load factor must not be greater that 1");
         this.loadFactor = lf;
         threshold = (long) ((double) table.size() * loadFactor);
     }
@@ -217,19 +216,13 @@ final class OffHeapMap
                 break;
             }
 
-            while (freeCapacity.get() < bytes)
-            {
-                long eldestHashAdr = removeEldest();
-                if (eldestHashAdr == 0L)
+            if (freeCapacity.get() < bytes)
+                do
                 {
-                    if (oldHashEntryAdr != 0L)
-                        size--;
-                    return false;
-                }
-                if (derefList == null)
                     derefList = new ArrayList<>();
-                derefList.add(eldestHashAdr);
-            }
+                    if (!ensureCapacity(derefList, oldHashEntryAdr))
+                        return false;
+                } while (freeCapacity.get() < bytes);
 
             if (oldHashEntryAdr == 0L)
             {
@@ -262,12 +255,31 @@ final class OffHeapMap
         }
     }
 
+    private boolean ensureCapacity(List<Long> derefList, long oldHashEntryAdr)
+    {
+        long eldestEntryAdr = table.getEldest();
+        if (eldestEntryAdr == 0L)
+        {
+            if (oldHashEntryAdr != 0L)
+                size--;
+            return false;
+        }
+
+        removeInternal(eldestEntryAdr, HashEntries.getHash(eldestEntryAdr));
+
+        size--;
+
+        evictedEntries++;
+
+        derefList.add(eldestEntryAdr);
+        return true;
+    }
+
     void clear()
     {
         lock.lock();
         try
         {
-            lruHead = lruTail = 0L;
             size = 0L;
 
             long hashEntryAdr;
@@ -382,7 +394,7 @@ final class OffHeapMap
         int tableSize = tab.size();
         if (tableSize > MAX_TABLE_SIZE)
         {
-            // already at max hash table size - keep rehashTrigger field true
+            // already at max hash table size
             return;
         }
 
@@ -417,13 +429,11 @@ final class OffHeapMap
         try
         {
             long[] r = new long[n];
-            int i = 0;
-            for (long hashEntryAdr = lruHead;
-                 hashEntryAdr != 0L && i < n;
-                 hashEntryAdr = HashEntries.getLRUNext(hashEntryAdr))
+            table.fillHotN(r, n);
+            for (long hashEntryAdr : r)
             {
-                r[i++] = hashEntryAdr;
-                HashEntries.reference(hashEntryAdr);
+                if (hashEntryAdr != 0L)
+                    HashEntries.reference(hashEntryAdr);
             }
             return r;
         }
@@ -488,9 +498,17 @@ final class OffHeapMap
         private final int entriesPerBucket;
         private boolean released;
 
+        private final long lruOffset;
+
+        private int lruWriteTarget;
+        private int lruEldestIndex;
+
         static Table create(int hashTableSize, int entriesPerBucket)
         {
             int msz = (int) Util.BUCKET_ENTRY_LEN * hashTableSize * entriesPerBucket;
+
+            msz += hashTableSize * Util.POINTER_LEN;
+
             long address = Uns.allocate(msz);
             return address != 0L ? new Table(address, hashTableSize, entriesPerBucket) : null;
         }
@@ -500,14 +518,106 @@ final class OffHeapMap
             this.address = address;
             this.mask = hashTableSize - 1;
             this.entriesPerBucket = entriesPerBucket;
+
+            this.lruOffset = Util.BUCKET_ENTRY_LEN * hashTableSize * entriesPerBucket;
+            this.lruWriteTarget = 0;
+
             clear();
         }
+
+        //
+
+        long getEldest()
+        {
+            for (int i = lruEldestIndex; i < lruWriteTarget; i++ )
+            {
+                long hashEntryAdr = Uns.getLong(address, lruOffset(i));
+                if (hashEntryAdr != 0L)
+                {
+                    lruEldestIndex = i + 1;
+                    return hashEntryAdr;
+                }
+            }
+            return 0;
+        }
+
+        void fillHotN(long[] r, int n)
+        {
+            int c = 0;
+            for (int i = lruWriteTarget - 1; i >= 0; i--)
+            {
+                long hashEntryAdr = Uns.getLong(address, lruOffset(i));
+                if (hashEntryAdr != 0L)
+                {
+                    r[c++] = hashEntryAdr;
+                    if (c == n)
+                        return;
+                }
+            }
+        }
+
+        void addToLRU(long hashEntryAdr)
+        {
+            int i = lruWriteTarget;
+            if (i < size())
+            {
+                // try to add to current-write-target
+                Uns.putLong(address, lruOffset(i), hashEntryAdr);
+                HashEntries.setLRUIndex(hashEntryAdr, i);
+                lruWriteTarget = i + 1;
+                return;
+            }
+
+            // LRU table compaction needed
+
+            int id = 0;
+            for (int is = lruEldestIndex; is < size(); is++)
+            {
+                long adr = Uns.getLong(address, lruOffset(is));
+                if (adr != 0L)
+                {
+                    Uns.putLong(address, lruOffset(id), adr);
+                    HashEntries.setLRUIndex(adr, id);
+                    id++;
+                }
+            }
+
+            // add hash-entry to LRU
+            HashEntries.setLRUIndex(hashEntryAdr, id);
+            Uns.putLong(address, lruOffset(id), hashEntryAdr);
+
+            lruWriteTarget = id + 1;
+            lruEldestIndex = 0;
+
+            // clear remaining LRU table
+            Uns.setMemory(address, lruOffset + id * Util.POINTER_LEN,
+                          (size() - id) * Util.POINTER_LEN,
+                          (byte) 0);
+        }
+
+        void removeFromLRU(long hashEntryAdr)
+        {
+            int lruIndex = HashEntries.getLRUIndex(hashEntryAdr);
+            if (lruEldestIndex <= lruIndex)
+                lruEldestIndex = lruIndex + 1;
+            Uns.putLong(address, lruOffset + lruIndex * Util.POINTER_LEN, 0L);
+        }
+
+        private long lruOffset(int i)
+        {
+            return lruOffset + i * Util.POINTER_LEN;
+        }
+
+        //
 
         void clear()
         {
             // It's important to initialize the hash table memory.
             // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
-            Uns.setMemory(address, 0L, Util.BUCKET_ENTRY_LEN * entriesPerBucket * size(), (byte) 0);
+            Uns.setMemory(address, 0L,
+                          Util.BUCKET_ENTRY_LEN * entriesPerBucket * size() +
+                          Util.POINTER_LEN * size(),
+                          (byte) 0);
         }
 
         void release()
@@ -535,15 +645,16 @@ final class OffHeapMap
             return false;
         }
 
-        boolean removeFromTable(long hash, long hashEntryAdr)
+        void removeFromTable(long hash, long hashEntryAdr)
         {
             long off = bucketOffset(hash);
             for (int i = 0; i < entriesPerBucket; i++, off += Util.BUCKET_ENTRY_LEN)
             {
                 if (Uns.compareAndSwapLong(address, off, hashEntryAdr, 0L))
-                    return true;
+                    break;
             }
-            return false;
+
+            removeFromLRU(hashEntryAdr);
         }
 
         long bucketOffset(long hash)
@@ -591,21 +702,6 @@ final class OffHeapMap
     {
         table.removeFromTable(hash, hashEntryAdr);
 
-        // LRU stuff
-
-        long next = HashEntries.getLRUNext(hashEntryAdr);
-        long prev = HashEntries.getLRUPrev(hashEntryAdr);
-
-        if (lruHead == hashEntryAdr)
-            lruHead = next;
-        if (lruTail == hashEntryAdr)
-            lruTail = prev;
-
-        if (next != 0L)
-            HashEntries.setLRUPrev(next, prev);
-        if (prev != 0L)
-            HashEntries.setLRUNext(prev, next);
-
         freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
     }
 
@@ -614,64 +710,13 @@ final class OffHeapMap
         if (!table.addToTable(hash, hashEntryAdr))
             return false;
 
-        // LRU stuff
-
-        long h = lruHead;
-        HashEntries.setLRUNext(hashEntryAdr, h);
-        if (h != 0L)
-            HashEntries.setLRUPrev(h, hashEntryAdr);
-        HashEntries.setLRUPrev(hashEntryAdr, 0L);
-        lruHead = hashEntryAdr;
-
-        if (lruTail == 0L)
-            lruTail = hashEntryAdr;
-
+        table.addToLRU(hashEntryAdr);
         return true;
     }
 
     private void touch(long hashEntryAdr)
     {
-        long head = lruHead;
-
-        if (head == hashEntryAdr)
-            // short-cut - entry already at LRU head
-            return;
-
-        // LRU stuff
-
-        long next = HashEntries.getAndSetLRUNext(hashEntryAdr, head);
-        long prev = HashEntries.getAndSetLRUPrev(hashEntryAdr, 0L);
-
-        long tail = lruTail;
-        if (tail == hashEntryAdr)
-            lruTail = prev == 0L ? hashEntryAdr : prev;
-        else if (tail == 0L)
-            lruTail = hashEntryAdr;
-
-        if (next != 0L)
-            HashEntries.setLRUPrev(next, prev);
-        if (prev != 0L)
-            HashEntries.setLRUNext(prev, next);
-
-        // LRU stuff (basically an add to LRU linked list)
-
-        if (head != 0L)
-            HashEntries.setLRUPrev(head, hashEntryAdr);
-        lruHead = hashEntryAdr;
-    }
-
-    private long removeEldest()
-    {
-        long hashEntryAdr = lruTail;
-        if (hashEntryAdr == 0L)
-            return 0L;
-
-        removeInternal(hashEntryAdr, HashEntries.getHash(hashEntryAdr));
-
-        size--;
-
-        evictedEntries++;
-
-        return hashEntryAdr;
+        table.removeFromLRU(hashEntryAdr);
+        table.addToLRU(hashEntryAdr);
     }
 }
