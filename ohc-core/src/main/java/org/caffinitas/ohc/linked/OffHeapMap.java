@@ -15,11 +15,11 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
@@ -171,7 +171,7 @@ final class OffHeapMap
     boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
     {
         long removeHashEntryAdr = 0L;
-        List<Long> derefList = null;
+        LongArrayList derefList = null;
         lock.lock();
         try
         {
@@ -216,7 +216,7 @@ final class OffHeapMap
                     return false;
                 }
                 if (derefList == null)
-                    derefList = new ArrayList<>();
+                    derefList = new LongArrayList();
                 derefList.add(eldestHashAdr);
             }
 
@@ -245,8 +245,8 @@ final class OffHeapMap
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
             if (derefList != null)
-                for (long hashEntryAdr : derefList)
-                    HashEntries.dereference(hashEntryAdr);
+                for (int i = 0; i < derefList.size(); i++)
+                    HashEntries.dereference(derefList.getLong(i));
         }
     }
 

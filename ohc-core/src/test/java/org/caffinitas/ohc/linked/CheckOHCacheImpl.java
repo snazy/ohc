@@ -437,7 +437,8 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
                                putReplaceCount(),
                                putFailCount,
                                removeCount(),
-                               memUsed()
+                               memUsed(),
+                               0L
         );
     }
 

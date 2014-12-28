@@ -344,7 +344,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                                putReplaceCount(),
                                putFailCount,
                                removeCount(),
-                               Uns.getTotalAllocated());
+                               Uns.getTotalAllocated(),
+                               0L);
     }
 
     private long putAddCount()

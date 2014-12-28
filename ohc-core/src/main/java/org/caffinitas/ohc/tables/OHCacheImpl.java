@@ -203,7 +203,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
 
             long hashEntryAdr;
-            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = HashEntries.allocate(bytes)) == 0L)
+            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
             {
                 // entry too large to be inserted or OS is not able to provide enough memory
                 putFailCount++;
@@ -221,12 +221,12 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
             catch (RuntimeException | Error e)
             {
-                HashEntries.free(hashEntryAdr, bytes);
+                Uns.free(hashEntryAdr);
                 throw e;
             }
             catch (Throwable e)
             {
-                HashEntries.free(hashEntryAdr, bytes);
+                Uns.free(hashEntryAdr);
                 throw new IOError(e);
             }
 
@@ -238,7 +238,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, oldValueLen))
                 return true;
 
-            HashEntries.free(hashEntryAdr, bytes);
+            Uns.free(hashEntryAdr);
             return false;
         }
         finally
@@ -287,8 +287,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         for (OffHeapMap map : maps)
             map.clear();
-
-        HashEntries.memBufferClear();
     }
 
     //
@@ -344,7 +342,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                                putReplaceCount(),
                                putFailCount,
                                removeCount(),
-                               Uns.getTotalAllocated());
+                               Uns.getTotalAllocated(),
+                               lruCompactions());
     }
 
     private long putAddCount()
@@ -411,6 +410,14 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         for (OffHeapMap map : maps)
             size += map.size();
         return size;
+    }
+
+    public long lruCompactions()
+    {
+        long lruCompactions = 0L;
+        for (OffHeapMap map : maps)
+            lruCompactions += map.lruCompactions();
+        return lruCompactions;
     }
 
     public int segments()
@@ -604,7 +611,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long kvLen = Util.roundUpTo8(keyLen) + valueLen;
         long totalLen = kvLen + Util.ENTRY_OFF_DATA;
         long hashEntryAdr;
-        if ((maxEntrySize > 0L && totalLen > maxEntrySize) || (hashEntryAdr = HashEntries.allocate(totalLen)) == 0L)
+        if ((maxEntrySize > 0L && totalLen > maxEntrySize) || (hashEntryAdr = Uns.allocate(totalLen)) == 0L)
         {
             if (channel instanceof SeekableByteChannel)
             {
@@ -633,7 +640,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (!Util.readFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, kvLen)) ||
             !segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, 0L, 0L))
         {
-            HashEntries.free(hashEntryAdr, totalLen);
+            Uns.free(hashEntryAdr);
             return false;
         }
 

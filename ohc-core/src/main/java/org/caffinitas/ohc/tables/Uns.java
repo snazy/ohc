@@ -304,16 +304,23 @@ final class Uns
         ext.getAndAddLong(address, offset, 1);
     }
 
-    static void copyMemory(byte[] arr, int off, long address, long offset, long len)
+    static void copyMemory(long srcAddress, long srcOffset, long dstAddress, long dstOffset, long len)
     {
-        validate(address, offset, len);
-        unsafe.copyMemory(arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, null, address + offset, len);
+        validate(srcAddress, srcOffset, len);
+        validate(dstAddress, dstOffset, len);
+        unsafe.copyMemory(null, srcAddress + srcOffset, null, dstAddress + dstOffset, len);
     }
 
-    static void copyMemory(long address, long offset, byte[] arr, int off, long len)
+    static void copyMemory(byte[] arr, int off, long dstAddress, long dstOffset, long len)
     {
-        validate(address, offset, len);
-        unsafe.copyMemory(null, address + offset, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len);
+        validate(dstAddress, dstOffset, len);
+        unsafe.copyMemory(arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, null, dstAddress + dstOffset, len);
+    }
+
+    static void copyMemory(long srcAddress, long srcOffset, byte[] arr, int off, long len)
+    {
+        validate(srcAddress, srcOffset, len);
+        unsafe.copyMemory(null, srcAddress + srcOffset, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len);
     }
 
     static void setMemory(long address, long offset, long len, byte val)

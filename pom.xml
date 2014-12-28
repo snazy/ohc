@@ -69,6 +69,7 @@
         <version.com.codahale.metrics>3.0.2</version.com.codahale.metrics>
         <version.com.google.guava>16.0</version.com.google.guava>
         <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m2</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
+        <version.it.unimi.dsi.fastutil>6.5.7</version.it.unimi.dsi.fastutil>
         <version.net.java.dev.jna>4.0.0</version.net.java.dev.jna>
         <version.org.apache.maven.plugins.maven-compiler-plugin>3.1</version.org.apache.maven.plugins.maven-compiler-plugin>
         <version.org.apache.maven.plugins.maven-gpg-plugin>1.5</version.org.apache.maven.plugins.maven-gpg-plugin>
@@ -146,6 +147,12 @@
                 <groupId>net.java.dev.jna</groupId>
                 <artifactId>jna</artifactId>
                 <version>${version.net.java.dev.jna}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>it.unimi.dsi</groupId>
+                <artifactId>fastutil</artifactId>
+                <version>${version.it.unimi.dsi.fastutil}</version>
             </dependency>
 
             <dependency>

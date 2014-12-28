@@ -57,17 +57,8 @@ Size estimation on 32 core system:
 - 'table' implementation  : 32MB (= 8192 * (8 + 8) * 8 * 64 with default configuration)
 
 2nd change: Condense LRU information.
-Per-OffHeapMap LRU information shall be in multiple smaller tables.
-OffHeapMap gets a two-dimensional long-array ('long[][]'). Each single array consists of 504 entries
-(= exactly 4kB in Java heap) or 512 entries (= exactly 4kB in off-heap).
-The whole two-dimensional long-array is sized to be able to contain 'hash table size * load factor' (at least).
-One long-array is the current-write-target receiving pointers all accessed hash entries.
-Upon reads it has to locate the address of the hash entry in the two-dimensional long-array,
-remove it from the long-array and add it to the current-write-target.
-Upon removes it has to locate the address of the hash entry in the two-dimensional long-array and
-remove it from the long-array.
-Upon puts it has to add it to the current-write-target.
-If the current-write-target is full, an empty one is assigned the current-write-target.
-If one long-array becomes empty, its has to be recycled for reuse.
-If there are no more long-arrays available to become the the current-write-target, the whole structure needs
-to be compacted.
+Per-OffHeapMap LRU information in a separate table.
+The lru-table is sized to be able to contain 'hash table size * load factor' (at least).
+Two index-pointers are used as pointers to the next write-index and the eldest entry.
+If "write-index" is outside of the table, the whole structure needs to be compacted - starting with
+the eldest-entry-index to the end of the lru-table.

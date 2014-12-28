@@ -45,7 +45,6 @@ public class CrossCheckTest
     @AfterMethod(alwaysRun = true)
     public void deinit()
     {
-        HashEntries.memBufferClear();
         Uns.clearUnsDebugForTest();
     }
 
@@ -177,7 +176,7 @@ public class CrossCheckTest
         try (OHCache<Integer, String> cache = cache(4, -1, 1, -1))
         {
             int i;
-            for (i = 0; cache.freeCapacity() > 950; i++)
+            for (i = 0; cache.freeCapacity() >= 1478; i++)
             {
                 cache.put(i, v);
                 if ((i % 10000) == 0)
@@ -208,7 +207,7 @@ public class CrossCheckTest
         try (OHCache<Integer, String> cache = cache(4, -1, 1, -1))
         {
             int i;
-            for (i = 0; cache.freeCapacity() > 950; i++)
+            for (i = 0; cache.freeCapacity() >= 1478; i++)
             {
                 cache.put(i, v);
                 if ((i % 10000) == 0)

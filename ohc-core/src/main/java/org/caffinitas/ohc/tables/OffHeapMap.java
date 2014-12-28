@@ -15,10 +15,11 @@
  */
 package org.caffinitas.ohc.tables;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
@@ -32,14 +33,15 @@ final class OffHeapMap
     private long size;
     private Table table;
 
+    private long threshold;
+    private final float loadFactor;
+
+    private long lruCompactions;
     private long hitCount;
     private long missCount;
     private long putAddCount;
     private long putReplaceCount;
     private long removeCount;
-
-    private long threshold;
-    private final float loadFactor;
 
     private long rehashes;
     private long evictedEntries;
@@ -128,6 +130,7 @@ final class OffHeapMap
         putAddCount = 0L;
         putReplaceCount = 0L;
         removeCount = 0L;
+        lruCompactions = 0L;
     }
 
     long rehashes()
@@ -140,19 +143,23 @@ final class OffHeapMap
         return evictedEntries;
     }
 
+    long lruCompactions()
+    {
+        return lruCompactions;
+    }
+
     long getEntry(KeyBuffer key, boolean reference)
     {
         lock.lock();
         try
         {
             long ptr = table.bucketOffset(key.hash());
+            long hashEntryAdr;
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
-                long hashEntryAdr = table.getEntryAdr(ptr);
-                if (hashEntryAdr == 0L)
-                    continue;
-
-                if (table.getHash(ptr) != key.hash() || notSameKey(key, hashEntryAdr))
+                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L
+                    || table.getHash(ptr) != key.hash()
+                    || notSameKey(key, hashEntryAdr))
                     continue;
 
                 // return existing entry
@@ -179,20 +186,19 @@ final class OffHeapMap
     boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
     {
         long removeHashEntryAdr = 0L;
-        List<Long> derefList = null;
+        LongArrayList derefList = null;
+        long fc = freeCapacity.get();
+        long ofc = fc;
         lock.lock();
         try
         {
-            long oldHashEntryAdr = 0L;
             long hashEntryAdr;
             long ptr = table.bucketOffset(hash);
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
-                hashEntryAdr = table.getEntryAdr(ptr);
-                if (hashEntryAdr == 0L)
-                    continue;
-
-                if (table.getHash(ptr) != hash || notSameKey(newHashEntryAdr, keyLen, hashEntryAdr))
+                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L
+                    || table.getHash(ptr) != hash
+                    || notSameKey(newHashEntryAdr, keyLen, hashEntryAdr))
                     continue;
 
                 // replace existing entry
@@ -203,28 +209,41 @@ final class OffHeapMap
                 if (oldValueAdr != 0L)
                 {
                     // code for replace() operation
-                    long valueLen = HashEntries.getValueLen(hashEntryAdr);
-                    if (valueLen != oldValueLen || !HashEntries.compare(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), oldValueAdr, 0L, oldValueLen))
+                    if (HashEntries.getValueLen(hashEntryAdr) != oldValueLen
+                        || !HashEntries.compare(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), oldValueAdr, 0L, oldValueLen))
                         return false;
                 }
 
-                removeInternal(hashEntryAdr, hash);
-                removeHashEntryAdr = hashEntryAdr;
+                table.removeFromTableWithOff(hashEntryAdr, ptr);
+                fc += HashEntries.getAllocLen(hashEntryAdr);
 
-                oldHashEntryAdr = hashEntryAdr;
+                removeHashEntryAdr = hashEntryAdr;
 
                 break;
             }
 
-            if (freeCapacity.get() < bytes)
+            if (fc < bytes)
+            {
+                derefList = new LongArrayList();
                 do
                 {
-                    derefList = new ArrayList<>();
-                    if (!ensureCapacity(derefList, oldHashEntryAdr))
+                    long eldestEntryAdr = table.removeEldest();
+                    if (eldestEntryAdr == 0L)
+                    {
+                        if (removeHashEntryAdr != 0L)
+                            size--;
                         return false;
-                } while (freeCapacity.get() < bytes);
+                    }
 
-            if (oldHashEntryAdr == 0L)
+                    fc += HashEntries.getAllocLen(eldestEntryAdr);
+
+                    size--;
+                    evictedEntries++;
+                    derefList.add(eldestEntryAdr);
+                } while (fc < bytes);
+            }
+
+            if (removeHashEntryAdr == 0L)
             {
                 if (size >= threshold)
                     rehash();
@@ -232,12 +251,12 @@ final class OffHeapMap
                 size++;
             }
 
-            freeCapacity.addAndGet(-bytes);
-
             if (!add(newHashEntryAdr, hash))
                 return false;
 
-            if (oldHashEntryAdr == 0L)
+            fc -= bytes;
+
+            if (removeHashEntryAdr == 0L)
                 putAddCount++;
             else
                 putReplaceCount++;
@@ -247,32 +266,13 @@ final class OffHeapMap
         finally
         {
             lock.unlock();
+            freeCapacity.addAndGet(fc - ofc);
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
             if (derefList != null)
-                for (long hashEntryAdr : derefList)
-                    HashEntries.dereference(hashEntryAdr);
+                for (int i = 0; i < derefList.size(); i++)
+                    HashEntries.dereference(derefList.getLong(i));
         }
-    }
-
-    private boolean ensureCapacity(List<Long> derefList, long oldHashEntryAdr)
-    {
-        long eldestEntryAdr = table.getEldest();
-        if (eldestEntryAdr == 0L)
-        {
-            if (oldHashEntryAdr != 0L)
-                size--;
-            return false;
-        }
-
-        removeInternal(eldestEntryAdr, HashEntries.getHash(eldestEntryAdr));
-
-        size--;
-
-        evictedEntries++;
-
-        derefList.add(eldestEntryAdr);
-        return true;
     }
 
     void clear()
@@ -288,8 +288,7 @@ final class OffHeapMap
                 long ptr = table.bucketOffset(p);
                 for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
                 {
-                    hashEntryAdr = table.getEntryAdr(ptr);
-                    if (hashEntryAdr == 0L)
+                    if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L)
                         continue;
 
                     freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
@@ -315,16 +314,12 @@ final class OffHeapMap
             long ptr = table.bucketOffset(hash);
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
-                hashEntryAdr = table.getEntryAdr(ptr);
-                if (hashEntryAdr != removeHashEntryAdr)
+                if ((hashEntryAdr = table.getEntryAdr(ptr)) != removeHashEntryAdr)
                     continue;
 
                 // remove existing entry
 
-                removeInternal(hashEntryAdr, hash);
-
-                size--;
-                removeCount++;
+                removeInternal(hashEntryAdr, ptr);
 
                 return;
             }
@@ -348,20 +343,15 @@ final class OffHeapMap
             long ptr = table.bucketOffset(key.hash());
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
-                hashEntryAdr = table.getEntryAdr(ptr);
-                if (hashEntryAdr == 0L)
-                    continue;
-
-                if (table.getHash(ptr) != key.hash() || notSameKey(key, hashEntryAdr))
+                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L
+                    || table.getHash(ptr) != key.hash()
+                    || notSameKey(key, hashEntryAdr))
                     continue;
 
                 // remove existing entry
 
                 removeHashEntryAdr = hashEntryAdr;
-                removeInternal(hashEntryAdr, key.hash());
-
-                size--;
-                removeCount++;
+                removeInternal(hashEntryAdr, ptr);
 
                 return;
             }
@@ -372,6 +362,16 @@ final class OffHeapMap
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
         }
+    }
+
+    private void removeInternal(long hashEntryAdr, long off)
+    {
+        table.removeFromTableWithOff(hashEntryAdr, off);
+
+        freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
+
+        size--;
+        removeCount++;
     }
 
     private static boolean notSameKey(KeyBuffer key, long hashEntryAdr)
@@ -408,14 +408,14 @@ final class OffHeapMap
             long ptr = table.bucketOffset(part);
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
-                hashEntryAdr = table.getEntryAdr(ptr);
-                if (hashEntryAdr == 0L)
+                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L)
                     continue;
 
                 if (!newTable.addToTable(table.getHash(ptr), hashEntryAdr))
                     HashEntries.dereference(hashEntryAdr);
             }
         }
+        newTable.copyLRU(table);
 
         threshold = (long) ((float) newTable.size() * loadFactor);
         table.release();
@@ -431,10 +431,8 @@ final class OffHeapMap
             long[] r = new long[n];
             table.fillHotN(r, n);
             for (long hashEntryAdr : r)
-            {
                 if (hashEntryAdr != 0L)
                     HashEntries.reference(hashEntryAdr);
-            }
             return r;
         }
         finally
@@ -477,8 +475,7 @@ final class OffHeapMap
                 long ptr = table.bucketOffset(mapSegmentIndex);
                 for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
                 {
-                    hashEntryAdr = table.getEntryAdr(ptr);
-                    if (hashEntryAdr == 0L)
+                    if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L)
                         continue;
                     hashEntryAdrs.add(hashEntryAdr);
                     HashEntries.reference(hashEntryAdr);
@@ -527,15 +524,25 @@ final class OffHeapMap
 
         //
 
-        long getEldest()
+        long removeEldest()
         {
-            for (int i = lruEldestIndex; i < lruWriteTarget; i++ )
+            int i = lruEldestIndex;
+            long off = lruOffset(i);
+            for (; i < lruWriteTarget; i++, off += Util.POINTER_LEN)
             {
-                long hashEntryAdr = Uns.getLong(address, lruOffset(i));
+                long hashEntryAdr = Uns.getAndPutLong(address, off, 0L);
                 if (hashEntryAdr != 0L)
                 {
                     lruEldestIndex = i + 1;
-                    return hashEntryAdr;
+
+                    off = bucketOffset(HashEntries.getHash(hashEntryAdr));
+                    for (i = 0; i < entriesPerBucket; i++, off += Util.BUCKET_ENTRY_LEN)
+                        if (Uns.compareAndSwapLong(address, off, hashEntryAdr, 0L))
+                        {
+                            return hashEntryAdr;
+                        }
+
+                    assert false;
                 }
             }
             return 0;
@@ -544,10 +551,12 @@ final class OffHeapMap
         void fillHotN(long[] r, int n)
         {
             int c = 0;
-            for (int i = lruWriteTarget - 1; i >= 0; i--)
+            long hashEntryAdr;
+            int i = lruWriteTarget - 1;
+            long off = lruOffset(i);
+            for (; i >= lruEldestIndex; i--, off -= Util.POINTER_LEN)
             {
-                long hashEntryAdr = Uns.getLong(address, lruOffset(i));
-                if (hashEntryAdr != 0L)
+                if ((hashEntryAdr = Uns.getLong(address, off)) != 0L)
                 {
                     r[c++] = hashEntryAdr;
                     if (c == n)
@@ -556,51 +565,65 @@ final class OffHeapMap
             }
         }
 
-        void addToLRU(long hashEntryAdr)
+        void copyLRU(Table srcTable)
         {
-            int i = lruWriteTarget;
-            if (i < size())
+            lruEldestIndex = srcTable.lruEldestIndex;
+            lruWriteTarget = srcTable.lruWriteTarget;
+            Uns.copyMemory(srcTable.address, srcTable.lruOffset(0), address, lruOffset(0), lruWriteTarget * Util.POINTER_LEN);
+        }
+
+        boolean addToLRU(long hashEntryAdr)
+        {
+            if (lruWriteTarget < size())
             {
                 // try to add to current-write-target
-                Uns.putLong(address, lruOffset(i), hashEntryAdr);
-                HashEntries.setLRUIndex(hashEntryAdr, i);
-                lruWriteTarget = i + 1;
-                return;
+                entryToLRU(hashEntryAdr, lruWriteTarget++);
+                return false;
             }
 
             // LRU table compaction needed
 
             int id = 0;
-            for (int is = lruEldestIndex; is < size(); is++)
-            {
-                long adr = Uns.getLong(address, lruOffset(is));
-                if (adr != 0L)
+            long adr;
+            int is = lruEldestIndex;
+            long off = lruOffset(is);
+            for (; is < size(); is++, off += Util.POINTER_LEN)
+                if ((adr = Uns.getLong(address, off)) != 0L)
                 {
-                    Uns.putLong(address, lruOffset(id), adr);
-                    HashEntries.setLRUIndex(adr, id);
+                    if (is != id)
+                        entryToLRU(adr, id);
                     id++;
                 }
-            }
 
             // add hash-entry to LRU
-            HashEntries.setLRUIndex(hashEntryAdr, id);
-            Uns.putLong(address, lruOffset(id), hashEntryAdr);
+            entryToLRU(hashEntryAdr, id++);
 
-            lruWriteTarget = id + 1;
+            lruWriteTarget = id;
             lruEldestIndex = 0;
 
             // clear remaining LRU table
-            Uns.setMemory(address, lruOffset + id * Util.POINTER_LEN,
+            Uns.setMemory(address, lruOffset(id),
                           (size() - id) * Util.POINTER_LEN,
                           (byte) 0);
+
+            return true;
+        }
+
+        private void entryToLRU(long hashEntryAdr, int id)
+        {
+            Uns.putLong(address, lruOffset(id), hashEntryAdr);
+            HashEntries.setLRUIndex(hashEntryAdr, id);
         }
 
         void removeFromLRU(long hashEntryAdr)
         {
             int lruIndex = HashEntries.getLRUIndex(hashEntryAdr);
-            if (lruEldestIndex <= lruIndex)
-                lruEldestIndex = lruIndex + 1;
-            Uns.putLong(address, lruOffset + lruIndex * Util.POINTER_LEN, 0L);
+            if (lruEldestIndex == lruIndex)
+                lruEldestIndex++;
+            if (lruIndex == lruWriteTarget - 1)
+                lruWriteTarget = lruIndex;
+            if (!Uns.compareAndSwapLong(address, lruOffset(lruIndex), hashEntryAdr, 0L))
+                assert false;
         }
 
         private long lruOffset(int i)
@@ -645,14 +668,10 @@ final class OffHeapMap
             return false;
         }
 
-        void removeFromTable(long hash, long hashEntryAdr)
+        void removeFromTableWithOff(long hashEntryAdr, long off)
         {
-            long off = bucketOffset(hash);
-            for (int i = 0; i < entriesPerBucket; i++, off += Util.BUCKET_ENTRY_LEN)
-            {
-                if (Uns.compareAndSwapLong(address, off, hashEntryAdr, 0L))
-                    break;
-            }
+            if (!Uns.compareAndSwapLong(address, off, hashEntryAdr, 0L))
+                assert false;
 
             removeFromLRU(hashEntryAdr);
         }
@@ -679,10 +698,8 @@ final class OffHeapMap
             {
                 int len = 0;
                 for (int i = 0; i < entriesPerBucket; i++, off += Util.BUCKET_ENTRY_LEN)
-                {
                     if (getEntryAdr(off) != 0L)
                         len++;
-                }
                 h.add(len + 1);
             }
         }
@@ -698,25 +715,24 @@ final class OffHeapMap
         }
     }
 
-    private void removeInternal(long hashEntryAdr, long hash)
-    {
-        table.removeFromTable(hash, hashEntryAdr);
-
-        freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
-    }
-
     private boolean add(long hashEntryAdr, long hash)
     {
         if (!table.addToTable(hash, hashEntryAdr))
             return false;
 
-        table.addToLRU(hashEntryAdr);
+        addToLRU(hashEntryAdr);
         return true;
     }
 
     private void touch(long hashEntryAdr)
     {
         table.removeFromLRU(hashEntryAdr);
-        table.addToLRU(hashEntryAdr);
+        addToLRU(hashEntryAdr);
+    }
+
+    private void addToLRU(long hashEntryAdr)
+    {
+        if (table.addToLRU(hashEntryAdr))
+            lruCompactions++;
     }
 }
