@@ -214,8 +214,8 @@ final class OffHeapMap
                         return false;
                 }
 
-                table.removeFromTableWithOff(hashEntryAdr, ptr);
                 fc += HashEntries.getAllocLen(hashEntryAdr);
+                table.removeFromTableWithOff(hashEntryAdr, ptr);
 
                 removeHashEntryAdr = hashEntryAdr;
 
@@ -622,8 +622,7 @@ final class OffHeapMap
                 lruEldestIndex++;
             if (lruIndex == lruWriteTarget - 1)
                 lruWriteTarget = lruIndex;
-            if (!Uns.compareAndSwapLong(address, lruOffset(lruIndex), hashEntryAdr, 0L))
-                assert false;
+            Uns.putLong(address, lruOffset(lruIndex), 0L);
         }
 
         private long lruOffset(int i)
@@ -670,9 +669,7 @@ final class OffHeapMap
 
         void removeFromTableWithOff(long hashEntryAdr, long off)
         {
-            if (!Uns.compareAndSwapLong(address, off, hashEntryAdr, 0L))
-                assert false;
-
+            Uns.putLong(address, off, 0L);
             removeFromLRU(hashEntryAdr);
         }
 
