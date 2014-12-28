@@ -31,19 +31,19 @@ import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import javax.management.openmbean.CompositeDataSupport;
 
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.Timer;
-import com.yammer.metrics.stats.Snapshot;
+import com.codahale.metrics.Snapshot;
+import com.codahale.metrics.Timer;
 import org.caffinitas.ohc.OHCache;
 
 final class Shared
 {
+    private static final double NANOS_PER_MILLI = 1000000d;
     static OHCache<Long, byte[]> cache;
 
     static final AtomicBoolean fatal = new AtomicBoolean();
     static final ThreadMXBean threadMXBean  = ManagementFactory.getPlatformMXBean(ThreadMXBean.class);
-    static final Timer readTimer = Metrics.newTimer(ReadTask.class, "reads");
-    static final Timer writeTimer = Metrics.newTimer(WriteTask.class, "writes");
+    static Timer readTimer = new Timer();
+    static Timer writeTimer = new Timer();
     static final ConcurrentHashMap<String, GCStats> gcStats = new ConcurrentHashMap<>();
 
     static
@@ -94,8 +94,8 @@ final class Shared
 
     static void clearStats()
     {
-        readTimer.clear();
-        writeTimer.clear();
+        readTimer = new Timer();
+        writeTimer = new Timer();
         gcStats.clear();
         cache.resetStatistics();
     }
@@ -130,28 +130,26 @@ final class Shared
         Snapshot snap = timer.getSnapshot();
         System.out.printf("     %-10s: one/five/fifteen/mean:  %.0f/%.0f/%.0f/%.0f%n" +
                           "                 count:                  %10d %n" +
-                          "                 min/max/mean/stddev:    %8.5f/%8.5f/%8.5f/%8.5f [%s]%n" +
-                          "                 75/95/98/99/999/median: %8.5f/%8.5f/%8.5f/%8.5f/%8.5f/%8.5f [%s]%n",
+                          "                 min/max/mean/stddev:    %8.5f/%8.5f/%8.5f/%8.5f%n" +
+                          "                 75/95/98/99/999/median: %8.5f/%8.5f/%8.5f/%8.5f/%8.5f/%8.5f%n",
                           header,
                           //
-                          timer.oneMinuteRate(),
-                          timer.fiveMinuteRate(),
-                          timer.fifteenMinuteRate(),
-                          timer.meanRate(),
+                          timer.getOneMinuteRate(),
+                          timer.getFiveMinuteRate(),
+                          timer.getFifteenMinuteRate(),
+                          timer.getMeanRate(),
                           //
-                          timer.count(),
+                          timer.getCount(),
                           //
-                          timer.min(),
-                          timer.max(),
-                          timer.mean(),
-                          timer.stdDev(),
-                          timer.durationUnit(),
-                          snap.get75thPercentile(),
-                          snap.get95thPercentile(),
-                          snap.get98thPercentile(),
-                          snap.get99thPercentile(),
-                          snap.get999thPercentile(),
-                          snap.getMedian(),
-                          timer.durationUnit());
+                          ((double)snap.getMin()/NANOS_PER_MILLI),
+                          ((double)snap.getMax()/NANOS_PER_MILLI),
+                          snap.getMean()/NANOS_PER_MILLI,
+                          snap.getStdDev()/NANOS_PER_MILLI,
+                          snap.get75thPercentile()/NANOS_PER_MILLI,
+                          snap.get95thPercentile()/NANOS_PER_MILLI,
+                          snap.get98thPercentile()/NANOS_PER_MILLI,
+                          snap.get99thPercentile()/NANOS_PER_MILLI,
+                          snap.get999thPercentile()/NANOS_PER_MILLI,
+                          snap.getMedian()/NANOS_PER_MILLI);
     }
 }
