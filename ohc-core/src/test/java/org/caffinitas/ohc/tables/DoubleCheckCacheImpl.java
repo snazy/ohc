@@ -56,7 +56,7 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
     {
         boolean rProd = prod.addOrReplace(key, old, value);
         boolean rCheck = check.addOrReplace(key, old, value);
-        Assert.assertEquals(rCheck, rProd);
+        Assert.assertEquals(rCheck, rProd, "for key='" + key + '\'');
         return rProd;
     }
 
@@ -64,7 +64,7 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
     {
         boolean rProd = prod.putIfAbsent(k, v);
         boolean rCheck = check.putIfAbsent(k, v);
-        Assert.assertEquals(rCheck, rProd);
+        Assert.assertEquals(rCheck, rProd, "for key='" + k + '\'');
         return rProd;
     }
 
@@ -96,7 +96,7 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
     {
         V rProd = prod.get(key);
         V rCheck = check.get(key);
-        Assert.assertEquals(rCheck, rProd);
+        Assert.assertEquals(rCheck, rProd, "for key='" + key + '\'');
         return rProd;
     }
 
@@ -104,7 +104,7 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
     {
         boolean rProd = prod.containsKey(key);
         boolean rCheck = check.containsKey(key);
-        Assert.assertEquals(rCheck, rProd);
+        Assert.assertEquals(rCheck, rProd, "for key='" + key + '\'');
         return rProd;
     }
 

@@ -121,28 +121,43 @@ public class CrossCheckTest
             Assert.assertEquals(stats.getSize(), TestUtils.manyCount);
 
             for (int i = 0; i < TestUtils.manyCount; i++)
-                Assert.assertEquals(cache.get(i), Integer.toHexString(i));
+                Assert.assertEquals(cache.get(i), Integer.toHexString(i), "for i="+i);
 
             stats = cache.stats();
             Assert.assertEquals(stats.getHitCount(), TestUtils.manyCount);
             Assert.assertEquals(stats.getSize(), TestUtils.manyCount);
 
             for (int i = 0; i < TestUtils.manyCount; i++)
+            {
+                Assert.assertEquals(cache.get(i), Integer.toHexString(i), "for i="+i);
+                Assert.assertTrue(cache.containsKey(i), "for i="+i);
                 cache.put(i, Integer.toOctalString(i));
+                Assert.assertEquals(cache.get(i), Integer.toOctalString(i), "for i="+i);
+                Assert.assertEquals(cache.size(), TestUtils.manyCount, "for i="+i);
+                Assert.assertTrue(cache.containsKey(i), "for i="+i);
+            }
 
             stats = cache.stats();
             Assert.assertEquals(stats.getPutReplaceCount(), TestUtils.manyCount);
             Assert.assertEquals(stats.getSize(), TestUtils.manyCount);
 
             for (int i = 0; i < TestUtils.manyCount; i++)
-                Assert.assertEquals(cache.get(i), Integer.toOctalString(i));
+                Assert.assertEquals(cache.get(i), Integer.toOctalString(i), "for i="+i);
 
             stats = cache.stats();
-            Assert.assertEquals(stats.getHitCount(), TestUtils.manyCount * 2);
+            Assert.assertEquals(stats.getHitCount(), TestUtils.manyCount * 6);
             Assert.assertEquals(stats.getSize(), TestUtils.manyCount);
 
             for (int i = 0; i < TestUtils.manyCount; i++)
+            {
+                Assert.assertEquals(cache.get(i), Integer.toOctalString(i), "for i="+i);
+                Assert.assertTrue(cache.containsKey(i), "for i="+i);
                 cache.remove(i);
+                Assert.assertNull(cache.get(i), "for i=" + i);
+                Assert.assertFalse(cache.containsKey(i), "for i=" + i);
+                Assert.assertEquals(cache.stats().getRemoveCount(), i + 1);
+                Assert.assertEquals(cache.size(), TestUtils.manyCount - i - 1, "for i=" + i);
+            }
 
             stats = cache.stats();
             Assert.assertEquals(stats.getRemoveCount(), TestUtils.manyCount);
@@ -177,11 +192,7 @@ public class CrossCheckTest
         {
             int i;
             for (i = 0; cache.freeCapacity() >= 1478; i++)
-            {
                 cache.put(i, v);
-                if ((i % 10000) == 0)
-                    Assert.assertEquals(cache.stats().getEvictionCount(), 0L, "oops - cleanup triggered - fix the unit test!");
-            }
 
             Assert.assertEquals(cache.stats().getEvictionCount(), 0L, "oops - cleanup triggered - fix the unit test!");
 
@@ -208,11 +219,7 @@ public class CrossCheckTest
         {
             int i;
             for (i = 0; cache.freeCapacity() >= 1478; i++)
-            {
                 cache.put(i, v);
-                if ((i % 10000) == 0)
-                    Assert.assertEquals(cache.stats().getEvictionCount(), 0L, "oops - cleanup triggered - fix the unit test!");
-            }
             int k = i;
 
             // reference ~50%

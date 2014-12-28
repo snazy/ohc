@@ -182,6 +182,20 @@ final class Uns
         return unsafe.getLong(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
     }
 
+    static int getIntFromByteArray(byte[] array, int offset)
+    {
+        if (offset < 0 || offset + 4 > array.length)
+            throw new ArrayIndexOutOfBoundsException();
+        return unsafe.getInt(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
+    }
+
+    static short getShortFromByteArray(byte[] array, int offset)
+    {
+        if (offset < 0 || offset + 2 > array.length)
+            throw new ArrayIndexOutOfBoundsException();
+        return unsafe.getShort(array, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + offset);
+    }
+
     static long getAndPutLong(long address, long offset, long value)
     {
         validate(address, offset, 8L);

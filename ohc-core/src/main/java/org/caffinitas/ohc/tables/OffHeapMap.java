@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
-
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
@@ -157,9 +156,10 @@ final class OffHeapMap
             long hashEntryAdr;
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
-                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L
-                    || table.getHash(ptr) != key.hash()
-                    || notSameKey(key, hashEntryAdr))
+                hashEntryAdr = table.getEntryAdr(ptr);
+                if (hashEntryAdr == 0L)
+                    break;
+                if (table.getHash(ptr) != key.hash() || notSameKey(key, hashEntryAdr))
                     continue;
 
                 // return existing entry
@@ -196,9 +196,15 @@ final class OffHeapMap
             long ptr = table.bucketOffset(hash);
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
-                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L
-                    || table.getHash(ptr) != hash
-                    || notSameKey(newHashEntryAdr, keyLen, hashEntryAdr))
+                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L)
+                    break;
+
+                if (table.getHash(ptr) != hash)
+                    continue;
+
+                // fetch allocLen here - same CPU cache line needed by key compare
+                long allocLen = HashEntries.getAllocLen(hashEntryAdr);
+                if (notSameKey(newHashEntryAdr, keyLen, hashEntryAdr))
                     continue;
 
                 // replace existing entry
@@ -214,8 +220,8 @@ final class OffHeapMap
                         return false;
                 }
 
-                fc += HashEntries.getAllocLen(hashEntryAdr);
-                table.removeFromTableWithOff(hashEntryAdr, ptr);
+                fc += allocLen;
+                table.removeFromTableWithOff(hashEntryAdr, ptr, idx);
 
                 removeHashEntryAdr = hashEntryAdr;
 
@@ -282,6 +288,7 @@ final class OffHeapMap
         {
             size = 0L;
 
+            long freed = 0L;
             long hashEntryAdr;
             for (int p = 0; p < table.size(); p++)
             {
@@ -289,14 +296,16 @@ final class OffHeapMap
                 for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
                 {
                     if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L)
-                        continue;
+                        break;
 
-                    freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
+                    freed += HashEntries.getAllocLen(hashEntryAdr);
                     HashEntries.dereference(hashEntryAdr);
                 }
             }
 
             table.clear();
+
+            freeCapacity.addAndGet(freed);
         }
         finally
         {
@@ -314,12 +323,15 @@ final class OffHeapMap
             long ptr = table.bucketOffset(hash);
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
-                if ((hashEntryAdr = table.getEntryAdr(ptr)) != removeHashEntryAdr)
+                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L)
+                    break;
+
+                if (hashEntryAdr != removeHashEntryAdr)
                     continue;
 
                 // remove existing entry
 
-                removeInternal(hashEntryAdr, ptr);
+                removeInternal(hashEntryAdr, ptr, idx);
 
                 return;
             }
@@ -343,15 +355,16 @@ final class OffHeapMap
             long ptr = table.bucketOffset(key.hash());
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
-                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L
-                    || table.getHash(ptr) != key.hash()
-                    || notSameKey(key, hashEntryAdr))
+                if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L)
+                    break;
+
+                if (table.getHash(ptr) != key.hash() || notSameKey(key, hashEntryAdr))
                     continue;
 
                 // remove existing entry
 
                 removeHashEntryAdr = hashEntryAdr;
-                removeInternal(hashEntryAdr, ptr);
+                removeInternal(hashEntryAdr, ptr, idx);
 
                 return;
             }
@@ -364,9 +377,9 @@ final class OffHeapMap
         }
     }
 
-    private void removeInternal(long hashEntryAdr, long off)
+    private void removeInternal(long hashEntryAdr, long off, int idx)
     {
-        table.removeFromTableWithOff(hashEntryAdr, off);
+        table.removeFromTableWithOff(hashEntryAdr, off, idx);
 
         freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
 
@@ -409,9 +422,10 @@ final class OffHeapMap
             for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
             {
                 if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L)
-                    continue;
+                    break;
 
                 if (!newTable.addToTable(table.getHash(ptr), hashEntryAdr))
+                    // this should never occur - so don't care about expensive free()
                     HashEntries.dereference(hashEntryAdr);
             }
         }
@@ -476,7 +490,7 @@ final class OffHeapMap
                 for (int idx = 0; idx < entriesPerBucket; idx++, ptr += Util.BUCKET_ENTRY_LEN)
                 {
                     if ((hashEntryAdr = table.getEntryAdr(ptr)) == 0L)
-                        continue;
+                        break;
                     hashEntryAdrs.add(hashEntryAdr);
                     HashEntries.reference(hashEntryAdr);
                 }
@@ -490,6 +504,27 @@ final class OffHeapMap
 
     static final class Table
     {
+        /*
+         * Holds an off-heap structure with two tables: the bucket-entry-table and the LRU-table.
+         * The bucket-entry-table starts at 'address'.
+         * The LRU-table starts at 'address + lruOffset'.
+         *
+         * Layout of the bucket-entry-table:
+         * +----------------+------------+----------------+------------+-----
+         * | hash-entry-adr | hash-value | hash-entry-adr | hash-value | ...
+         * +----------------+------------+----------------+------------+-----
+         * For each bucket the table holds as many entries as specified by 'entriesPerBucket'.
+         *
+         * Layout of the LRU-table:
+         * +----------------+----------------+-----
+         * | hash-entry-adr | hash-entry-adr | ...
+         * +----------------+----------------+-----
+         * The field 'lruWriteTarget' defines at which index in the LRU-table the next recently hash-entry-address goes.
+         * The field 'lruEldestIndex' defines the index of the eldest entry in the LRU-table.
+         * If there's no more room in the LRU-table ('lruWriteTarget == size()'), the whole LRU table is compacted.
+         * For fast access into the LRU-table, the hash-entry itself tracks the index of the hash-entry in the LRU-table.
+         */
+
         final int mask;
         final long address;
         private final int entriesPerBucket;
@@ -524,6 +559,25 @@ final class OffHeapMap
 
         //
 
+        void removeFromTableWithOff(long hashEntryAdr, long off, int idx)
+        {
+            for (; idx < entriesPerBucket; idx++, off += Util.BUCKET_ENTRY_LEN)
+            {
+                if (idx < entriesPerBucket - 1)
+                {
+                    long adr = getEntryAdr(off + Util.BUCKET_ENTRY_LEN);
+                    long h = getHash(off + Util.BUCKET_ENTRY_LEN);
+                    setEntryAdr(off, adr);
+                    setHash(off, h);
+                    if (adr == 0L)
+                        break;
+                }
+                else
+                    setEntryAdr(off, 0L);
+            }
+            removeFromLRU(hashEntryAdr);
+        }
+
         long removeEldest()
         {
             int i = lruEldestIndex;
@@ -536,13 +590,35 @@ final class OffHeapMap
                     lruEldestIndex = i + 1;
 
                     off = bucketOffset(HashEntries.getHash(hashEntryAdr));
+                    boolean st = false;
                     for (i = 0; i < entriesPerBucket; i++, off += Util.BUCKET_ENTRY_LEN)
-                        if (Uns.compareAndSwapLong(address, off, hashEntryAdr, 0L))
+                    {
+                        long adr;
+                        if (!st)
                         {
-                            return hashEntryAdr;
+                            adr = getEntryAdr(off);
+                            if (adr == hashEntryAdr)
+                                st = true;
+                            else if (adr == 0L)
+                                break;
+                            else
+                                continue;
                         }
 
-                    assert false;
+                        adr = getEntryAdr(off + Util.BUCKET_ENTRY_LEN);
+                        long h = getHash(off + Util.BUCKET_ENTRY_LEN);
+                        if (i < entriesPerBucket - 1)
+                        {
+                            setEntryAdr(off, adr);
+                            setHash(off, h);
+                        }
+                        else
+                            setEntryAdr(off, 0L);
+                        if (adr == 0L)
+                            break;
+                    }
+
+                    return hashEntryAdr;
                 }
             }
             return 0;
@@ -661,16 +737,10 @@ final class OffHeapMap
             for (int i = 0; i < entriesPerBucket; i++, off += Util.BUCKET_ENTRY_LEN)
                 if (Uns.compareAndSwapLong(address, off, 0L, hashEntryAdr))
                 {
-                    Uns.putLong(address, off + Util.BUCKET_OFF_HASH, hash);
+                    setHash(off, hash);
                     return true;
                 }
             return false;
-        }
-
-        void removeFromTableWithOff(long hashEntryAdr, long off)
-        {
-            Uns.putLong(address, off, 0L);
-            removeFromLRU(hashEntryAdr);
         }
 
         long bucketOffset(long hash)
@@ -690,15 +760,20 @@ final class OffHeapMap
 
         void updateBucketHistogram(EstimatedHistogram h)
         {
-            long off = 0L;
             for (int p = 0; p < size(); p++)
-            {
-                int len = 0;
-                for (int i = 0; i < entriesPerBucket; i++, off += Util.BUCKET_ENTRY_LEN)
-                    if (getEntryAdr(off) != 0L)
-                        len++;
-                h.add(len + 1);
-            }
+                h.add(bucketLength(p) + 1);
+        }
+
+        private int bucketLength(long hash)
+        {
+            int len = 0;
+            long off = bucketOffset(hash);
+            for (int i = 0; i < entriesPerBucket; i++, off += Util.BUCKET_ENTRY_LEN)
+                if (getEntryAdr(off) != 0L)
+                    len++;
+                else
+                    break;
+            return len;
         }
 
         long getEntryAdr(long entryOff)
@@ -706,9 +781,19 @@ final class OffHeapMap
             return Uns.getLong(address, entryOff);
         }
 
+        private void setEntryAdr(long entryOff, long adr)
+        {
+            Uns.putLong(address, entryOff, adr);
+        }
+
         long getHash(long entryOff)
         {
             return Uns.getLong(address, entryOff + Util.BUCKET_OFF_HASH);
+        }
+
+        private void setHash(long entryOff, long adr)
+        {
+            Uns.putLong(address, entryOff + Util.BUCKET_OFF_HASH, adr);
         }
     }
 
