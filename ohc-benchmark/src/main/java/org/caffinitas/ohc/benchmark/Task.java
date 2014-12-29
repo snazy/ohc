@@ -17,36 +17,9 @@ package org.caffinitas.ohc.benchmark;
 
 import com.codahale.metrics.Timer;
 
-class ReadTask implements Task
+public interface Task
 {
-    private final long key;
+    Timer timer();
 
-    public ReadTask(long key)
-    {
-        this.key = key;
-    }
-
-    public Timer timer()
-    {
-        return Shared.readTimer;
-    }
-
-    public long run()
-    {
-        try
-        {
-            long t0 = Shared.ntime();
-            Shared.cache.get(key);
-            long t = Shared.ntime() - t0;
-            return t;
-        }
-        catch (Error e)
-        {
-            throw e;
-        }
-        catch (Throwable t)
-        {
-            throw new Error(t);
-        }
-    }
+    long run();
 }

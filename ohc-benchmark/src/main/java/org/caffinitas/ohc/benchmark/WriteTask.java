@@ -15,9 +15,9 @@
  */
 package org.caffinitas.ohc.benchmark;
 
-import java.util.concurrent.TimeUnit;
+import com.codahale.metrics.Timer;
 
-class WriteTask implements Runnable
+class WriteTask implements Task
 {
     private final long key;
     private final int valueLen;
@@ -28,19 +28,27 @@ class WriteTask implements Runnable
         this.valueLen = valueLen;
     }
 
-    public void run()
+    public Timer timer()
+    {
+        return Shared.writeTimer;
+    }
+
+    public long run()
     {
         try
         {
             long t0 = Shared.ntime();
             Shared.cache.put(key, new byte[valueLen]);
             long t = Shared.ntime() - t0;
-            Shared.writeTimer.update(t, TimeUnit.NANOSECONDS);
+            return t;
+        }
+        catch (Error e)
+        {
+            throw e;
         }
         catch (Throwable t)
         {
-            t.printStackTrace();
-            Shared.fatal.set(true);
+            throw new Error(t);
         }
     }
 }

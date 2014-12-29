@@ -33,6 +33,7 @@ import javax.management.openmbean.CompositeDataSupport;
 
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.Timer;
+import com.codahale.metrics.UniformReservoir;
 import org.caffinitas.ohc.OHCache;
 
 final class Shared
@@ -42,8 +43,8 @@ final class Shared
 
     static final AtomicBoolean fatal = new AtomicBoolean();
     static final ThreadMXBean threadMXBean  = ManagementFactory.getPlatformMXBean(ThreadMXBean.class);
-    static Timer readTimer = new Timer();
-    static Timer writeTimer = new Timer();
+    static Timer readTimer = new Timer(new UniformReservoir());
+    static Timer writeTimer = new Timer(new UniformReservoir());
     static final ConcurrentHashMap<String, GCStats> gcStats = new ConcurrentHashMap<>();
 
     static
@@ -94,8 +95,8 @@ final class Shared
 
     static void clearStats()
     {
-        readTimer = new Timer();
-        writeTimer = new Timer();
+        readTimer = new Timer(new UniformReservoir());
+        writeTimer = new Timer(new UniformReservoir());
         gcStats.clear();
         cache.resetStatistics();
     }
