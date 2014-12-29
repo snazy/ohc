@@ -986,11 +986,9 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         private final int perMap;
         int mapIndex;
 
-        OffHeapMap segment;
         long[] hotPerMap;
         int subIndex;
 
-        OffHeapMap lastSegment;
         long lastHashEntryAdr;
 
         public AbstractHotKeyIterator(int n)
@@ -1009,7 +1007,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             {
                 HashEntries.dereference(lastHashEntryAdr);
                 lastHashEntryAdr = 0L;
-                lastSegment = null;
             }
         }
 
@@ -1026,7 +1023,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                     long hashEntryAdr = hotPerMap[subIndex++];
                     if (hashEntryAdr != 0L)
                     {
-                        lastSegment = segment;
                         lastHashEntryAdr = hashEntryAdr;
                         return buildResult(hashEntryAdr);
                     }
@@ -1035,8 +1031,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 if (mapIndex == maps.length)
                     return endOfData();
 
-                segment = maps[mapIndex++];
-                hotPerMap = segment.hotN(perMap);
+                hotPerMap = maps[mapIndex++].hotN(perMap);
                 subIndex = 0;
             }
         }
