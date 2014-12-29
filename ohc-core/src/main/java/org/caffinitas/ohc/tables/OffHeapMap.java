@@ -47,7 +47,8 @@ final class OffHeapMap
 
     private final AtomicLong freeCapacity;
 
-    private final ReentrantLock lock = new ReentrantLock();
+//    private final ReentrantLock lock = new ReentrantLock();
+    private final CasLock lock = new CasLock();
 
     OffHeapMap(OHCacheBuilder builder, AtomicLong freeCapacity)
     {
