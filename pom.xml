@@ -4,7 +4,7 @@
 
     <groupId>org.caffinitas.ohc</groupId>
     <artifactId>ohc-parent</artifactId>
-    <version>0.2</version>
+    <version>0.2.1</version>
     <packaging>pom</packaging>
 
     <name>OHC parent</name>
@@ -53,7 +53,7 @@
     </scm>
     <issueManagement>
         <system>Github</system>
-        <url>https://github.com/snazy/ohc</url>
+        <url>https://github.com/snazy/ohc/issues</url>
     </issueManagement>
 
     <modules>

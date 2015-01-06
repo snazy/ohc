@@ -79,48 +79,51 @@ final class KeyBuffer extends AbstractDataOutput
             h2 = h2 * 5 + 0x38495ab5;
         }
 
-        k1 = 0;
-        k2 = 0;
-        switch (r)
+        if (r > 0)
         {
-            case 15:
-                k2 ^= Murmur3.toLong(array[o + 14]) << 48; // fall through
-            case 14:
-                k2 ^= Murmur3.toLong(array[o + 13]) << 40; // fall through
-            case 13:
-                k2 ^= Murmur3.toLong(array[o + 12]) << 32; // fall through
-            case 12:
-                k2 ^= Murmur3.toLong(array[o + 11]) << 24; // fall through
-            case 11:
-                k2 ^= Murmur3.toLong(array[o + 10]) << 16; // fall through
-            case 10:
-                k2 ^= Murmur3.toLong(array[o + 9]) << 8; // fall through
-            case 9:
-                k2 ^= Murmur3.toLong(array[o + 8]); // fall through
-            case 8:
-                k1 ^= getLong(o);
-                break;
-            case 7:
-                k1 ^= Murmur3.toLong(array[o + 6]) << 48; // fall through
-            case 6:
-                k1 ^= Murmur3.toLong(array[o + 5]) << 40; // fall through
-            case 5:
-                k1 ^= Murmur3.toLong(array[o + 4]) << 32; // fall through
-            case 4:
-                k1 ^= Murmur3.toLong(array[o + 3]) << 24; // fall through
-            case 3:
-                k1 ^= Murmur3.toLong(array[o + 2]) << 16; // fall through
-            case 2:
-                k1 ^= Murmur3.toLong(array[o + 1]) << 8; // fall through
-            case 1:
-                k1 ^= Murmur3.toLong(array[o]);
-                break;
-            default:
-                throw new AssertionError("Should never get here.");
-        }
+            k1 = 0;
+            k2 = 0;
+            switch (r)
+            {
+                case 15:
+                    k2 ^= Murmur3.toLong(array[o + 14]) << 48; // fall through
+                case 14:
+                    k2 ^= Murmur3.toLong(array[o + 13]) << 40; // fall through
+                case 13:
+                    k2 ^= Murmur3.toLong(array[o + 12]) << 32; // fall through
+                case 12:
+                    k2 ^= Murmur3.toLong(array[o + 11]) << 24; // fall through
+                case 11:
+                    k2 ^= Murmur3.toLong(array[o + 10]) << 16; // fall through
+                case 10:
+                    k2 ^= Murmur3.toLong(array[o + 9]) << 8; // fall through
+                case 9:
+                    k2 ^= Murmur3.toLong(array[o + 8]); // fall through
+                case 8:
+                    k1 ^= getLong(o);
+                    break;
+                case 7:
+                    k1 ^= Murmur3.toLong(array[o + 6]) << 48; // fall through
+                case 6:
+                    k1 ^= Murmur3.toLong(array[o + 5]) << 40; // fall through
+                case 5:
+                    k1 ^= Murmur3.toLong(array[o + 4]) << 32; // fall through
+                case 4:
+                    k1 ^= Murmur3.toLong(array[o + 3]) << 24; // fall through
+                case 3:
+                    k1 ^= Murmur3.toLong(array[o + 2]) << 16; // fall through
+                case 2:
+                    k1 ^= Murmur3.toLong(array[o + 1]) << 8; // fall through
+                case 1:
+                    k1 ^= Murmur3.toLong(array[o]);
+                    break;
+                default:
+                    throw new AssertionError("Should never get here.");
+            }
 
-        h1 ^= Murmur3.mixK1(k1);
-        h2 ^= Murmur3.mixK2(k2);
+            h1 ^= Murmur3.mixK1(k1);
+            h2 ^= Murmur3.mixK2(k2);
+        }
 
         // makeHash()
 

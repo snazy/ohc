@@ -1,0 +1,9 @@
+0.2.1
+=====
+
+#1: KeyBuffer class failed for serialized key size of 16 and multiples of 16
+
+0.2
+===
+
+intial release on Maven Central
