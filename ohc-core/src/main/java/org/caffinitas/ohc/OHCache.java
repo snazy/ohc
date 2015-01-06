@@ -128,9 +128,10 @@ public interface OHCache<K, V> extends Closeable
     /**
      * Modify the cache's capacity.
      * Lowering the capacity will not immediately remove any entry nor will it immediately free allocated (off heap) memory.
-     * <p/>
+     * <p>
      * Future operations will even allocate in flight, temporary memory - i.e. setting capacity to 0 does not
      * disable the cache, it will continue to work but cannot add more data.
+     * </p>
      */
     public void setCapacity(long capacity);
 }

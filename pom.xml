@@ -168,7 +168,6 @@
     <build>
 
         <plugins>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
@@ -183,9 +182,9 @@
                 </executions>
             </plugin>
         </plugins>
+
         <pluginManagement>
             <plugins>
-
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
@@ -206,6 +205,7 @@
                             href="http://www.apache.org/licenses/LICENSE-2.0" target="_new"&gt;Apache License, Version 2&lt;/a&gt;
                             - &lt;a href="http://caffinitas.org/" target="_new"&gt;Homepage&lt;/a&gt;</bottom>
                         <show>protected</show>
+                        <failOnError>false</failOnError>
                         <includeDependencySources>false</includeDependencySources>
                         <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
                     </configuration>
@@ -295,6 +295,7 @@
                         href="http://www.apache.org/licenses/LICENSE-2.0" target="_new"&gt;Apache License, Version 2&lt;/a&gt;
                         - &lt;a href="http://caffinitas.org/" target="_new"&gt;Homepage&lt;/a&gt;</bottom>
                     <show>protected</show>
+                    <failOnError>false</failOnError>
                     <includeDependencySources>true</includeDependencySources>
                     <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
                 </configuration>
@@ -311,6 +312,18 @@
     </reporting>
 
     <profiles>
+        <profile>
+            <id>javadoc</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
         <profile>
             <id>deploy</id>
             <build>

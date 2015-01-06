@@ -29,7 +29,6 @@ public interface CacheSerializer<T>
      *
      * @param t   type that needs to be serialized
      * @param out {@code DataOutput} into which serialization needs to happen.
-     * @throws java.io.IOException
      */
     public void serialize(T t, DataOutput out) throws IOException;
 
@@ -38,7 +37,6 @@ public interface CacheSerializer<T>
      *
      * @param in {@code DataInput} from which deserialization needs to happen.
      * @return the type that was deserialized
-     * @throws IOException
      */
     public T deserialize(DataInput in) throws IOException;
 
