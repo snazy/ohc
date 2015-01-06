@@ -312,16 +312,6 @@
 
     <profiles>
         <profile>
-            <id>website-deploy</id>
-            <distributionManagement>
-                <site>
-                    <id>caffinitas.org</id>
-                    <url>scp://caffinitas.org/opt/caffinitas.org/webapps/ROOT/mapper</url>
-                </site>
-            </distributionManagement>
-        </profile>
-
-        <profile>
             <id>deploy</id>
             <build>
                 <plugins>
@@ -358,22 +348,18 @@
         </profile>
 
         <!--
-        Website deployment procedure:
-
-            mvn site-deploy -Pwebsite-deploy
-
         Release deployment procecure:
 
             mvn clean
-            mvn jgitflow:release-start -Pdeploy -Pwebsite-deploy
-            mvn jgitflow:release-finish -Pdeploy -Pwebsite-deploy
+            mvn jgitflow:release-start -Pdeploy
+            mvn jgitflow:release-finish -Pdeploy
             (git push required unless -DpushReleases=true)
 
             ALTERNATIVE:
 
             mvn clean
-            mvn jgitflow:release-start -Pdeploy -Pwebsite-deploy
-            mvn jgitflow:release-finish -Pdeploy -Pwebsite-deploy -DkeepBranch=true -DnoDeploy=true
+            mvn jgitflow:release-start -Pdeploy
+            mvn jgitflow:release-finish -Pdeploy -DkeepBranch=true -DnoDeploy=true
             (...)
             mvn deploy
             (git push required unless -DpushReleases=true on release-finish)
