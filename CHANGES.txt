@@ -1,3 +1,9 @@
+0.3
+===
+- remove cassandra-all dependency from ohc-benchmark
+- do not deploy big binary ohc-benchmark and ohc-jmh artifacts to Maven Central
+- change scope of snappy dependency in ohc-core to provided
+
 0.2.1
 =====
 
