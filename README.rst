@@ -24,9 +24,8 @@ Architecture
 OHC uses multiple segments. Each segment contains its own independent off-heap hash map. Synchronization occurs
 on critical sections that access a off-heap hash map. Necessary serialization and deserialization is performed
 outside of these critical sections.
-
-Concurrent eviction is performed using either LRU (double linked list), timestamp or counter (2Q).
-Note that the last two replacement strategies are not yet implemented.
+Eviction is performed using LRU strategy when adding entries.
+Rehashing is performed in each individual off-heap map when necessary.
 
 Configuration
 -------------
@@ -35,9 +34,8 @@ Use the class ``OHCacheBuilder`` to configure all necessary parameter like
 
 - number of segments (must be a power of 2), defaults to number-of-cores * 2
 - hash table size (must be a power of 2), defaults to 8192
-- load factory, defaults to .75
+- load factor, defaults to .75
 - capacity for data over the whole cache
-- eviction configuration (cleanup-trigger-free-percentage triggers a cleanup, cleanup-target-free-percentage defines the target free capacity)
 - key and value serializers
 
 Generally you should work with a large hash table. The larger the hash table, the shorter the linked-list in each
