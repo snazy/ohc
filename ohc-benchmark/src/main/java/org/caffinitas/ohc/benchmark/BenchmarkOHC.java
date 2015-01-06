@@ -51,7 +51,6 @@ public final class BenchmarkOHC
     public static final String READ_KEY_DIST = "rkd";
     public static final String WRITE_KEY_DIST = "wkd";
     public static final String VALUE_SIZE_DIST = "vs";
-    public static final String DRIVERS = "dr";
     public static final String TYPE = "type";
 
     public static final String DEFAULT_VALUE_SIZE_DIST = "fixed(512)";
@@ -82,36 +81,25 @@ public final class BenchmarkOHC
 
             double readWriteRatio = Double.parseDouble(cmd.getOptionValue(READ_WRITE_RATIO, ".5"));
 
-            int driverCount = Integer.parseInt(cmd.getOptionValue(DRIVERS, Integer.toString(Runtime.getRuntime().availableProcessors() / 4)));
-            if (driverCount < 1)
-                driverCount = 1;
-
             String type = cmd.getOptionValue(TYPE, "linked");
 
-            int threadsPerDriver = threads / driverCount;
-
-            Driver[] drivers = new Driver[driverCount];
-            int remainingThreads = threads;
+            Driver[] drivers = new Driver[threads];
             Random rnd = new Random();
             DistributionFactory readKeyDist = OptionDistribution.get(cmd.getOptionValue(READ_KEY_DIST, DEFAULT_KEY_DIST));
             DistributionFactory writeKeyDist = OptionDistribution.get(cmd.getOptionValue(WRITE_KEY_DIST, DEFAULT_KEY_DIST));
             DistributionFactory valueSizeDist = OptionDistribution.get(cmd.getOptionValue(VALUE_SIZE_DIST, DEFAULT_VALUE_SIZE_DIST));
-            for (int i = 0; i < driverCount; i++)
+            for (int i = 0; i < threads; i++)
             {
-                int driverThreads = Math.min(threadsPerDriver, remainingThreads);
-                remainingThreads -= driverThreads;
-
-                drivers[i] = new Driver(i, readKeyDist.get(), writeKeyDist.get(), valueSizeDist.get(),
-                                        readWriteRatio, driverThreads, rnd.nextLong());
+                drivers[i] = new Driver(readKeyDist.get(), writeKeyDist.get(), valueSizeDist.get(),
+                                        readWriteRatio, rnd.nextLong());
             }
 
             printMessage("Starting benchmark with%n" +
                          "   threads     : %d%n" +
-                         "   drivers     : %d%n" +
                          "   warm-up-secs: %d%n" +
                          "   idle-secs   : %d%n" +
                          "   runtime-secs: %d%n",
-                         threads, driverCount, warmUpSecs, coldSleepSecs, duration);
+                         threads, warmUpSecs, coldSleepSecs, duration);
 
             printMessage("Initializing OHC cache...");
             Shared.cache = OHCacheBuilder.<Long, byte[]>newBuilder()
@@ -133,7 +121,7 @@ public final class BenchmarkOHC
                          Shared.cache.segments(),
                          Shared.cache.capacity());
 
-            ThreadPoolExecutor main = new ThreadPoolExecutor(driverCount, driverCount, coldSleepSecs + 1, TimeUnit.SECONDS,
+            ThreadPoolExecutor main = new ThreadPoolExecutor(threads, threads, coldSleepSecs + 1, TimeUnit.SECONDS,
                                                              new LinkedBlockingQueue<Runnable>(), new ThreadFactory()
             {
                 volatile int threadNo;
@@ -171,11 +159,6 @@ public final class BenchmarkOHC
             logMemoryUse();
 
             // finish
-
-            for (Driver driver : drivers)
-                driver.shutdown();
-            for (Driver driver : drivers)
-                driver.terminate();
 
             System.exit(0);
         }
@@ -250,8 +233,6 @@ public final class BenchmarkOHC
         options.addOption(VALUE_SIZE_DIST, true, "value sizes - default: " + DEFAULT_VALUE_SIZE_DIST);
         options.addOption(READ_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);
         options.addOption(WRITE_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);
-
-        options.addOption(DRIVERS, true, "number of drivers - default: # of cores divided by 4");
 
         options.addOption(TYPE, true, "implementation type - default: linked - option: tables");
 

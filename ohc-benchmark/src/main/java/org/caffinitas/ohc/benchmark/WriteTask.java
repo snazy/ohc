@@ -33,22 +33,9 @@ class WriteTask implements Task
         return Shared.writeTimer;
     }
 
-    public long run()
+    public Object call() throws Exception
     {
-        try
-        {
-            long t0 = Shared.ntime();
-            Shared.cache.put(key, new byte[valueLen]);
-            long t = Shared.ntime() - t0;
-            return t;
-        }
-        catch (Error e)
-        {
-            throw e;
-        }
-        catch (Throwable t)
-        {
-            throw new Error(t);
-        }
+        Shared.cache.put(key, new byte[valueLen]);
+        return null;
     }
 }

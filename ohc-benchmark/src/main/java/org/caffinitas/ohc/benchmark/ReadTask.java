@@ -31,22 +31,9 @@ class ReadTask implements Task
         return Shared.readTimer;
     }
 
-    public long run()
+    public Object call() throws Exception
     {
-        try
-        {
-            long t0 = Shared.ntime();
-            Shared.cache.get(key);
-            long t = Shared.ntime() - t0;
-            return t;
-        }
-        catch (Error e)
-        {
-            throw e;
-        }
-        catch (Throwable t)
-        {
-            throw new Error(t);
-        }
+        Shared.cache.get(key);
+        return null;
     }
 }
