@@ -101,7 +101,7 @@ public class JEMallocAllocator implements IAllocator
         if (mallctlBool("config.debug"))
             LOGGER.warn("jemalloc is compiled with debug code - this leads to performance penalties");
         if (mallctlBool("config.fill"))
-            LOGGER.warn("jemalloc is compiled with fill code - this leads to performance penalties");
+            LOGGER.warn("jemalloc is compiled with fill option - this leads to performance penalties");
     }
 
     static String jemallocExportedName(String name)
