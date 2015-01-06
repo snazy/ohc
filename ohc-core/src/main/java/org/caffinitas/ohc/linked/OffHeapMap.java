@@ -250,6 +250,20 @@ final class OffHeapMap
         }
     }
 
+    private long removeEldest()
+    {
+        long hashEntryAdr = lruTail;
+        if (hashEntryAdr == 0L)
+            return 0L;
+
+        removeInternal(hashEntryAdr, -1L);
+
+        size--;
+        evictedEntries++;
+
+        return hashEntryAdr;
+    }
+
     void clear()
     {
         lock.lock();
@@ -259,6 +273,7 @@ final class OffHeapMap
             size = 0L;
 
             long next;
+            long freed = 0L;
             for (int p = 0; p < table.size(); p++)
                 for (long hashEntryAdr = table.getFirst(p);
                      hashEntryAdr != 0L;
@@ -266,9 +281,10 @@ final class OffHeapMap
                 {
                     next = HashEntries.getNext(hashEntryAdr);
 
-                    freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
+                    freed += HashEntries.getAllocLen(hashEntryAdr);
                     HashEntries.dereference(hashEntryAdr);
                 }
+            freeCapacity.addAndGet(freed);
 
             table.clear();
         }
@@ -294,10 +310,7 @@ final class OffHeapMap
 
                 // remove existing entry
 
-                removeInternal(hashEntryAdr, prevEntryAdr);
-
-                size--;
-                removeCount++;
+                removeIt(prevEntryAdr, hashEntryAdr);
 
                 return;
             }
@@ -328,10 +341,7 @@ final class OffHeapMap
                 // remove existing entry
 
                 removeHashEntryAdr = hashEntryAdr;
-                removeInternal(hashEntryAdr, prevEntryAdr);
-
-                size--;
-                removeCount++;
+                removeIt(prevEntryAdr, hashEntryAdr);
 
                 return;
             }
@@ -342,6 +352,14 @@ final class OffHeapMap
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
         }
+    }
+
+    private void removeIt(long prevEntryAdr, long hashEntryAdr)
+    {
+        removeInternal(hashEntryAdr, prevEntryAdr);
+
+        size--;
+        removeCount++;
     }
 
     private static boolean notSameKey(KeyBuffer key, long hashEntryAdr)
@@ -639,20 +657,5 @@ final class OffHeapMap
         if (head != 0L)
             HashEntries.setLRUPrev(head, hashEntryAdr);
         lruHead = hashEntryAdr;
-    }
-
-    private long removeEldest()
-    {
-        long hashEntryAdr = lruTail;
-        if (hashEntryAdr == 0L)
-            return 0L;
-
-        removeInternal(hashEntryAdr, -1L);
-
-        size--;
-
-        evictedEntries++;
-
-        return hashEntryAdr;
     }
 }
