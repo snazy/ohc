@@ -56,6 +56,25 @@ public class KeyBufferTest
     }
 
     @Test
+    public void testHashFinish16() throws Exception
+    {
+        byte[] ref = TestUtils.randomBytes(14);
+        KeyBuffer out = build(16);
+        out.write(42);
+        out.write(ref);
+        out.write(0xf0);
+
+        Hasher hasher = Hashing.murmur3_128().newHasher();
+        hasher.putByte((byte) 42);
+        hasher.putBytes(ref);
+        hasher.putByte((byte) 0xf0);
+
+        out.finish();
+
+        assertEquals(out.hash(), hasher.hash().asLong());
+    }
+
+    @Test
     public void testWrite() throws Exception
     {
         int ref = 42;
