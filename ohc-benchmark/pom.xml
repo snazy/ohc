@@ -165,4 +165,24 @@
         </plugins>
     </build>
 
+    <profiles>
+        <profile>
+            <id>deploy</id>
+            <!-- do not include benchmark assemblies during release deployment -->
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>make-assembly</id>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
 </project>
