@@ -16,7 +16,6 @@
 package org.caffinitas.ohc.benchmark;
 
 import java.lang.management.ManagementFactory;
-import java.lang.management.ThreadMXBean;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -42,7 +41,6 @@ final class Shared
     static OHCache<Long, byte[]> cache;
 
     static final AtomicBoolean fatal = new AtomicBoolean();
-    static final ThreadMXBean threadMXBean  = ManagementFactory.getPlatformMXBean(ThreadMXBean.class);
     static Timer readTimer = new Timer(new UniformReservoir());
     static Timer writeTimer = new Timer(new UniformReservoir());
     static final ConcurrentHashMap<String, GCStats> gcStats = new ConcurrentHashMap<>();

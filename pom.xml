@@ -61,16 +61,16 @@
         <module>ohc-core</module>
         <module>ohc-core-j8</module>
         <module>ohc-benchmark</module>
+        <module>ohc-jmh</module>
     </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <version.com.codahale.metrics>3.0.2</version.com.codahale.metrics>
         <version.com.google.guava>16.0</version.com.google.guava>
         <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m2</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
         <version.it.unimi.dsi.fastutil>6.5.7</version.it.unimi.dsi.fastutil>
-        <version.net.java.dev.jna>4.0.0</version.net.java.dev.jna>
+        <version.net.java.dev.jna>4.1.0</version.net.java.dev.jna>
         <version.org.apache.maven.plugins.maven-compiler-plugin>3.1</version.org.apache.maven.plugins.maven-compiler-plugin>
         <version.org.apache.maven.plugins.maven-gpg-plugin>1.5</version.org.apache.maven.plugins.maven-gpg-plugin>
         <version.org.apache.maven.plugins.maven-javadoc-plugin>2.9.1</version.org.apache.maven.plugins.maven-javadoc-plugin>
