@@ -53,7 +53,7 @@
     </scm>
     <issueManagement>
         <system>Github</system>
-        <url>https://github.com/snazy/ohc</url>
+        <url>https://github.com/snazy/ohc/issues</url>
     </issueManagement>
 
     <modules>
