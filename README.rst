@@ -12,6 +12,7 @@ Performance
 OHC shall provide a good performance on both commodity hardware and big systems using non-uniform-memory-architectures.
 
 No performance test results available yet - you may try the ohc-benchmark tool. See instructions below.
+A very basic impression on the speed is in the _Benchmarking_ section.
 
 Requirements
 ------------
@@ -136,6 +137,11 @@ Quick example with a read/write ratio of ``.9``, approx 1.5GB max capacity, 16 t
    -t 16
 
 (Note that the version in the jar file name might differ.)
+
+On a 2.6GHz Core i7 system (OSX) the following numbers are typical running the above benchmark (.9 read/write ratio):
+
+- # of gets per second: 2300000
+- # of puts per second:  260000
 
 Why off-heap memory
 -------------------
