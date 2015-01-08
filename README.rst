@@ -57,6 +57,7 @@ Quickstart::
                                  .build();
 
 This quickstart uses the very least default configuration:
+
 - of 64MB capacity,
 - number of segments is 2 * number of cores
 - 8192 buckets per segment
@@ -66,6 +67,7 @@ This quickstart uses the very least default configuration:
 - no maximum serialized cache entry size
 
 Key and value serializers need to implement the ``CacheSerializer`` interface. This interface has three methods:
+
 - ``int serializedSize(T t)`` to return the serialized size of the given object
 - ``void serialize(Object obj, DataOutput out)`` to serialize the given object to the data output
 - ``T deserialize(DataInput in)`` to deserialize an object from the data input
