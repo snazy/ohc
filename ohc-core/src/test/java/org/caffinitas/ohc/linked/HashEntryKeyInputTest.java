@@ -446,7 +446,7 @@ public class HashEntryKeyInputTest
         long adr = Uns.allocate(MIN_ALLOC_LEN);
         try
         {
-            HashEntries.init(0L, 10L, 10L, adr);
+            HashEntries.init(0L, 10L, 10L, adr, 0);
             HashEntryKeyInput input = new HashEntryKeyInput(adr);
             input.readLine();
         }
@@ -460,7 +460,7 @@ public class HashEntryKeyInputTest
     {
         byte[] arr = out.toByteArray();
         long adr = Uns.allocate(Util.ENTRY_OFF_DATA + Util.roundUpTo8(arr.length));
-        HashEntries.init(0L, arr.length, 0L, adr);
+        HashEntries.init(0L, arr.length, 0L, adr, 0);
         Uns.copyMemory(arr, 0, adr, Util.ENTRY_OFF_DATA, arr.length);
         return adr;
     }

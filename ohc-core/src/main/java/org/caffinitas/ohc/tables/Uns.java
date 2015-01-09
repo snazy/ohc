@@ -308,14 +308,14 @@ final class Uns
     static boolean decrement(long address, long offset)
     {
         validate(address, offset, 8L);
-        long v = ext.getAndAddLong(address, offset, -1);
+        long v = ext.getAndAddInt(address, offset, -1);
         return v == 1;
     }
 
     static void increment(long address, long offset)
     {
         validate(address, offset, 8L);
-        ext.getAndAddLong(address, offset, 1);
+        ext.getAndAddInt(address, offset, 1);
     }
 
     static void copyMemory(long srcAddress, long srcOffset, long dstAddress, long dstOffset, long len)

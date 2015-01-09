@@ -202,7 +202,7 @@ public class HashEntriesTest
             HashEntries.reference(adr); // to 2
             HashEntries.reference(adr); // to 3
             HashEntries.reference(adr); // to 4
-            assertEquals(Uns.getLong(adr, Util.ENTRY_OFF_REFCOUNT), 4);
+            assertEquals(Uns.getInt(adr, Util.ENTRY_OFF_REFCOUNT), 4);
             assertFalse(HashEntries.dereference(adr)); // to 3
             assertFalse(HashEntries.dereference(adr)); // to 2
             assertFalse(HashEntries.dereference(adr)); // to 1

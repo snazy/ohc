@@ -24,11 +24,16 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
 
+import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.OHCache;
@@ -173,6 +178,21 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer keyBuffer = keySource(key);
         CheckSegment segment = segment(keyBuffer.hash());
         return segment.get(keyBuffer) != null;
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader) throws InterruptedException, ExecutionException
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader, long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader)
+    {
+        throw new UnsupportedOperationException();
     }
 
     public CloseableIterator<K> hotKeyIterator(int n)

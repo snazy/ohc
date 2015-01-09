@@ -1,14 +1,15 @@
 
 THIS IS JUST AN UNORDERED LIST OF NOTES AND TODOS AND HINTS
 
+
+Let only one implementation (linked / tables) survive, test on NUMA machine.
+
 Add burn test.
 
 Cleanup (or better: combination of entry size and trigger/target) may expose a bug. Definitely worth keeping an eye on it.
 It will just "do nothing" if there's not enough off-heap memory could be allocated.
 But if too many threads allocate new entries and the machine is near-to-full, the whole machine may fail (due to OOM).
 
-I'd also like to "pin" row-cache memory to RAM (cache swapped out to disk is wasted effort :) )
---> Pinning the row cache to RAM might be tricky though - we can easily pin the table, but not so easily the individual allocations.
 
 // Marker item (RowCacheSentinel) added to row cache before actual load of row.
 --
@@ -17,8 +18,8 @@ It would make sense if one simply waited on the result of the other, but I don't
 --
 It's nice - but we should not do more than adding a "marker" to the cache and regularly poll if it has been processed.
 But it will degrade performance for rows that are bigger than "maxEntrySize".
+--> use CacheLoader since OHC 0.3
 
-Consider jemalloc "./configure --disable-tcache"
 
 
 jemalloc + Unsafe allocation on Linux + Windows regarding fragmentation on long running systems.

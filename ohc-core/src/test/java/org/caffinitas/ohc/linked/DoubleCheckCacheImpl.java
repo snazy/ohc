@@ -22,7 +22,12 @@ import java.nio.channels.WritableByteChannel;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -106,6 +111,21 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
         boolean rCheck = check.containsKey(key);
         Assert.assertEquals(rCheck, rProd, "for key='" + key + '\'');
         return rProd;
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader) throws InterruptedException, ExecutionException
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader, long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader)
+    {
+        throw new UnsupportedOperationException();
     }
 
     public CloseableIterator<K> hotKeyIterator(int n)

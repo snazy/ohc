@@ -27,17 +27,28 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.collect.AbstractIterator;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.SettableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.OHCacheStats;
+import org.caffinitas.ohc.PermanentLoadException;
+import org.caffinitas.ohc.TemporaryLoadException;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 public final class OHCacheImpl<K, V> implements OHCache<K, V>
@@ -58,6 +69,10 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     private volatile long putFailCount;
 
+    private boolean closed;
+
+    private final ScheduledExecutorService executorService;
+
     public OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
         long capacity = builder.getCapacity();
@@ -71,7 +86,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         int segments = builder.getSegmentCount();
         if (segments <= 0)
             segments = Runtime.getRuntime().availableProcessors() * 2;
-        segments = (int) Util.roundUpToPowerOf2(segments, 1<<30);
+        segments = (int) Util.roundUpToPowerOf2(segments, 1 << 30);
         maps = new OffHeapMap[segments];
         for (int i = 0; i < segments; i++)
         {
@@ -105,6 +120,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (valueSerializer == null)
             throw new NullPointerException("valueSerializer == null");
 
+        this.executorService = builder.getExecutorService();
+
         if (LOGGER.isDebugEnabled())
             LOGGER.debug("OHC instance with {} segments and capacity of {} created.", segments, capacity);
     }
@@ -120,8 +137,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         KeyBuffer keySource = keySource(key);
 
-        OffHeapMap segment = segment(keySource.hash());
-        long hashEntryAdr = segment.getEntry(keySource, true);
+        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true);
 
         if (hashEntryAdr == 0L)
             return null;
@@ -213,27 +229,10 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 return false;
             }
 
-            HashEntryKeyOutput key = new HashEntryKeyOutput(hashEntryAdr, keyLen);
-            try
-            {
-                keySerializer.serialize(k, key);
-                valueSerializer.serialize(v, new HashEntryValueOutput(hashEntryAdr, keyLen, valueLen));
-            }
-            catch (RuntimeException | Error e)
-            {
-                HashEntries.free(hashEntryAdr, bytes);
-                throw e;
-            }
-            catch (Throwable e)
-            {
-                HashEntries.free(hashEntryAdr, bytes);
-                throw new IOError(e);
-            }
-
-            long hash = key.hash();
+            long hash = serializeForPut(k, v, keyLen, valueLen, bytes, hashEntryAdr);
 
             // initialize hash entry
-            HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
+            HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
 
             if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, oldValueLen))
                 return true;
@@ -247,6 +246,28 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
+    long serializeForPut(K k, V v, long keyLen, long valueLen, long bytes, long hashEntryAdr)
+    {
+        HashEntryKeyOutput key = new HashEntryKeyOutput(hashEntryAdr, keyLen);
+        try
+        {
+            keySerializer.serialize(k, key);
+            valueSerializer.serialize(v, new HashEntryValueOutput(hashEntryAdr, keyLen, valueLen));
+        }
+        catch (RuntimeException | Error e)
+        {
+            HashEntries.free(hashEntryAdr, bytes);
+            throw e;
+        }
+        catch (Throwable e)
+        {
+            HashEntries.free(hashEntryAdr, bytes);
+            throw new IOError(e);
+        }
+
+        return key.hash();
+    }
+
     public void remove(K k)
     {
         if (k == null)
@@ -255,6 +276,281 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer key = keySource(k);
 
         segment(key.hash()).removeEntry(key);
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader) throws InterruptedException, ExecutionException
+    {
+        return getWithLoaderAsync(key, loader).get();
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader, long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException
+    {
+        return getWithLoaderAsync(key, loader).get(timeout, unit);
+    }
+
+    public Future<V> getWithLoaderAsync(final K key, final CacheLoader<K, V> loader)
+    {
+        if (key == null)
+            throw new NullPointerException();
+        if (executorService == null || executorService.isShutdown() || closed)
+            throw new IllegalStateException("OHCache has no executor service - configure one via OHCacheBuilder.executorService()");
+
+        final KeyBuffer keySource = keySource(key);
+
+        final OffHeapMap segment = segment(keySource.hash());
+        long hashEntryAdr = segment.getEntry(keySource, true);
+
+        if (hashEntryAdr == 0L)
+        {
+            // this call is _likely_ the initial requestor for that key since there's no entry for the key
+
+            final long keyLen = keySerializer.serializedSize(key);
+
+            long bytes = Util.allocLen(keyLen, 0L);
+
+            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = HashEntries.allocate(bytes)) == 0L)
+            {
+                // entry too large to be inserted or OS is not able to provide enough memory
+                putFailCount++;
+
+                remove(key);
+
+                return Futures.immediateFailedFuture(new RuntimeException("max entry size exceeded or malloc() failed"));
+            }
+
+            final HashEntryKeyOutput keyOut = new HashEntryKeyOutput(hashEntryAdr, keyLen);
+            try
+            {
+                keySerializer.serialize(key, keyOut);
+            }
+            catch (RuntimeException | Error e)
+            {
+                HashEntries.free(hashEntryAdr, bytes);
+                throw e;
+            }
+            catch (Throwable e)
+            {
+                HashEntries.free(hashEntryAdr, bytes);
+                throw new IOError(e);
+            }
+
+            final long hash = keyOut.hash();
+
+            // initialize hash entry
+            HashEntries.init(hash, keyLen, 0L, hashEntryAdr, Util.SENTINEL_LOADING);
+
+            if (segment.putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L))
+            {
+                // this request IS the initial requestor for the key
+
+                final long sentinelHashEntryAdr = hashEntryAdr;
+                return executorService.submit(new Callable<V>()
+                {
+                    public V call() throws Exception
+                    {
+                        Exception failure = null;
+                        V value = null;
+
+                        try
+                        {
+                            value = loader.load(key);
+
+                            long valueLen = valueSerializer.serializedSize(value);
+
+                            long bytes = Util.allocLen(keyLen, valueLen);
+
+                            long hashEntryAdr;
+                            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = HashEntries.allocate(bytes)) == 0L)
+                                throw new RuntimeException("max entry size exceeded or malloc() failed");
+
+                            long hash = serializeForPut(key, value, keyLen, valueLen, bytes, hashEntryAdr);
+
+                            // initialize hash entry
+                            HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
+
+                            if (!segment.replaceEntry(hash, sentinelHashEntryAdr, hashEntryAdr, bytes))
+                                throw new RuntimeException("not enough free capacity");
+
+                            HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_SUCCESS);
+                            segment.removeEntry(sentinelHashEntryAdr);
+                        }
+                        catch (PermanentLoadException e)
+                        {
+                            HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_PERMANENT_FAILURE);
+                            throw e;
+                        }
+                        catch (Throwable e)
+                        {
+                            failure = e instanceof Exception ? (Exception)e : new RuntimeException(e);
+                            HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_TEMPORARY_FAILURE);
+                            segment.removeEntry(sentinelHashEntryAdr);
+                        }
+
+                        if (failure != null)
+                            throw failure;
+
+                        return value;
+                    }
+                });
+            }
+            else
+            {
+                // this request IS NOT the initial requestor for the key, so it must
+                // free the unneeded but allocated sentinel
+
+                HashEntries.free(hashEntryAdr, bytes);
+            }
+
+            // fall through
+        }
+
+        // this request IS NOT the initial requestor for the key
+        // this request IS an adjacent requestor for the key
+
+        // check if the value is already there (no sentinel) or has permanent failure status
+        int sentinelStatus = HashEntries.getSentinel(hashEntryAdr);
+        switch (sentinelStatus)
+        {
+            case Util.SENTINEL_NOT_PRESENT:
+                try
+                {
+                    return Futures.immediateFuture(valueSerializer.deserialize(new HashEntryValueInput(hashEntryAdr)));
+                }
+                catch (IOException e)
+                {
+                    throw new IOError(e);
+                }
+                finally
+                {
+                    HashEntries.dereference(hashEntryAdr);
+                }
+            case Util.SENTINEL_PERMANENT_FAILURE:
+                HashEntries.dereference(hashEntryAdr);
+                return Futures.immediateFailedFuture(new PermanentLoadException());
+        }
+
+        // handle sentinel
+
+        final SettableFuture<V> future = SettableFuture.create();
+
+        final long sentinelHashEntryAdr = hashEntryAdr;
+
+        // TODO / DOCUMENT: executorService shutdown with ongoing requests with referenced sentinel-entries --> off-heap memory leak
+        // Reason:
+        // The jobs started for adjacent getWithLoader*() calls are not running (and waiting) continuously.
+        // Instead these are scheduled regularly and poll the referenced sentinel hash-entry.
+        // The sentinel hash-entry is dereferenced within the following job for adjacent getWithLoader*() calls.
+        // So - if the following job is no longer called, the sentinel hash-entry will never be dereferenced and
+        // therefore never be deallocated.
+        // Workaround is to close the OHCache instance, then wait some time and shutdown the scheduled executor service
+        // when there are no more scheduled jobs.
+
+
+        // The following job basically "spins" on the sentinel field of the sentinel hash-entry without
+        // any lock on the segment.
+        // It has two "exit" criterias:
+
+        executorService.schedule(new Runnable()
+        {
+            public void run()
+            {
+                if (future.isCancelled() || closed)
+                {
+                    HashEntries.dereference(sentinelHashEntryAdr);
+                    return;
+                }
+
+                int sentinelStatus = HashEntries.getSentinel(sentinelHashEntryAdr);
+                switch (sentinelStatus)
+                {
+                    // SENTINEL_NOT_PRESENT is an impossible status on the sentinel hash-entry
+                    case Util.SENTINEL_SUCCESS:
+                        break;
+                    case Util.SENTINEL_LOADING:
+                        reschedule(0L);
+                        return;
+                    case Util.SENTINEL_PERMANENT_FAILURE:
+                        failure(0L, new PermanentLoadException());
+                        return;
+                    case Util.SENTINEL_TEMPORARY_FAILURE:
+                        failure(0L, new TemporaryLoadException());
+                        return;
+                    default:
+                        failure(0L, new AssertionError("illegal sentinel value " + sentinelStatus));
+                        return;
+                }
+
+                long hashEntryAdr = segment.getEntry(keySource, true);
+
+                if (hashEntryAdr == 0L)
+                {
+                    // two possibilities that the entry does not exist:
+                    // - entry has been evicted (very very unlikely, so ignore this option)
+                    // - loader indicated temporary failure (very very likely)
+                    future.setException(new TemporaryLoadException());
+                }
+
+                if (hashEntryAdr == sentinelHashEntryAdr)
+                {
+                    // oops, still the sentinel entry
+                    reschedule(0L);
+                    return;
+                }
+
+                sentinelStatus = HashEntries.getSentinel(hashEntryAdr);
+                switch (sentinelStatus)
+                {
+                    case Util.SENTINEL_NOT_PRESENT:
+                        try
+                        {
+                            future.set(valueSerializer.deserialize(new HashEntryValueInput(hashEntryAdr)));
+                            HashEntries.dereference(hashEntryAdr);
+                            HashEntries.dereference(sentinelHashEntryAdr);
+                        }
+                        catch (Throwable e)
+                        {
+                            failure(hashEntryAdr, e);
+                        }
+                        break;
+                    case Util.SENTINEL_SUCCESS:
+                    case Util.SENTINEL_LOADING:
+                        HashEntries.dereference(hashEntryAdr);
+                        reschedule(hashEntryAdr);
+                        break;
+                    case Util.SENTINEL_PERMANENT_FAILURE:
+                        failure(hashEntryAdr, new PermanentLoadException());
+                        break;
+                    case Util.SENTINEL_TEMPORARY_FAILURE:
+                        failure(hashEntryAdr, new TemporaryLoadException());
+                        break;
+                    default:
+                        failure(hashEntryAdr, new AssertionError("illegal sentinel value " + sentinelStatus));
+                        break;
+                }
+            }
+
+            private void failure(long hashEntryAdr, Throwable e)
+            {
+                if (hashEntryAdr != 0L)
+                    HashEntries.dereference(hashEntryAdr);
+                HashEntries.dereference(sentinelHashEntryAdr);
+                future.setException(e);
+            }
+
+            private void reschedule(long hashEntryAdr)
+            {
+                try
+                {
+                    executorService.schedule(this, 10, TimeUnit.MILLISECONDS);
+                }
+                catch (Throwable t)
+                {
+                    failure(hashEntryAdr, t);
+                }
+            }
+        }, 10, TimeUnit.MILLISECONDS);
+
+        return future;
     }
 
     private OffHeapMap segment(long hash)
@@ -306,6 +602,18 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public void close()
     {
+        closed = true;
+        if (executorService != null)
+            try
+            {
+                Thread.sleep(500);
+            }
+            catch (InterruptedException e)
+            {
+                // ignored
+                Thread.currentThread().interrupt();
+            }
+
         clear();
 
         for (OffHeapMap map : maps)
@@ -449,7 +757,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long[] offsets = hist.getBucketOffsets();
         long[] buckets = hist.getBuckets(false);
 
-        for (int i=buckets.length-1;i>0;i--)
+        for (int i = buckets.length - 1; i > 0; i--)
         {
             if (buckets[i] != 0L)
             {
@@ -556,7 +864,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                         eod = true;
                         throw new EOFException();
                     }
-                    HashEntries.init(0L, keyLen, 0L, bufAdr);
+                    HashEntries.init(0L, keyLen, 0L, bufAdr, Util.SENTINEL_NOT_PRESENT);
                     next = keySerializer.deserialize(new HashEntryKeyInput(bufAdr));
                 }
                 catch (IOException e)
@@ -628,7 +936,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             return false;
         }
 
-        HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
+        HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
 
         // read key + value
         if (!Util.readFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, kvLen)) ||
@@ -645,8 +953,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         KeyBuffer keySource = keySource(key);
 
-        OffHeapMap segment = segment(keySource.hash());
-        long hashEntryAdr = segment.getEntry(keySource, true);
+        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true);
 
         return hashEntryAdr != 0L && serializeEntry(channel, hashEntryAdr);
     }
@@ -969,7 +1276,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                     mapSegmentIndex += 1024;
                     listIndex = 0;
                 }
-
             }
         }
 

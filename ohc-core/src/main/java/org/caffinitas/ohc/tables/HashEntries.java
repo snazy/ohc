@@ -25,7 +25,8 @@ final class HashEntries
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_HASH, hash);
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, keyLen);
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_VALUE_LENGTH, valueLen);
-        Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_REFCOUNT, 1L);
+        Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_REFCOUNT, 1);
+        Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_SENTINEL, 0);
     }
 
     static boolean compareKey(long hashEntryAdr, org.caffinitas.ohc.tables.KeyBuffer key, long serKeyLen)

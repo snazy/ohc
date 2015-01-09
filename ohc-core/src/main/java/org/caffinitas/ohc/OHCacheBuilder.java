@@ -16,6 +16,7 @@
 package org.caffinitas.ohc;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.caffinitas.ohc.linked.OHCacheImpl;
 
@@ -30,6 +31,7 @@ public class OHCacheBuilder<K, V>
     private float loadFactor = .75f;
     private long maxEntrySize;
     private Class<? extends OHCache> type = OHCacheImpl.class;
+    private ScheduledExecutorService executorService;
 
     private OHCacheBuilder()
     {
@@ -87,7 +89,7 @@ public class OHCacheBuilder<K, V>
         return bucketLength;
     }
 
-    public OHCacheBuilder<K, V> setBucketLength(int bucketLength)
+    public OHCacheBuilder<K, V> bucketLength(int bucketLength)
     {
         this.bucketLength = bucketLength;
         return this;
@@ -156,6 +158,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> maxEntrySize(long maxEntrySize)
     {
         this.maxEntrySize = maxEntrySize;
+        return this;
+    }
+
+    public ScheduledExecutorService getExecutorService()
+    {
+        return executorService;
+    }
+
+    public OHCacheBuilder<K, V> executorService(ScheduledExecutorService executorService)
+    {
+        this.executorService = executorService;
         return this;
     }
 }

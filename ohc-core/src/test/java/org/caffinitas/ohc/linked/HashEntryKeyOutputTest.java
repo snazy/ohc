@@ -285,7 +285,7 @@ public class HashEntryKeyOutputTest
     private static HashEntryKeyOutput build(int len)
     {
         long adr = Uns.allocate(Util.ENTRY_OFF_DATA + len);
-        HashEntries.init(0, len, 0, adr);
+        HashEntries.init(0, len, 0, adr, 0);
         HashEntryKeyOutput out = new HashEntryKeyOutput(adr, len);
         assertEquals(out.avail(), len);
         return out;

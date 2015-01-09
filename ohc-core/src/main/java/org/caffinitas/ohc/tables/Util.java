@@ -28,6 +28,8 @@ final class Util
 
     // offset of entry reference counter
     static final long ENTRY_OFF_REFCOUNT = 0;
+    // offset of entry sentinel
+    static final long ENTRY_OFF_SENTINEL = 4;
     // offset of serialized hash value
     static final long ENTRY_OFF_LRU_INDEX = 8;
     // offset of serialized hash value

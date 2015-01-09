@@ -22,13 +22,14 @@ import java.util.Arrays;
  */
 final class HashEntries
 {
-    static void init(long hash, long keyLen, long valueLen, long hashEntryAdr)
+    static void init(long hash, long keyLen, long valueLen, long hashEntryAdr, int sentinel)
     {
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_HASH, hash);
         setNext(hashEntryAdr, 0L);
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, keyLen);
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_VALUE_LENGTH, valueLen);
-        Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_REFCOUNT, 1L);
+        Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_REFCOUNT, 1);
+        Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_SENTINEL, sentinel);
     }
 
     static boolean compareKey(long hashEntryAdr, KeyBuffer key, long serKeyLen)
@@ -115,6 +116,17 @@ final class HashEntries
     static long getNext(long hashEntryAdr)
     {
         return hashEntryAdr != 0L ? Uns.getLong(hashEntryAdr, Util.ENTRY_OFF_NEXT) : 0L;
+    }
+
+    static int getSentinel(long hashEntryAdr)
+    {
+        return hashEntryAdr != 0L ? Uns.getInt(hashEntryAdr, Util.ENTRY_OFF_SENTINEL) : 0;
+    }
+
+    static void setSentinel(long hashEntryAdr, int sentinelState)
+    {
+        if (hashEntryAdr != 0L)
+            Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_SENTINEL, sentinelState);
     }
 
     static void setNext(long hashEntryAdr, long nextAdr)

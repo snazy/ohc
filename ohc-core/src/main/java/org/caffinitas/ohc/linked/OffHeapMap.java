@@ -563,6 +563,31 @@ final class OffHeapMap
             }
         }
 
+        void replaceLink(long hash, long hashEntryAdr, long prevEntryAdr, long newHashEntryAdr)
+        {
+            HashEntries.setNext(newHashEntryAdr, HashEntries.getNext(hashEntryAdr));
+
+            long head = getFirst(hash);
+            if (head == hashEntryAdr)
+            {
+                setFirst(hash, newHashEntryAdr);
+            }
+            else if (prevEntryAdr != 0L)
+            {
+                if (prevEntryAdr == -1L)
+                {
+                    for (long adr = head;
+                         adr != 0L;
+                         prevEntryAdr = adr, adr = HashEntries.getNext(adr))
+                    {
+                        if (adr == hashEntryAdr)
+                            break;
+                    }
+                }
+                HashEntries.setNext(prevEntryAdr, newHashEntryAdr);
+            }
+        }
+
         void addAsHead(long hash, long hashEntryAdr)
         {
             long head = getFirst(hash);
@@ -607,6 +632,79 @@ final class OffHeapMap
             HashEntries.setLRUPrev(next, prev);
         if (prev != 0L)
             HashEntries.setLRUNext(prev, next);
+
+        freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
+    }
+
+    boolean replaceEntry(long hash, long oldHashEntryAdr, long newHashEntryAdr, long bytes)
+    {
+        LongArrayList derefList = null;
+
+        lock.lock();
+        try
+        {
+            long prevEntryAdr = 0L;
+            for (long hashEntryAdr = table.getFirst(hash);
+                 hashEntryAdr != 0L;
+                 prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+            {
+                if (hashEntryAdr != oldHashEntryAdr)
+                    continue;
+
+                // remove existing entry
+
+                replaceInternal(oldHashEntryAdr, prevEntryAdr, newHashEntryAdr);
+
+                while (freeCapacity.get() < bytes)
+                {
+                    long eldestHashAdr = removeEldest();
+                    if (eldestHashAdr == 0L)
+                    {
+                        return false;
+                    }
+                    if (derefList == null)
+                        derefList = new LongArrayList();
+                    derefList.add(eldestHashAdr);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+        finally
+        {
+            lock.unlock();
+
+            if (derefList != null)
+                for (int i = 0; i < derefList.size(); i++)
+                    HashEntries.dereference(derefList.getLong(i));
+        }
+    }
+
+    private void replaceInternal(long hashEntryAdr, long prevEntryAdr, long newHashEntryAdr)
+    {
+        long hash = HashEntries.getHash(hashEntryAdr);
+
+        table.replaceLink(hash, hashEntryAdr, prevEntryAdr, newHashEntryAdr);
+
+        // LRU stuff
+
+        long next = HashEntries.getLRUNext(hashEntryAdr);
+        long prev = HashEntries.getLRUPrev(hashEntryAdr);
+
+        HashEntries.setLRUNext(newHashEntryAdr, next);
+        HashEntries.setLRUPrev(newHashEntryAdr, prev);
+
+        if (lruHead == hashEntryAdr)
+            lruHead = newHashEntryAdr;
+        if (lruTail == hashEntryAdr)
+            lruTail = newHashEntryAdr;
+
+        if (next != 0L)
+            HashEntries.setLRUPrev(next, newHashEntryAdr);
+        if (prev != 0L)
+            HashEntries.setLRUNext(prev, newHashEntryAdr);
 
         freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
     }

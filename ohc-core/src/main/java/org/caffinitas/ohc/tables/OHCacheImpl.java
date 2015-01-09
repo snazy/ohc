@@ -27,12 +27,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.collect.AbstractIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.OHCache;
@@ -255,6 +260,21 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer key = keySource(k);
 
         segment(key.hash()).removeEntry(key);
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader) throws InterruptedException, ExecutionException
+    {
+        return getWithLoaderAsync(key, loader).get();
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader, long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException
+    {
+        return getWithLoaderAsync(key, loader).get(timeout, unit);
+    }
+
+    public Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader)
+    {
+        throw new UnsupportedOperationException();
     }
 
     private OffHeapMap segment(long hash)

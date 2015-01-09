@@ -425,7 +425,7 @@ public class HashEntryValueInputOutputTest
     private static HashEntryValueOutput build(int len)
     {
         long adr = Uns.allocate(Util.ENTRY_OFF_DATA + 16 + len);
-        HashEntries.init(0, 11, len, adr);
+        HashEntries.init(0, 11, len, adr, 0);
         HashEntryValueOutput out = new HashEntryValueOutput(adr, 16, len);
         assertEquals(out.avail(), len);
         return out;
