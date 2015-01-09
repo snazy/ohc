@@ -13,10 +13,17 @@ import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.PermanentLoadException;
 import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 public class CacheLoaderTest
 {
+    @AfterMethod(alwaysRun = true)
+    public void deinit()
+    {
+        Uns.clearUnsDebugForTest();
+    }
+
     static int loaderCalled;
     static int loaderPermFailCalled;
     static int slowLoaderCalled;

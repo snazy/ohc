@@ -28,7 +28,6 @@ public class HashEntryValueInputOutputTest
     @AfterMethod(alwaysRun = true)
     public void deinit()
     {
-        HashEntries.memBufferClear();
         Uns.clearUnsDebugForTest();
     }
 

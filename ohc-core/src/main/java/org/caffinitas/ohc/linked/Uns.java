@@ -46,8 +46,20 @@ final class Uns
     //
     // #ifdef __DEBUG_OFF_HEAP_MEMORY_ACCESS
     //
-    private static final ConcurrentMap<Long, Long> ohDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, Long>(16384) : null;
+    private static final ConcurrentMap<Long, AllocInfo> ohDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, AllocInfo>(16384) : null;
     private static final Map<Long, Throwable> ohFreeDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, Throwable>(16384) : null;
+
+    private static final class AllocInfo
+    {
+        final long size;
+        final Throwable trace;
+
+        AllocInfo(Long size, Throwable trace)
+        {
+            this.size = size;
+            this.trace = trace;
+        }
+    }
 
     static void clearUnsDebugForTest()
     {
@@ -57,8 +69,11 @@ final class Uns
             {
                 if (!ohDebug.isEmpty())
                 {
-                    for (Map.Entry<Long, Long> addrSize : ohDebug.entrySet())
-                        System.err.printf("  still allocated: address=%d, size=%d%n", addrSize.getKey(), addrSize.getValue());
+                    for (Map.Entry<Long, AllocInfo> addrSize : ohDebug.entrySet())
+                    {
+                        System.err.printf("  still allocated: address=%d, size=%d%n", addrSize.getKey(), addrSize.getValue().size);
+                        addrSize.getValue().trace.printStackTrace();
+                    }
                     throw new RuntimeException("Not all allocated memory has been freed!");
                 }
             }
@@ -74,8 +89,8 @@ final class Uns
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
         {
-            Long allocatedLen = ohDebug.remove(address);
-            if (allocatedLen == null)
+            AllocInfo allocInfo = ohDebug.remove(address);
+            if (allocInfo == null)
             {
                 Throwable freedAt = ohFreeDebug.get(address);
                 throw new IllegalStateException("Free of unallocated region " + address, freedAt);
@@ -88,7 +103,7 @@ final class Uns
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
         {
-            Long allocatedLen = ohDebug.putIfAbsent(address, bytes);
+            AllocInfo allocatedLen = ohDebug.putIfAbsent(address, new AllocInfo(bytes, new Exception("Thread: "+Thread.currentThread())));
             if (allocatedLen != null)
                 throw new Error("Oops - allocate() got duplicate address");
             ohFreeDebug.remove(address);
@@ -101,8 +116,8 @@ final class Uns
         {
             if (address == 0L)
                 throw new NullPointerException();
-            Long allocatedLen = ohDebug.get(address);
-            if (allocatedLen == null)
+            AllocInfo allocInfo = ohDebug.get(address);
+            if (allocInfo == null)
             {
                 Throwable freedAt = ohFreeDebug.get(address);
                 throw new IllegalStateException("Access to unallocated region " + address + " - t=" + System.nanoTime(), freedAt);
@@ -111,7 +126,7 @@ final class Uns
                 throw new IllegalArgumentException("Negative offset");
             if (len < 0L)
                 throw new IllegalArgumentException("Negative length");
-            if (offset + len > allocatedLen)
+            if (offset + len > allocInfo.size)
                 throw new IllegalArgumentException("Access outside allocated region");
         }
     }

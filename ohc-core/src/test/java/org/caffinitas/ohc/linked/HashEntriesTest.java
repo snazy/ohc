@@ -27,7 +27,6 @@ public class HashEntriesTest
     @AfterMethod(alwaysRun = true)
     public void deinit()
     {
-        HashEntries.memBufferClear();
         Uns.clearUnsDebugForTest();
     }
 
@@ -278,19 +277,6 @@ public class HashEntriesTest
         {
             if (!ok)
                 Uns.free(adr);
-        }
-    }
-
-    @Test
-    public void testBlockAllocLen()
-    {
-        for (long i = 1; i < 8L * 1024 * 1024; i++)
-        {
-            long blkDiv = i & ~HashEntries.BLOCK_MASK;
-            if ((i & HashEntries.BLOCK_MASK) != 0)
-                blkDiv += HashEntries.BLOCK_SIZE;
-
-            assertEquals(HashEntries.blockAllocLen(i), blkDiv, "for size " + i);
         }
     }
 }

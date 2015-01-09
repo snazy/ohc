@@ -45,7 +45,6 @@ public class CrossCheckTest
     @AfterMethod(alwaysRun = true)
     public void deinit()
     {
-        HashEntries.memBufferClear();
         Uns.clearUnsDebugForTest();
     }
 

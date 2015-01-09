@@ -219,7 +219,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
 
             long hashEntryAdr;
-            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = HashEntries.allocate(bytes)) == 0L)
+            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
             {
                 // entry too large to be inserted or OS is not able to provide enough memory
                 putFailCount++;
@@ -229,7 +229,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 return false;
             }
 
-            long hash = serializeForPut(k, v, keyLen, valueLen, bytes, hashEntryAdr);
+            long hash = serializeForPut(k, v, keyLen, valueLen, hashEntryAdr);
 
             // initialize hash entry
             HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
@@ -237,7 +237,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, oldValueLen))
                 return true;
 
-            HashEntries.free(hashEntryAdr, bytes);
+            Uns.free(hashEntryAdr);
             return false;
         }
         finally
@@ -246,7 +246,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
-    long serializeForPut(K k, V v, long keyLen, long valueLen, long bytes, long hashEntryAdr)
+    long serializeForPut(K k, V v, long keyLen, long valueLen, long hashEntryAdr)
     {
         HashEntryKeyOutput key = new HashEntryKeyOutput(hashEntryAdr, keyLen);
         try
@@ -256,12 +256,12 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         catch (RuntimeException | Error e)
         {
-            HashEntries.free(hashEntryAdr, bytes);
+            Uns.free(hashEntryAdr);
             throw e;
         }
         catch (Throwable e)
         {
-            HashEntries.free(hashEntryAdr, bytes);
+            Uns.free(hashEntryAdr);
             throw new IOError(e);
         }
 
@@ -308,7 +308,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
             long bytes = Util.allocLen(keyLen, 0L);
 
-            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = HashEntries.allocate(bytes)) == 0L)
+            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
             {
                 // entry too large to be inserted or OS is not able to provide enough memory
                 putFailCount++;
@@ -325,12 +325,12 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
             catch (RuntimeException | Error e)
             {
-                HashEntries.free(hashEntryAdr, bytes);
+                Uns.free(hashEntryAdr);
                 throw e;
             }
             catch (Throwable e)
             {
-                HashEntries.free(hashEntryAdr, bytes);
+                Uns.free(hashEntryAdr);
                 throw new IOError(e);
             }
 
@@ -350,6 +350,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                     {
                         Exception failure = null;
                         V value = null;
+                        boolean replaced = false;
 
                         try
                         {
@@ -360,19 +361,20 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                             long bytes = Util.allocLen(keyLen, valueLen);
 
                             long hashEntryAdr;
-                            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = HashEntries.allocate(bytes)) == 0L)
+                            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
                                 throw new RuntimeException("max entry size exceeded or malloc() failed");
 
-                            long hash = serializeForPut(key, value, keyLen, valueLen, bytes, hashEntryAdr);
+                            long hash = serializeForPut(key, value, keyLen, valueLen, hashEntryAdr);
 
                             // initialize hash entry
                             HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
 
                             if (!segment.replaceEntry(hash, sentinelHashEntryAdr, hashEntryAdr, bytes))
                                 throw new RuntimeException("not enough free capacity");
+                            replaced = true;
 
                             HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_SUCCESS);
-                            segment.removeEntry(sentinelHashEntryAdr);
+                            HashEntries.dereference(sentinelHashEntryAdr);
                         }
                         catch (PermanentLoadException e)
                         {
@@ -383,7 +385,10 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                         {
                             failure = e instanceof Exception ? (Exception)e : new RuntimeException(e);
                             HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_TEMPORARY_FAILURE);
-                            segment.removeEntry(sentinelHashEntryAdr);
+                            if (replaced)
+                                HashEntries.dereference(sentinelHashEntryAdr);
+                            else
+                                segment.removeEntry(sentinelHashEntryAdr);
                         }
 
                         if (failure != null)
@@ -398,7 +403,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 // this request IS NOT the initial requestor for the key, so it must
                 // free the unneeded but allocated sentinel
 
-                HashEntries.free(hashEntryAdr, bytes);
+                Uns.free(hashEntryAdr);
             }
 
             // fall through
@@ -583,8 +588,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         for (OffHeapMap map : maps)
             map.clear();
-
-        HashEntries.memBufferClear();
     }
 
     //
@@ -913,7 +916,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long kvLen = Util.roundUpTo8(keyLen) + valueLen;
         long totalLen = kvLen + Util.ENTRY_OFF_DATA;
         long hashEntryAdr;
-        if ((maxEntrySize > 0L && totalLen > maxEntrySize) || (hashEntryAdr = HashEntries.allocate(totalLen)) == 0L)
+        if ((maxEntrySize > 0L && totalLen > maxEntrySize) || (hashEntryAdr = Uns.allocate(totalLen)) == 0L)
         {
             if (channel instanceof SeekableByteChannel)
             {
@@ -942,7 +945,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (!Util.readFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, kvLen)) ||
             !segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, 0L, 0L))
         {
-            HashEntries.free(hashEntryAdr, totalLen);
+            Uns.free(hashEntryAdr);
             return false;
         }
 
