@@ -20,6 +20,68 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import org.caffinitas.ohc.linked.OHCacheImpl;
 
+/**
+ * Configures and builds OHC instance.
+ * <table>
+ *     <tr>
+ *         <th>Field</th>
+ *         <th>Meaning</th>
+ *         <th>Default</th>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code keySerializer}</td>
+ *         <td>Serializer implementation used for keys</td>
+ *         <td>Must be configured</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code valueSerializer}</td>
+ *         <td>Serializer implementation used for values</td>
+ *         <td>Must be configured</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code executorService}</td>
+ *         <td>Executor service required for get operations using a cache loader. E.g. {@link org.caffinitas.ohc.OHCache#getWithLoaderAsync(Object, CacheLoader)}</td>
+ *         <td>(Not configured by default meaning get operations with cache loader not supported by default)</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code segmentCount}</td>
+ *         <td>Number of segments</td>
+ *         <td>2 * number of CPUs ({@code java.lang.Runtime.availableProcessors()})</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code hashTableSize}</td>
+ *         <td>Initial size of each segment's hash table</td>
+ *         <td>{@code 8192}</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code loadFactor}</td>
+ *         <td>Hash table load factor. I.e. determines when rehashing occurs.</td>
+ *         <td>{@code .75f}</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code capacity}</td>
+ *         <td>Capacity of the cache in bytes</td>
+ *         <td>64 MB</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code maxEntrySize}</td>
+ *         <td>Maximum size of a hash entry (including header, serialized key + serialized value)</td>
+ *         <td>(not set, defaults to capacity)</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code bucketLength}</td>
+ *         <td>(For tables implementation only) Number of entries per bucket.</td>
+ *         <td>{@code 8}</td>
+ *     </tr>
+ * </table>
+ * <p>
+ *     You may also use system properties prefixed with {@code org.caffinitas.org.} to other defaults.
+ *     E.g. the system property {@code org.caffinitas.org.segmentCount} configures the default of the number of segments.
+ * </p>
+ *
+ * @param <K> cache key type
+ * @param <V> cache value type
+ */
 public class OHCacheBuilder<K, V>
 {
     private int segmentCount;
@@ -36,6 +98,52 @@ public class OHCacheBuilder<K, V>
     private OHCacheBuilder()
     {
         segmentCount = roundUpToPowerOf2(Runtime.getRuntime().availableProcessors() * 2, 1 << 30);
+
+        segmentCount = fromSystemProperties("segmentCount", segmentCount);
+        hashTableSize = fromSystemProperties("hashTableSize", hashTableSize);
+        bucketLength = fromSystemProperties("bucketLength", bucketLength);
+        capacity = fromSystemProperties("capacity", capacity);
+        loadFactor = fromSystemProperties("loadFactor", loadFactor);
+        maxEntrySize = fromSystemProperties("maxEntrySize", maxEntrySize);
+        String t = fromSystemProperties("type", null);
+        if (t != null)
+            try
+            {
+                type = (Class<? extends OHCache>) Class.forName(t);
+            }
+            catch (ClassNotFoundException x)
+            {
+                try
+                {
+                    type = (Class<? extends OHCache>) Class.forName("org.caffinitas.ohc." + t + ".OHCacheImpl");
+                }
+                catch (ClassNotFoundException e)
+                {
+                    throw new RuntimeException(e);
+                }
+            }
+    }
+
+    public static final String SYSTEM_PROPERTY_PREFIX = "org.caffinitas.org.";
+
+    private static float fromSystemProperties(String name, float defaultValue)
+    {
+        return Float.parseFloat(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Float.toString(defaultValue)));
+    }
+
+    private static long fromSystemProperties(String name, long defaultValue)
+    {
+        return Long.parseLong(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Long.toString(defaultValue)));
+    }
+
+    private static int fromSystemProperties(String name, int defaultValue)
+    {
+        return Integer.parseInt(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Integer.toString(defaultValue)));
+    }
+
+    private static String fromSystemProperties(String name, String defaultValue)
+    {
+        return System.getProperty(SYSTEM_PROPERTY_PREFIX + name, defaultValue);
     }
 
     static int roundUpToPowerOf2(int number, int max)
