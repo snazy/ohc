@@ -15,39 +15,31 @@
  */
 package org.caffinitas.ohc.linked;
 
-final class Murmur3
+import org.testng.annotations.Test;
+
+import static org.testng.Assert.assertEquals;
+
+public class LongArrayListTest
 {
-    static final long C1 = 0x87c37b91114253d5L;
-    static final long C2 = 0x4cf5ad432745937fL;
-
-    static long fmix64(long k)
+    @Test
+    public void testLongArrayList()
     {
-        k ^= k >>> 33;
-        k *= 0xff51afd7ed558ccdL;
-        k ^= k >>> 33;
-        k *= 0xc4ceb9fe1a85ec53L;
-        k ^= k >>> 33;
-        return k;
-    }
+        LongArrayList l = new LongArrayList();
 
-    static long mixK1(long k1)
-    {
-        k1 *= C1;
-        k1 = Long.rotateLeft(k1, 31);
-        k1 *= C2;
-        return k1;
-    }
+        assertEquals(l.size(), 0);
 
-    static long mixK2(long k2)
-    {
-        k2 *= C2;
-        k2 = Long.rotateLeft(k2, 33);
-        k2 *= C1;
-        return k2;
-    }
+        l.add(0);
+        assertEquals(l.size(), 1);
 
-    static long toLong(byte value)
-    {
-        return value & 0xff;
+        for (int i=1;i<=20;i++)
+        {
+            l.add(i);
+            assertEquals(l.size(), i + 1);
+        }
+
+        for (int i=0;i<=20;i++)
+        {
+            assertEquals(l.getLong(i), i);
+        }
     }
 }

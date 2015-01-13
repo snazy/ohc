@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
-import it.unimi.dsi.fastutil.longs.LongArrayList;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 

@@ -91,11 +91,6 @@
         </dependency>
 
         <dependency>
-            <groupId>it.unimi.dsi</groupId>
-            <artifactId>fastutil</artifactId>
-        </dependency>
-
-        <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
             <scope>test</scope>
@@ -171,6 +166,16 @@
             </plugin>
         </plugins>
     </build>
+
+    <reporting>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>cobertura-maven-plugin</artifactId>
+                <version>${version.org.codehaus.mojo.cobertura}</version>
+            </plugin>
+        </plugins>
+    </reporting>
 
     <profiles>
         <profile>

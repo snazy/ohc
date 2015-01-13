@@ -13,41 +13,36 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.linked;
+package org.caffinitas.ohc.tables;
 
-final class Murmur3
+import java.util.Arrays;
+
+final class LongArrayList
 {
-    static final long C1 = 0x87c37b91114253d5L;
-    static final long C2 = 0x4cf5ad432745937fL;
+    private long[] array;
+    private int size;
 
-    static long fmix64(long k)
+    public LongArrayList()
     {
-        k ^= k >>> 33;
-        k *= 0xff51afd7ed558ccdL;
-        k ^= k >>> 33;
-        k *= 0xc4ceb9fe1a85ec53L;
-        k ^= k >>> 33;
-        return k;
+        array = new long[10];
     }
 
-    static long mixK1(long k1)
+    public long getLong(int i)
     {
-        k1 *= C1;
-        k1 = Long.rotateLeft(k1, 31);
-        k1 *= C2;
-        return k1;
+        if (i < 0 || i >= size)
+            throw new ArrayIndexOutOfBoundsException();
+        return array[i];
     }
 
-    static long mixK2(long k2)
+    public int size()
     {
-        k2 *= C2;
-        k2 = Long.rotateLeft(k2, 33);
-        k2 *= C1;
-        return k2;
+        return size;
     }
 
-    static long toLong(byte value)
+    public void add(long value)
     {
-        return value & 0xff;
+        if (size == array.length)
+            array = Arrays.copyOf(array, array.length + 10);
+        array[size++] = value;
     }
 }

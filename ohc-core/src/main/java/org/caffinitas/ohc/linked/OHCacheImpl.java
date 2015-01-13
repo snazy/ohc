@@ -16,7 +16,6 @@
 package org.caffinitas.ohc.linked;
 
 import java.io.EOFException;
-import java.io.IOError;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -148,7 +147,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         catch (IOException e)
         {
-            throw new IOError(e);
+            throw new RuntimeException(e);
         }
         finally
         {
@@ -211,7 +210,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             catch (Throwable e)
             {
                 Uns.free(oldValueAdr);
-                throw new IOError(e);
+                throw new RuntimeException(e);
             }
         }
 
@@ -262,7 +261,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         catch (Throwable e)
         {
             Uns.free(hashEntryAdr);
-            throw new IOError(e);
+            throw new RuntimeException(e);
         }
 
         return key.hash();
@@ -331,7 +330,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             catch (Throwable e)
             {
                 Uns.free(hashEntryAdr);
-                throw new IOError(e);
+                throw new RuntimeException(e);
             }
 
             final long hash = keyOut.hash();
@@ -423,7 +422,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 catch (IOException e)
                 {
-                    throw new IOError(e);
+                    throw new RuntimeException(e);
                 }
                 finally
                 {
@@ -575,7 +574,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         catch (IOException e)
         {
-            throw new IOError(e);
+            throw new RuntimeException(e);
         }
         return key.finish();
     }
@@ -872,7 +871,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 catch (IOException e)
                 {
-                    throw new IOError(e);
+                    throw new RuntimeException(e);
                 }
             }
 
@@ -1139,7 +1138,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 catch (IOException e)
                 {
-                    throw new IOError(e);
+                    throw new RuntimeException(e);
                 }
             }
         };
@@ -1168,7 +1167,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 catch (IOException e)
                 {
-                    throw new IOError(e);
+                    throw new RuntimeException(e);
                 }
             }
         };
