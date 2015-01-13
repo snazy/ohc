@@ -110,6 +110,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long maxEntrySize = builder.getMaxEntrySize();
         if (maxEntrySize > capacity / segments)
             throw new IllegalArgumentException("Illegal max entry size " + maxEntrySize);
+        else if (maxEntrySize <= 0)
+            maxEntrySize = capacity / segments;
         this.maxEntrySize = maxEntrySize;
 
         this.keySerializer = builder.getKeySerializer();
