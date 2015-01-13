@@ -192,30 +192,28 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         long oldValueAdr = 0L;
         long oldValueLen = 0L;
-        if (old != null)
-        {
-            oldValueLen = valueSerializer.serializedSize(old);
-            oldValueAdr = Uns.allocate(oldValueLen);
-            if (oldValueAdr == 0L)
-                throw new RuntimeException("Unable to allocate " + oldValueLen + " bytes in off-heap");
-            try
-            {
-                valueSerializer.serialize(old, new HashEntryValueOutput(oldValueAdr, oldValueLen));
-            }
-            catch (RuntimeException | Error e)
-            {
-                Uns.free(oldValueAdr);
-                throw e;
-            }
-            catch (Throwable e)
-            {
-                Uns.free(oldValueAdr);
-                throw new RuntimeException(e);
-            }
-        }
 
         try
         {
+            if (old != null)
+            {
+                oldValueLen = valueSerializer.serializedSize(old);
+                oldValueAdr = Uns.allocate(oldValueLen);
+                if (oldValueAdr == 0L)
+                    throw new RuntimeException("Unable to allocate " + oldValueLen + " bytes in off-heap");
+                try
+                {
+                    valueSerializer.serialize(old, new HashEntryValueOutput(oldValueAdr, oldValueLen));
+                }
+                catch (RuntimeException | Error e)
+                {
+                    throw e;
+                }
+                catch (Throwable e)
+                {
+                    throw new RuntimeException(e);
+                }
+            }
 
             long hashEntryAdr;
             if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
@@ -253,18 +251,22 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             keySerializer.serialize(k, key);
             valueSerializer.serialize(v, new HashEntryValueOutput(hashEntryAdr, keyLen, valueLen));
         }
-        catch (RuntimeException | Error e)
-        {
-            Uns.free(hashEntryAdr);
-            throw e;
-        }
         catch (Throwable e)
         {
-            Uns.free(hashEntryAdr);
-            throw new RuntimeException(e);
+            freeAndThrow(e, hashEntryAdr);
         }
 
         return key.hash();
+    }
+
+    private static void freeAndThrow(Throwable e, long hashEntryAdr)
+    {
+        Uns.free(hashEntryAdr);
+        if (e instanceof RuntimeException)
+            throw (RuntimeException) e;
+        if (e instanceof Error)
+            throw (Error) e;
+        throw new RuntimeException(e);
     }
 
     public void remove(K k)
@@ -322,15 +324,9 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             {
                 keySerializer.serialize(key, keyOut);
             }
-            catch (RuntimeException | Error e)
-            {
-                Uns.free(hashEntryAdr);
-                throw e;
-            }
             catch (Throwable e)
             {
-                Uns.free(hashEntryAdr);
-                throw new RuntimeException(e);
+                freeAndThrow(e, hashEntryAdr);
             }
 
             final long hash = keyOut.hash();
