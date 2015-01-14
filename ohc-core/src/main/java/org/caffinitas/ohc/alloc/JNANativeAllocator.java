@@ -17,33 +17,15 @@
  */
 package org.caffinitas.ohc.alloc;
 
-import java.lang.reflect.Field;
+import com.sun.jna.Native;
 
-import sun.misc.Unsafe;
-
-public class NativeAllocator implements IAllocator
+public class JNANativeAllocator implements IAllocator
 {
-    static final Unsafe unsafe;
-
-    static
-    {
-        try
-        {
-            Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-            field.setAccessible(true);
-            unsafe = (sun.misc.Unsafe) field.get(null);
-        }
-        catch (Exception e)
-        {
-            throw new AssertionError(e);
-        }
-    }
-
     public long allocate(long size)
     {
         try
         {
-            return unsafe.allocateMemory(size);
+            return Native.malloc(size);
         }
         catch (OutOfMemoryError oom)
         {
@@ -53,7 +35,7 @@ public class NativeAllocator implements IAllocator
 
     public void free(long peer)
     {
-        unsafe.freeMemory(peer);
+        Native.free(peer);
     }
 
     public long getTotalAllocated()
