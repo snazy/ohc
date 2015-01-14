@@ -32,7 +32,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.collect.AbstractIterator;
 import com.google.common.util.concurrent.Futures;
@@ -64,7 +63,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     private final long maxEntrySize;
 
     private long capacity;
-    private final AtomicLong freeCapacity;
 
     private volatile long putFailCount;
 
@@ -79,7 +77,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             throw new IllegalArgumentException("capacity");
 
         this.capacity = capacity;
-        freeCapacity = new AtomicLong(capacity);
 
         // build segments
         int segments = builder.getSegmentCount();
@@ -91,7 +88,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             try
             {
-                maps[i] = new OffHeapMap(builder, freeCapacity);
+                maps[i] = new OffHeapMap(builder, capacity / segments);
             }
             catch (RuntimeException e)
             {
@@ -595,9 +592,12 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         if (capacity < 0L)
             throw new IllegalArgumentException();
-        long diff = capacity - this.capacity;
+        long oldPerSegment = this.capacity / segments();
         this.capacity = capacity;
-        freeCapacity.addAndGet(diff);
+        long perSegment = capacity / segments();
+        long diff = perSegment - oldPerSegment;
+        for (OffHeapMap map : maps)
+            map.updateFreeCapacity(diff);
     }
 
     public void close()
@@ -703,7 +703,10 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public long freeCapacity()
     {
-        return freeCapacity.get();
+        long freeCapacity = 0L;
+        for (OffHeapMap map : maps)
+            freeCapacity += map.freeCapacity();
+        return freeCapacity;
     }
 
     public long evictedEntries()

@@ -61,7 +61,7 @@ import org.caffinitas.ohc.linked.OHCacheImpl;
  *     <tr>
  *         <td>{@code capacity}</td>
  *         <td>Capacity of the cache in bytes</td>
- *         <td>64 MB</td>
+ *         <td>16 MB * number of CPUs ({@code java.lang.Runtime.availableProcessors()})</td>
  *     </tr>
  *     <tr>
  *         <td>{@code maxEntrySize}</td>
@@ -87,7 +87,7 @@ public class OHCacheBuilder<K, V>
     private int segmentCount;
     private int hashTableSize = 8192;
     private int bucketLength = 8;
-    private long capacity = 64L * 1024L * 1024L;
+    private long capacity;
     private CacheSerializer<K> keySerializer;
     private CacheSerializer<V> valueSerializer;
     private float loadFactor = .75f;
@@ -98,6 +98,7 @@ public class OHCacheBuilder<K, V>
     private OHCacheBuilder()
     {
         segmentCount = roundUpToPowerOf2(Runtime.getRuntime().availableProcessors() * 2, 1 << 30);
+        capacity = Runtime.getRuntime().availableProcessors() * 16 * 1024 * 1024;
 
         segmentCount = fromSystemProperties("segmentCount", segmentCount);
         hashTableSize = fromSystemProperties("hashTableSize", hashTableSize);

@@ -27,6 +27,10 @@ final class OffHeapMap
     // maximum hash table size
     private static final int MAX_TABLE_SIZE = 1 << 30;
 
+    // TODO think of exchanging this "poor man's" open-address table to a real open-address table.
+    // Need to add "tombstone" for removed entries.
+    // Need to add "max probe length.
+
     private final int entriesPerBucket;
     private long size;
     private Table table;

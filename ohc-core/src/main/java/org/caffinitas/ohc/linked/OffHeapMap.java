@@ -16,7 +16,6 @@
 package org.caffinitas.ohc.linked;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -45,11 +44,11 @@ final class OffHeapMap
     private long rehashes;
     private long evictedEntries;
 
-    private final AtomicLong freeCapacity;
+    private long freeCapacity;
 
     private final ReentrantLock lock = new ReentrantLock();
 
-    OffHeapMap(OHCacheBuilder builder, AtomicLong freeCapacity)
+    OffHeapMap(OHCacheBuilder builder, long freeCapacity)
     {
         this.freeCapacity = freeCapacity;
 
@@ -129,6 +128,24 @@ final class OffHeapMap
         return rehashes;
     }
 
+    long freeCapacity()
+    {
+        return freeCapacity;
+    }
+
+    void updateFreeCapacity(long diff)
+    {
+        lock.lock();
+        try
+        {
+            freeCapacity += diff;
+        }
+        finally
+        {
+            lock.unlock();
+        }
+    }
+
     long evictedEntries()
     {
         return evictedEntries;
@@ -205,7 +222,7 @@ final class OffHeapMap
                 break;
             }
 
-            while (freeCapacity.get() < bytes)
+            while (freeCapacity < bytes)
             {
                 long eldestHashAdr = removeEldest();
                 if (eldestHashAdr == 0L)
@@ -227,7 +244,7 @@ final class OffHeapMap
                 size++;
             }
 
-            freeCapacity.addAndGet(-bytes);
+            freeCapacity -= bytes;
 
             add(newHashEntryAdr, hash);
 
@@ -283,7 +300,7 @@ final class OffHeapMap
                     freed += HashEntries.getAllocLen(hashEntryAdr);
                     HashEntries.dereference(hashEntryAdr);
                 }
-            freeCapacity.addAndGet(freed);
+            freeCapacity += freed;
 
             table.clear();
         }
@@ -632,7 +649,7 @@ final class OffHeapMap
         if (prev != 0L)
             HashEntries.setLRUNext(prev, next);
 
-        freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
+        freeCapacity += HashEntries.getAllocLen(hashEntryAdr);
     }
 
     boolean replaceEntry(long hash, long oldHashEntryAdr, long newHashEntryAdr, long bytes)
@@ -654,7 +671,7 @@ final class OffHeapMap
 
                 replaceInternal(oldHashEntryAdr, prevEntryAdr, newHashEntryAdr);
 
-                while (freeCapacity.get() < bytes)
+                while (freeCapacity < bytes)
                 {
                     long eldestHashAdr = removeEldest();
                     if (eldestHashAdr == 0L)
@@ -705,7 +722,7 @@ final class OffHeapMap
         if (prev != 0L)
             HashEntries.setLRUNext(prev, newHashEntryAdr);
 
-        freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
+        freeCapacity += HashEntries.getAllocLen(hashEntryAdr);
     }
 
     private void add(long hashEntryAdr, long hash)
