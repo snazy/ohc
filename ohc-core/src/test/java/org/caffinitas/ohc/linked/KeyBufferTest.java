@@ -49,9 +49,7 @@ public class KeyBufferTest
         hasher.putBytes(ref);
         hasher.putByte((byte) 0xf0);
 
-        out.finish();
-
-        assertEquals(out.hash(), hasher.hash().asLong());
+        assertEquals(out.murmur3hash(), hasher.hash().asLong());
     }
 
     @Test
@@ -68,9 +66,7 @@ public class KeyBufferTest
         hasher.putBytes(ref);
         hasher.putByte((byte) 0xf0);
 
-        out.finish();
-
-        assertEquals(out.hash(), hasher.hash().asLong());
+        assertEquals(out.murmur3hash(), hasher.hash().asLong());
     }
 
     @Test

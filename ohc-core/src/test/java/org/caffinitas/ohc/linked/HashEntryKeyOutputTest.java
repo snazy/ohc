@@ -56,7 +56,7 @@ public class HashEntryKeyOutputTest
             hasher.putBytes(ref);
             hasher.putByte((byte) 0xf0);
 
-            assertEquals(out.hash(), hasher.hash().asLong());
+            assertEquals(out.murmur3hash(), hasher.hash().asLong());
         }
         finally
         {
@@ -303,13 +303,12 @@ public class HashEntryKeyOutputTest
             out.writeUTF(ref);
             assertEquals(out.avail(), 0);
 
-            long h2 = out.hash();
+            long h2 = out.murmur3hash();
 
             KeyBuffer kb = new KeyBuffer(len);
             kb.writeUTF(ref);
-            kb.finish();
 
-            long h3 = kb.hash();
+            long h3 = kb.murmur3hash();
 
             Hasher hasher = Hashing.murmur3_128().newHasher();
 
