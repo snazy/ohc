@@ -238,7 +238,7 @@ public class HashEntryValueInputOutputTest
     {
         String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio \u00e4\u00f6\u00fc \uff02 ";
 
-        HashEntryValueOutput out = build(ref.length() + 2);
+        HashEntryValueOutput out = build(ref.getBytes().length + 2);
         out.writeUTF(ref);
         try
         {
@@ -258,8 +258,8 @@ public class HashEntryValueInputOutputTest
     {
         String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio \u00e4\u00f6\u00fc \uff02 ";
 
-        HashEntryValueOutput out = build(ref.length() + 2 +
-                                         3 + 6 + 12 + 12 + 12345 + 5432 + 321 + ref.length() + 2);
+        HashEntryValueOutput out = build(ref.getBytes().length + 2 +
+                                         3 + 6 + 12 + 12 + 12345 + 5432 + 321 + ref.getBytes().length + 2);
         out.writeUTF(ref);
         out.writeBoolean(false);
         out.writeByte(0x8f);
