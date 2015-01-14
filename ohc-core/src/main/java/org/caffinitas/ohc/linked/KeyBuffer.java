@@ -51,7 +51,7 @@ final class KeyBuffer extends AbstractDataOutput
 
     KeyBuffer finish()
     {
-        hash = murmur3hash();
+        hash = murmur3hash(); //crc32hash();
 
         return this;
     }

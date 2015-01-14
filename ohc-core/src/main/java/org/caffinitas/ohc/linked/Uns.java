@@ -154,7 +154,7 @@ final class Uns
                 Unsafe.class.getDeclaredMethod("getAndAddLong", Object.class, long.class, long.class);
                 // use new Java8 methods in sun.misc.Unsafe
                 Class<? extends UnsExt> cls = (Class<? extends UnsExt>) Class.forName(UnsExt7.class.getName().replace('7', '8'));
-                e = cls.getDeclaredConstructor(Class.class).newInstance(unsafe);
+                e = cls.getDeclaredConstructor(Unsafe.class).newInstance(unsafe);
                 LOGGER.info("OHC using Java8 Unsafe API");
             }
             catch (Exception ignored)
@@ -359,6 +359,12 @@ final class Uns
     {
         validate(address, offset, len);
         unsafe.setMemory(address + offset, len, val);
+    }
+
+    static long crc32(long address, long offset, long len)
+    {
+        validate(address, offset, len);
+        return ext.crc32(address, offset, len);
     }
 
     static long getTotalAllocated()

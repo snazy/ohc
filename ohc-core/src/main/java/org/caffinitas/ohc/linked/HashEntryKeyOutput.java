@@ -16,7 +16,6 @@
 package org.caffinitas.ohc.linked;
 
 import java.io.IOException;
-import java.util.zip.CRC32;
 
 /**
  * Used during put operations to serialize the key directly to off-heap bypassing {@link KeyBuffer}.
@@ -33,16 +32,12 @@ final class HashEntryKeyOutput extends AbstractOffHeapDataOutput
 
     long hash()
     {
-        return murmur3hash();
+        return murmur3hash(); //crc32hash();
     }
 
     long crc32hash()
     {
-        CRC32 crc = new CRC32();
-        crc.update(Uns.directBufferFor(blkAdr, Util.ENTRY_OFF_DATA, keyLen));
-        long h = crc.getValue();
-        h |= h << 32;
-        return h;
+        return Uns.crc32(blkAdr, Util.ENTRY_OFF_DATA, keyLen);
     }
 
     long murmur3hash()

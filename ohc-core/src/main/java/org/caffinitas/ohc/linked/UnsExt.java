@@ -33,4 +33,6 @@ abstract class UnsExt
     abstract int getAndPutInt(long address, long offset, int value);
 
     abstract int getAndAddInt(long address, long offset, int value);
+
+    abstract long crc32(long address, long offset, long len);
 }
