@@ -236,7 +236,7 @@ public class HashEntryValueInputOutputTest
     @Test
     public void testReadUTF() throws Exception
     {
-        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio";
+        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio \u00e4\u00f6\u00fc \uff02 ";
 
         HashEntryValueOutput out = build(ref.length() + 2);
         out.writeUTF(ref);
@@ -256,7 +256,7 @@ public class HashEntryValueInputOutputTest
     @Test
     public void testReadMixed() throws Exception
     {
-        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio";
+        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio \u00e4\u00f6\u00fc \uff02 ";
 
         HashEntryValueOutput out = build(ref.length() + 2 +
                     3 + 6 + 12 + 12 + 12345 + 5432 + 321 + ref.length() + 2);

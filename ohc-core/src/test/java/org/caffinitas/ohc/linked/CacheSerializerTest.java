@@ -90,8 +90,6 @@ public class CacheSerializerTest
             {
                 // ok
             }
-
-            // TODO check off-heap mem is not leaked
         }
     }
 
@@ -136,8 +134,6 @@ public class CacheSerializerTest
                 // ok
             }
         }
-
-        // TODO check off-heap mem is not leaked
     }
 
     @Test
@@ -180,7 +176,5 @@ public class CacheSerializerTest
             }
 
         }
-
-        // TODO check off-heap mem is not leaked
     }
 }

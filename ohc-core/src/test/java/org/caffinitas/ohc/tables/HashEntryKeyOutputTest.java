@@ -249,7 +249,7 @@ public class HashEntryKeyOutputTest
     @Test
     public void testWriteUTF() throws Exception
     {
-        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf ";
+        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf \u00e4\u00f6\u00fc \uff02 ";
         HashEntryKeyOutput out = build(ref.length() + 2);
         try
         {
@@ -267,7 +267,7 @@ public class HashEntryKeyOutputTest
     @Test(expectedExceptions = EOFException.class)
     public void testAssertAvail() throws Exception
     {
-        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf ";
+        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf \u00e4\u00f6\u00fc \uff02 ";
         HashEntryKeyOutput out = build(ref.length() + 2);
         try
         {
@@ -293,7 +293,7 @@ public class HashEntryKeyOutputTest
     @Test
     public void testOwnHash() throws IOException
     {
-        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf ";
+        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf \u00e4\u00f6\u00fc \uff02 ";
         int len = ref.length() + 2;
         HashEntryKeyOutput out = build(len);
         try

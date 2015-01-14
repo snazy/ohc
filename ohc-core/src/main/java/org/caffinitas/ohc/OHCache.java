@@ -76,12 +76,18 @@ public interface OHCache<K, V> extends Closeable
     /**
      * Builds an iterator over the N most recently used keys returning deserialized objects.
      * You must call {@code close()} on the returned iterator.
+     * <p>
+     *     Note: During a rehash, the implementation might return keys twice or not at all.
+     * </p>
      */
     CloseableIterator<K> hotKeyIterator(int n);
 
     /**
      * Builds an iterator over all keys returning deserialized objects.
      * You must call {@code close()} on the returned iterator.
+     * <p>
+     *     Note: During a rehash, the implementation might return keys twice or not at all.
+     * </p>
      */
     CloseableIterator<K> keyIterator();
 
@@ -89,6 +95,9 @@ public interface OHCache<K, V> extends Closeable
      * Builds an iterator over all keys returning direct byte buffers.
      * Do not use a returned {@code ByteBuffer} after calling any method on the iterator.
      * You must call {@code close()} on the returned iterator.
+     * <p>
+     *     Note: During a rehash, the implementation might return keys twice or not at all.
+     * </p>
      */
     CloseableIterator<ByteBuffer> hotKeyBufferIterator(int n);
 
@@ -96,6 +105,9 @@ public interface OHCache<K, V> extends Closeable
      * Builds an iterator over all keys returning direct byte buffers.
      * Do not use a returned {@code ByteBuffer} after calling any method on the iterator.
      * You must call {@code close()} on the returned iterator.
+     * <p>
+     *     Note: During a rehash, the implementation might return keys twice or not at all.
+     * </p>
      */
     CloseableIterator<ByteBuffer> keyBufferIterator();
 
