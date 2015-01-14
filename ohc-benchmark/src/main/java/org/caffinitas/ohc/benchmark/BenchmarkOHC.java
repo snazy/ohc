@@ -47,6 +47,7 @@ public final class BenchmarkOHC
     public static final String LOAD_FACTOR = "lf";
     public static final String HASH_TABLE_SIZE = "z";
     public static final String WARM_UP = "wu";
+    public static final String KEY_LEN = "kl";
     public static final String READ_WRITE_RATIO = "r";
     public static final String READ_KEY_DIST = "rkd";
     public static final String WRITE_KEY_DIST = "wkd";
@@ -78,6 +79,7 @@ public final class BenchmarkOHC
             int hashTableSize = Integer.parseInt(cmd.getOptionValue(HASH_TABLE_SIZE, "0"));
             int segmentCount = Integer.parseInt(cmd.getOptionValue(SEGMENT_COUNT, "0"));
             float loadFactor = Float.parseFloat(cmd.getOptionValue(LOAD_FACTOR, "0"));
+            int keyLen = Integer.parseInt(cmd.getOptionValue(KEY_LEN, "0"));
 
             double readWriteRatio = Double.parseDouble(cmd.getOptionValue(READ_WRITE_RATIO, ".5"));
 
@@ -104,7 +106,7 @@ public final class BenchmarkOHC
             printMessage("Initializing OHC cache...");
             Shared.cache = OHCacheBuilder.<Long, byte[]>newBuilder()
                                          .type((Class<? extends OHCache>) Class.forName("org.caffinitas.ohc."+type+".OHCacheImpl"))
-                                         .keySerializer(BenchmarkUtils.longSerializer)
+                                         .keySerializer(keyLen <= 0 ? BenchmarkUtils.longSerializer : new BenchmarkUtils.KeySerializer(keyLen))
                                          .valueSerializer(BenchmarkUtils.serializer)
                                          .hashTableSize(hashTableSize)
                                          .loadFactor(loadFactor)
@@ -230,6 +232,7 @@ public final class BenchmarkOHC
         options.addOption(LOAD_FACTOR, true, "hash table load factor");
         options.addOption(SEGMENT_COUNT, true, "number of segments (number of individual off-heap-maps)");
 
+        options.addOption(KEY_LEN, true, "key length (additional) - default: 0");
         options.addOption(VALUE_SIZE_DIST, true, "value sizes - default: " + DEFAULT_VALUE_SIZE_DIST);
         options.addOption(READ_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);
         options.addOption(WRITE_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);
