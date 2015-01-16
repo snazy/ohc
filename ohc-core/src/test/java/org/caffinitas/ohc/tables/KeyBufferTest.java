@@ -178,11 +178,48 @@ public class KeyBufferTest
     @Test
     public void testWriteUTF() throws Exception
     {
-        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf ";
-        KeyBuffer out = build(ref.length() + 2);
+        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf äöü ＂ ";
+        KeyBuffer out = build(TestUtils.writeUTFLen(ref));
         out.writeUTF(ref);
         ByteArrayDataInput in = ByteStreams.newDataInput(out.array());
         assertEquals(in.readUTF(), ref);
+    }
+
+    @Test(dependsOnMethods = "testWriteUTF")
+    public void testWriteUTFAllChars() throws Exception
+    {
+        StringBuilder sb = new StringBuilder(65536);
+        for (int i=0; i<=65535; i++)
+            sb.append((char) i);
+        String ref1 = sb.substring(0, 16384);
+        String ref2 = sb.substring(16384, 32768);
+        String ref3 = sb.substring(32768, 49152);
+        String ref4 = sb.substring(49152);
+
+        KeyBuffer out = build(TestUtils.writeUTFLen(ref1) +
+                              TestUtils.writeUTFLen(ref2) +
+                              TestUtils.writeUTFLen(ref3) +
+                              TestUtils.writeUTFLen(ref4));
+        assertEquals(out.position(), 0);
+        out.writeUTF(ref1);
+        assertEquals(out.position(), TestUtils.writeUTFLen(ref1));
+        out.writeUTF(ref2);
+        assertEquals(out.position(), TestUtils.writeUTFLen(ref1) +
+                                     TestUtils.writeUTFLen(ref2));
+        out.writeUTF(ref3);
+        assertEquals(out.position(), TestUtils.writeUTFLen(ref1) +
+                                     TestUtils.writeUTFLen(ref2) +
+                                     TestUtils.writeUTFLen(ref3));
+        out.writeUTF(ref4);
+        assertEquals(out.position(), TestUtils.writeUTFLen(ref1) +
+                                     TestUtils.writeUTFLen(ref2) +
+                                     TestUtils.writeUTFLen(ref3) +
+                                     TestUtils.writeUTFLen(ref4));
+        ByteArrayDataInput in = ByteStreams.newDataInput(out.array());
+        assertEquals(in.readUTF(), ref1);
+        assertEquals(in.readUTF(), ref2);
+        assertEquals(in.readUTF(), ref3);
+        assertEquals(in.readUTF(), ref4);
     }
 
     private static KeyBuffer build(int len)

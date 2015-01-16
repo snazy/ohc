@@ -39,6 +39,11 @@ final class KeyBuffer extends AbstractDataOutput
         return array;
     }
 
+    int position()
+    {
+        return p;
+    }
+
     int size()
     {
         return array.length;
