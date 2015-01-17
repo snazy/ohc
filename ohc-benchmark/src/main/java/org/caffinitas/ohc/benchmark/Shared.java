@@ -96,19 +96,22 @@ final class Shared
         int cores;
     }
 
-    static void printStats(String title)
+    static void printStats(String title, boolean bucketHistogram)
     {
-        System.out.println(String.format("%s%n     %s%n" +
-                                         "   Histogram:%n%s", title, cache.stats(), cache.getBucketHistogram()));
+        if (bucketHistogram)
+            System.out.printf("%s%n     %s%n" +
+                              "   Histogram:%n%s%n", title, cache.stats(), cache.getBucketHistogram());
+        else
+            System.out.printf("%s%n     %s%n", title, cache.stats());
         for (Map.Entry<String, GCStats> gcStat : gcStats.entrySet())
         {
             GCStats gs = gcStat.getValue();
             long count = gs.count.longValue();
             long duration = gs.duration.longValue();
             double runtimeAvg = ((double) duration) / count;
-            System.out.println(String.format("     GC  %-15s : count: %8d    duration: %8dms (avg:%6.2fms)    cores: %d",
-                                             gcStat.getKey(),
-                                             count, duration, runtimeAvg, gs.cores));
+            System.out.printf("     GC  %-15s : count: %8d    duration: %8dms (avg:%6.2fms)    cores: %d%n",
+                              gcStat.getKey(),
+                              count, duration, runtimeAvg, gs.cores);
         }
         dumpStats(readTimer, "Reads");
         dumpStats(writeTimer, "Writes");
