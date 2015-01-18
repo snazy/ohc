@@ -3,7 +3,7 @@
 - remove cassandra-all dependency from ohc-benchmark
 - do not deploy big binary ohc-benchmark and ohc-jmh artifacts to Maven Central
 - change scope of snappy dependency in ohc-core to provided
-- add new benchmark command line option to specify key length (-kl)
+- benchmark: add new command line option to specify key length (-kl)
 - fix murmur3 hashing
 - divide overall capacity to all segments and manage free capacity inside segments
 - allow use of native malloc()/free() functions via JNA Native class
@@ -13,6 +13,10 @@
 - remove fastutil dependency
 #3 support cache-loader functionality
 - some dependency cleanups in pom.xml files
+- benchmark: make metrics in local to the driver threads
+- benchmark: disable bucket histogram in stats by default
+- default minimum capacity changed to 64MB
+- 
 
 0.2.1
 =====
