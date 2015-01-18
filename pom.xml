@@ -192,7 +192,6 @@
                             href="http://www.apache.org/licenses/LICENSE-2.0" target="_new"&gt;Apache License, Version 2&lt;/a&gt;
                             - &lt;a href="http://caffinitas.org/" target="_new"&gt;Homepage&lt;/a&gt;</bottom>
                         <show>protected</show>
-                        <failOnError>false</failOnError>
                         <includeDependencySources>false</includeDependencySources>
                         <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
                     </configuration>

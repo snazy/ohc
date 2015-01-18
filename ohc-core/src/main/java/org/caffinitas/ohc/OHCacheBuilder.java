@@ -22,7 +22,7 @@ import org.caffinitas.ohc.linked.OHCacheImpl;
 
 /**
  * Configures and builds OHC instance.
- * <table>
+ * <table summary="Configuration parameters">
  *     <tr>
  *         <th>Field</th>
  *         <th>Meaning</th>
