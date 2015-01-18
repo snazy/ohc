@@ -13,26 +13,36 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.linked;
+package org.caffinitas.ohc.tables;
 
-import sun.misc.Unsafe;
+import java.util.Arrays;
 
-abstract class UnsExt
+final class LongArrayList
 {
-    final Unsafe unsafe;
+    private long[] array;
+    private int size;
 
-    UnsExt(Unsafe unsafe)
+    public LongArrayList()
     {
-        this.unsafe = unsafe;
+        array = new long[10];
     }
 
-    abstract long getAndPutLong(long address, long offset, long value);
+    public long getLong(int i)
+    {
+        if (i < 0 || i >= size)
+            throw new ArrayIndexOutOfBoundsException();
+        return array[i];
+    }
 
-    abstract long getAndAddLong(long address, long offset, long value);
+    public int size()
+    {
+        return size;
+    }
 
-    abstract int getAndPutInt(long address, long offset, int value);
-
-    abstract int getAndAddInt(long address, long offset, int value);
-
-    abstract long crc32(long address, long offset, long len);
+    public void add(long value)
+    {
+        if (size == array.length)
+            array = Arrays.copyOf(array, array.length + 10);
+        array[size++] = value;
+    }
 }

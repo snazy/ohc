@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc.linked;
 
+import java.util.zip.CRC32;
+
 import sun.misc.Unsafe;
 
 final class UnsExt7 extends UnsExt
@@ -41,5 +43,34 @@ final class UnsExt7 extends UnsExt
             if (unsafe.compareAndSwapLong(null, address, v, v + value))
                 return v;
         }
+    }
+
+    int getAndPutInt(long address, long offset, int value)
+    {
+        int r = unsafe.getInt(null, address + offset);
+        unsafe.putInt(null, address + offset, value);
+        return r;
+    }
+
+    int getAndAddInt(long address, long offset, int value)
+    {
+        address += offset;
+        int v;
+        while (true)
+        {
+            v = unsafe.getIntVolatile(null, address);
+            if (unsafe.compareAndSwapInt(null, address, v, v + value))
+                return v;
+        }
+    }
+
+    long crc32(long address, long offset, long len)
+    {
+        CRC32 crc = new CRC32();
+        for (; len-- > 0; len--, offset++)
+            crc.update(Uns.getByte(address, offset));
+        long h = crc.getValue();
+        h |= h << 32;
+        return h;
     }
 }

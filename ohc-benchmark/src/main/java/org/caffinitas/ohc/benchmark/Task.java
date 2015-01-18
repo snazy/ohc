@@ -17,9 +17,7 @@ package org.caffinitas.ohc.benchmark;
 
 import java.util.concurrent.Callable;
 
-import com.codahale.metrics.Timer;
-
 public interface Task extends Callable<Object>
 {
-    Timer timer();
+    int timer();
 }

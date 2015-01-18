@@ -30,7 +30,8 @@ import org.slf4j.LoggerFactory;
 
 import org.caffinitas.ohc.alloc.IAllocator;
 import org.caffinitas.ohc.alloc.JEMallocAllocator;
-import org.caffinitas.ohc.alloc.NativeAllocator;
+import org.caffinitas.ohc.alloc.JNANativeAllocator;
+import org.caffinitas.ohc.alloc.UnsafeAllocator;
 import sun.misc.Unsafe;
 
 final class Uns
@@ -42,12 +43,25 @@ final class Uns
 
     private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty("DEBUG_OFF_HEAP_MEMORY_ACCESS", "false"));
     private static final boolean __DISABLE_JEMALLOC = Boolean.parseBoolean(System.getProperty("DISABLE_JEMALLOC", "false"));
+    private static final String __ALLOCATOR = System.getProperty("org.caffinitas.ohc.allocator");
 
     //
     // #ifdef __DEBUG_OFF_HEAP_MEMORY_ACCESS
     //
-    private static final ConcurrentMap<Long, Long> ohDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, Long>(16384) : null;
+    private static final ConcurrentMap<Long, AllocInfo> ohDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, AllocInfo>(16384) : null;
     private static final Map<Long, Throwable> ohFreeDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, Throwable>(16384) : null;
+
+    private static final class AllocInfo
+    {
+        final long size;
+        final Throwable trace;
+
+        AllocInfo(Long size, Throwable trace)
+        {
+            this.size = size;
+            this.trace = trace;
+        }
+    }
 
     static void clearUnsDebugForTest()
     {
@@ -57,8 +71,11 @@ final class Uns
             {
                 if (!ohDebug.isEmpty())
                 {
-                    for (Map.Entry<Long, Long> addrSize : ohDebug.entrySet())
-                        System.err.printf("  still allocated: address=%d, size=%d%n", addrSize.getKey(), addrSize.getValue());
+                    for (Map.Entry<Long, AllocInfo> addrSize : ohDebug.entrySet())
+                    {
+                        System.err.printf("  still allocated: address=%d, size=%d%n", addrSize.getKey(), addrSize.getValue().size);
+                        addrSize.getValue().trace.printStackTrace();
+                    }
                     throw new RuntimeException("Not all allocated memory has been freed!");
                 }
             }
@@ -74,8 +91,8 @@ final class Uns
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
         {
-            Long allocatedLen = ohDebug.remove(address);
-            if (allocatedLen == null)
+            AllocInfo allocInfo = ohDebug.remove(address);
+            if (allocInfo == null)
             {
                 Throwable freedAt = ohFreeDebug.get(address);
                 throw new IllegalStateException("Free of unallocated region " + address, freedAt);
@@ -88,7 +105,7 @@ final class Uns
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
         {
-            Long allocatedLen = ohDebug.putIfAbsent(address, bytes);
+            AllocInfo allocatedLen = ohDebug.putIfAbsent(address, new AllocInfo(bytes, new Exception("Thread: "+Thread.currentThread())));
             if (allocatedLen != null)
                 throw new Error("Oops - allocate() got duplicate address");
             ohFreeDebug.remove(address);
@@ -101,8 +118,8 @@ final class Uns
         {
             if (address == 0L)
                 throw new NullPointerException();
-            Long allocatedLen = ohDebug.get(address);
-            if (allocatedLen == null)
+            AllocInfo allocInfo = ohDebug.get(address);
+            if (allocInfo == null)
             {
                 Throwable freedAt = ohFreeDebug.get(address);
                 throw new IllegalStateException("Access to unallocated region " + address + " - t=" + System.nanoTime(), freedAt);
@@ -111,7 +128,7 @@ final class Uns
                 throw new IllegalArgumentException("Negative offset");
             if (len < 0L)
                 throw new IllegalArgumentException("Negative length");
-            if (offset + len > allocatedLen)
+            if (offset + len > allocInfo.size)
                 throw new IllegalArgumentException("Access outside allocated region");
         }
     }
@@ -137,7 +154,7 @@ final class Uns
                 Unsafe.class.getDeclaredMethod("getAndAddLong", Object.class, long.class, long.class);
                 // use new Java8 methods in sun.misc.Unsafe
                 Class<? extends UnsExt> cls = (Class<? extends UnsExt>) Class.forName(UnsExt7.class.getName().replace('7', '8'));
-                e = cls.getDeclaredConstructor(Class.class).newInstance(unsafe);
+                e = cls.getDeclaredConstructor(Unsafe.class).newInstance(unsafe);
                 LOGGER.info("OHC using Java8 Unsafe API");
             }
             catch (Exception ignored)
@@ -150,19 +167,33 @@ final class Uns
                 LOGGER.warn("Degraded performance due to off-heap memory allocations and access guarded by debug code enabled via system property DEBUG_OFF_HEAP_MEMORY_ACCESS=true");
 
             IAllocator alloc = null;
-            if (!__DISABLE_JEMALLOC)
-                try
-                {
-                    alloc = new JEMallocAllocator();
-                }
-                catch (Throwable t)
-                {
-                    LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
-                }
-            else
-                LOGGER.warn("jemalloc disabled by system property setting DISABLE_JEMALLOC=true");
+            String allocType = __ALLOCATOR != null ? __ALLOCATOR : "jemalloc";
+            if ("jemalloc".equalsIgnoreCase(allocType))
+                if (!__DISABLE_JEMALLOC)
+                    try
+                    {
+                        alloc = new JEMallocAllocator();
+                        LOGGER.info("OHC using jemalloc via JNA");
+                    }
+                    catch (Throwable t)
+                    {
+                        LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
+                    }
+                else
+                    LOGGER.warn("jemalloc disabled by system property setting DISABLE_JEMALLOC=true");
+
+            if ("jna".equalsIgnoreCase(allocType))
+            {
+                alloc = new JNANativeAllocator();
+                LOGGER.info("OHC using JNA OS native malloc/free");
+            }
+
             if (alloc == null)
-                alloc = new NativeAllocator();
+            {
+                alloc = new UnsafeAllocator();
+                LOGGER.info("OHC using sun.misc.Unsafe memory allocation");
+            }
+
             allocator = alloc;
         }
         catch (Exception e)
@@ -302,14 +333,14 @@ final class Uns
     static boolean decrement(long address, long offset)
     {
         validate(address, offset, 8L);
-        long v = ext.getAndAddLong(address, offset, -1);
+        long v = ext.getAndAddInt(address, offset, -1);
         return v == 1;
     }
 
     static void increment(long address, long offset)
     {
         validate(address, offset, 8L);
-        ext.getAndAddLong(address, offset, 1);
+        ext.getAndAddInt(address, offset, 1);
     }
 
     static void copyMemory(byte[] arr, int off, long address, long offset, long len)
@@ -328,6 +359,12 @@ final class Uns
     {
         validate(address, offset, len);
         unsafe.setMemory(address + offset, len, val);
+    }
+
+    static long crc32(long address, long offset, long len)
+    {
+        validate(address, offset, len);
+        return ext.crc32(address, offset, len);
     }
 
     static long getTotalAllocated()

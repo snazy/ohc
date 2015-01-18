@@ -30,7 +30,8 @@ import org.slf4j.LoggerFactory;
 
 import org.caffinitas.ohc.alloc.IAllocator;
 import org.caffinitas.ohc.alloc.JEMallocAllocator;
-import org.caffinitas.ohc.alloc.NativeAllocator;
+import org.caffinitas.ohc.alloc.JNANativeAllocator;
+import org.caffinitas.ohc.alloc.UnsafeAllocator;
 import sun.misc.Unsafe;
 
 final class Uns
@@ -42,6 +43,7 @@ final class Uns
 
     private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty("DEBUG_OFF_HEAP_MEMORY_ACCESS", "false"));
     private static final boolean __DISABLE_JEMALLOC = Boolean.parseBoolean(System.getProperty("DISABLE_JEMALLOC", "false"));
+    private static final String __ALLOCATOR = System.getProperty("org.caffinitas.ohc.allocator");
 
     //
     // #ifdef __DEBUG_OFF_HEAP_MEMORY_ACCESS
@@ -150,19 +152,33 @@ final class Uns
                 LOGGER.warn("Degraded performance due to off-heap memory allocations and access guarded by debug code enabled via system property DEBUG_OFF_HEAP_MEMORY_ACCESS=true");
 
             IAllocator alloc = null;
-            if (!__DISABLE_JEMALLOC)
-                try
-                {
-                    alloc = new JEMallocAllocator();
-                }
-                catch (Throwable t)
-                {
-                    LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
-                }
-            else
-                LOGGER.warn("jemalloc disabled by system property setting DISABLE_JEMALLOC=true");
+            String allocType = __ALLOCATOR != null ? __ALLOCATOR : "jemalloc";
+            if ("jemalloc".equalsIgnoreCase(allocType))
+                if (!__DISABLE_JEMALLOC)
+                    try
+                    {
+                        alloc = new JEMallocAllocator();
+                        LOGGER.info("OHC using jemalloc via JNA");
+                    }
+                    catch (Throwable t)
+                    {
+                        LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
+                    }
+                else
+                    LOGGER.warn("jemalloc disabled by system property setting DISABLE_JEMALLOC=true");
+
+            if ("jna".equalsIgnoreCase(allocType))
+            {
+                alloc = new JNANativeAllocator();
+                LOGGER.info("OHC using JNA OS native malloc/free");
+            }
+
             if (alloc == null)
-                alloc = new NativeAllocator();
+            {
+                alloc = new UnsafeAllocator();
+                LOGGER.info("OHC using sun.misc.Unsafe memory allocation");
+            }
+
             allocator = alloc;
         }
         catch (Exception e)
@@ -308,14 +324,14 @@ final class Uns
     static boolean decrement(long address, long offset)
     {
         validate(address, offset, 8L);
-        long v = ext.getAndAddLong(address, offset, -1);
+        long v = ext.getAndAddInt(address, offset, -1);
         return v == 1;
     }
 
     static void increment(long address, long offset)
     {
         validate(address, offset, 8L);
-        ext.getAndAddLong(address, offset, 1);
+        ext.getAndAddInt(address, offset, 1);
     }
 
     static void copyMemory(long srcAddress, long srcOffset, long dstAddress, long dstOffset, long len)

@@ -16,7 +16,6 @@
 package org.caffinitas.ohc.tables;
 
 import java.io.EOFException;
-import java.io.IOError;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -27,12 +26,16 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.google.common.collect.AbstractIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.OHCache;
@@ -54,7 +57,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     private final long maxEntrySize;
 
     private long capacity;
-    private final AtomicLong freeCapacity;
 
     private volatile long putFailCount;
 
@@ -65,7 +67,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             throw new IllegalArgumentException("capacity");
 
         this.capacity = capacity;
-        freeCapacity = new AtomicLong(capacity);
 
         // build segments
         int segments = builder.getSegmentCount();
@@ -77,7 +78,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             try
             {
-                maps[i] = new OffHeapMap(builder, freeCapacity);
+                maps[i] = new OffHeapMap(builder, capacity / segments);
             }
             catch (RuntimeException e)
             {
@@ -96,6 +97,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long maxEntrySize = builder.getMaxEntrySize();
         if (maxEntrySize > capacity / segments)
             throw new IllegalArgumentException("Illegal max entry size " + maxEntrySize);
+        else if (maxEntrySize <= 0)
+            maxEntrySize = capacity / segments;
         this.maxEntrySize = maxEntrySize;
 
         this.keySerializer = builder.getKeySerializer();
@@ -132,7 +135,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         catch (IOException e)
         {
-            throw new IOError(e);
+            throw new RuntimeException(e);
         }
         finally
         {
@@ -177,30 +180,28 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         long oldValueAdr = 0L;
         long oldValueLen = 0L;
-        if (old != null)
-        {
-            oldValueLen = valueSerializer.serializedSize(old);
-            oldValueAdr = Uns.allocate(oldValueLen);
-            if (oldValueAdr == 0L)
-                throw new RuntimeException("Unable to allocate " + oldValueLen + " bytes in off-heap");
-            try
-            {
-                valueSerializer.serialize(old, new HashEntryValueOutput(oldValueAdr, oldValueLen));
-            }
-            catch (RuntimeException | Error e)
-            {
-                Uns.free(oldValueAdr);
-                throw e;
-            }
-            catch (Throwable e)
-            {
-                Uns.free(oldValueAdr);
-                throw new IOError(e);
-            }
-        }
 
         try
         {
+            if (old != null)
+            {
+                oldValueLen = valueSerializer.serializedSize(old);
+                oldValueAdr = Uns.allocate(oldValueLen);
+                if (oldValueAdr == 0L)
+                    throw new RuntimeException("Unable to allocate " + oldValueLen + " bytes in off-heap");
+                try
+                {
+                    valueSerializer.serialize(old, new HashEntryValueOutput(oldValueAdr, oldValueLen));
+                }
+                catch (RuntimeException | Error e)
+                {
+                    throw e;
+                }
+                catch (Throwable e)
+                {
+                    throw new RuntimeException(e);
+                }
+            }
 
             long hashEntryAdr;
             if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
@@ -213,24 +214,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 return false;
             }
 
-            HashEntryKeyOutput key = new HashEntryKeyOutput(hashEntryAdr, keyLen);
-            try
-            {
-                keySerializer.serialize(k, key);
-                valueSerializer.serialize(v, new HashEntryValueOutput(hashEntryAdr, keyLen, valueLen));
-            }
-            catch (RuntimeException | Error e)
-            {
-                Uns.free(hashEntryAdr);
-                throw e;
-            }
-            catch (Throwable e)
-            {
-                Uns.free(hashEntryAdr);
-                throw new IOError(e);
-            }
-
-            long hash = key.hash();
+            long hash = serializeForPut(k, v, keyLen, valueLen, hashEntryAdr);
 
             // initialize hash entry
             HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
@@ -247,6 +231,32 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
     }
 
+    private long serializeForPut(K k, V v, long keyLen, long valueLen, long hashEntryAdr)
+    {
+        HashEntryKeyOutput key = new HashEntryKeyOutput(hashEntryAdr, keyLen);
+        try
+        {
+            keySerializer.serialize(k, key);
+            valueSerializer.serialize(v, new HashEntryValueOutput(hashEntryAdr, keyLen, valueLen));
+        }
+        catch (Throwable e)
+        {
+            freeAndThrow(e, hashEntryAdr);
+        }
+
+        return key.hash();
+    }
+
+    private static void freeAndThrow(Throwable e, long hashEntryAdr)
+    {
+        Uns.free(hashEntryAdr);
+        if (e instanceof RuntimeException)
+            throw (RuntimeException) e;
+        if (e instanceof Error)
+            throw (Error) e;
+        throw new RuntimeException(e);
+    }
+
     public void remove(K k)
     {
         if (k == null)
@@ -255,6 +265,21 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer key = keySource(k);
 
         segment(key.hash()).removeEntry(key);
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader) throws InterruptedException, ExecutionException
+    {
+        return getWithLoaderAsync(key, loader).get();
+    }
+
+    public V getWithLoader(K key, CacheLoader<K, V> loader, long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException
+    {
+        return getWithLoaderAsync(key, loader).get(timeout, unit);
+    }
+
+    public Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader)
+    {
+        throw new UnsupportedOperationException();
     }
 
     private OffHeapMap segment(long hash)
@@ -274,7 +299,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         }
         catch (IOException e)
         {
-            throw new IOError(e);
+            throw new RuntimeException(e);
         }
         return key.finish();
     }
@@ -297,9 +322,12 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         if (capacity < 0L)
             throw new IllegalArgumentException();
-        long diff = capacity - this.capacity;
+        long oldPerSegment = this.capacity / segments();
         this.capacity = capacity;
-        freeCapacity.addAndGet(diff);
+        long perSegment = capacity / segments();
+        long diff = perSegment - oldPerSegment;
+        for (OffHeapMap map : maps)
+            map.updateFreeCapacity(diff);
     }
 
     public void close()
@@ -393,7 +421,10 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public long freeCapacity()
     {
-        return freeCapacity.get();
+        long freeCapacity = 0L;
+        for (OffHeapMap map : maps)
+            freeCapacity += map.freeCapacity();
+        return freeCapacity;
     }
 
     public long evictedEntries()
@@ -567,7 +598,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 catch (IOException e)
                 {
-                    throw new IOError(e);
+                    throw new RuntimeException(e);
                 }
             }
 
@@ -835,7 +866,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 catch (IOException e)
                 {
-                    throw new IOError(e);
+                    throw new RuntimeException(e);
                 }
             }
         };
@@ -864,7 +895,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 }
                 catch (IOException e)
                 {
-                    throw new IOError(e);
+                    throw new RuntimeException(e);
                 }
             }
         };

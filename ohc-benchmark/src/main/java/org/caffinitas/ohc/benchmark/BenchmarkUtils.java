@@ -51,9 +51,39 @@ public final class BenchmarkUtils {
             return in.readLong();
         }
 
-        public int serializedSize(Long aLong)
+        public int serializedSize(Long value)
         {
             return 8;
         }
     };
+
+    public static class KeySerializer implements CacheSerializer<Long>
+    {
+        private final int keyLen;
+
+        public KeySerializer(int keyLen)
+        {
+            this.keyLen = keyLen;
+        }
+
+        public void serialize(Long val, DataOutput out) throws IOException
+        {
+            out.writeLong(val);
+            for (int i = 0; i < keyLen; i++)
+                out.write(0);
+        }
+
+        public Long deserialize(DataInput in) throws IOException
+        {
+            long v = in.readLong();
+            for (int i = 0; i < keyLen; i++)
+                in.readByte();
+            return v;
+        }
+
+        public int serializedSize(Long value)
+        {
+            return 8 + keyLen;
+        }
+    }
 }

@@ -32,7 +32,6 @@ public class KeyBufferTest
     @AfterMethod(alwaysRun = true)
     public void deinit()
     {
-        HashEntries.memBufferClear();
         Uns.clearUnsDebugForTest();
     }
 
@@ -50,12 +49,10 @@ public class KeyBufferTest
         hasher.putBytes(ref);
         hasher.putByte((byte) 0xf0);
 
-        out.finish();
-
-        assertEquals(out.hash(), hasher.hash().asLong());
+        assertEquals(out.murmur3hash(), hasher.hash().asLong());
     }
 
-    @Test
+    @Test(dependsOnMethods = "testHashFinish")
     public void testHashFinish16() throws Exception
     {
         byte[] ref = TestUtils.randomBytes(14);
@@ -69,9 +66,26 @@ public class KeyBufferTest
         hasher.putBytes(ref);
         hasher.putByte((byte) 0xf0);
 
-        out.finish();
+        assertEquals(out.murmur3hash(), hasher.hash().asLong());
+    }
 
-        assertEquals(out.hash(), hasher.hash().asLong());
+    @Test(dependsOnMethods = "testHashFinish16")
+    public void testHashRandom() throws Exception
+    {
+        for (int i = 1; i < 4100; i++)
+        {
+            for (int j = 0; j < 10; j++)
+            {
+                byte[] ref = TestUtils.randomBytes(i);
+                KeyBuffer out = build(i);
+                out.write(ref);
+
+                Hasher hasher = Hashing.murmur3_128().newHasher();
+                hasher.putBytes(ref);
+
+                assertEquals(out.murmur3hash(), hasher.hash().asLong());
+            }
+        }
     }
 
     @Test
@@ -179,11 +193,48 @@ public class KeyBufferTest
     @Test
     public void testWriteUTF() throws Exception
     {
-        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf ";
-        KeyBuffer out = build(ref.length() + 2);
+        String ref = "ewoifjeoif jewoifj oiewjfio ejwiof jeowijf oiewhiuf \u00e4\u00f6\u00fc \uff02 ";
+        KeyBuffer out = build(TestUtils.writeUTFLen(ref));
         out.writeUTF(ref);
         ByteArrayDataInput in = ByteStreams.newDataInput(out.array());
         assertEquals(in.readUTF(), ref);
+    }
+
+    @Test(dependsOnMethods = "testWriteUTF")
+    public void testWriteUTFAllChars() throws Exception
+    {
+        StringBuilder sb = new StringBuilder(65536);
+        for (int i=0; i<=65535; i++)
+            sb.append((char) i);
+        String ref1 = sb.substring(0, 16384);
+        String ref2 = sb.substring(16384, 32768);
+        String ref3 = sb.substring(32768, 49152);
+        String ref4 = sb.substring(49152);
+
+        KeyBuffer out = build(TestUtils.writeUTFLen(ref1) +
+                              TestUtils.writeUTFLen(ref2) +
+                              TestUtils.writeUTFLen(ref3) +
+                              TestUtils.writeUTFLen(ref4));
+        assertEquals(out.position(), 0);
+        out.writeUTF(ref1);
+        assertEquals(out.position(), TestUtils.writeUTFLen(ref1));
+        out.writeUTF(ref2);
+        assertEquals(out.position(), TestUtils.writeUTFLen(ref1) +
+                                     TestUtils.writeUTFLen(ref2));
+        out.writeUTF(ref3);
+        assertEquals(out.position(), TestUtils.writeUTFLen(ref1) +
+                                     TestUtils.writeUTFLen(ref2) +
+                                     TestUtils.writeUTFLen(ref3));
+        out.writeUTF(ref4);
+        assertEquals(out.position(), TestUtils.writeUTFLen(ref1) +
+                                     TestUtils.writeUTFLen(ref2) +
+                                     TestUtils.writeUTFLen(ref3) +
+                                     TestUtils.writeUTFLen(ref4));
+        ByteArrayDataInput in = ByteStreams.newDataInput(out.array());
+        assertEquals(in.readUTF(), ref1);
+        assertEquals(in.readUTF(), ref2);
+        assertEquals(in.readUTF(), ref3);
+        assertEquals(in.readUTF(), ref4);
     }
 
     private static KeyBuffer build(int len)

@@ -47,10 +47,12 @@ public final class BenchmarkOHC
     public static final String LOAD_FACTOR = "lf";
     public static final String HASH_TABLE_SIZE = "z";
     public static final String WARM_UP = "wu";
+    public static final String KEY_LEN = "kl";
     public static final String READ_WRITE_RATIO = "r";
     public static final String READ_KEY_DIST = "rkd";
     public static final String WRITE_KEY_DIST = "wkd";
     public static final String VALUE_SIZE_DIST = "vs";
+    public static final String BUCKET_HISTOGRAM = "bh";
     public static final String TYPE = "type";
 
     public static final String DEFAULT_VALUE_SIZE_DIST = "fixed(512)";
@@ -78,6 +80,9 @@ public final class BenchmarkOHC
             int hashTableSize = Integer.parseInt(cmd.getOptionValue(HASH_TABLE_SIZE, "0"));
             int segmentCount = Integer.parseInt(cmd.getOptionValue(SEGMENT_COUNT, "0"));
             float loadFactor = Float.parseFloat(cmd.getOptionValue(LOAD_FACTOR, "0"));
+            int keyLen = Integer.parseInt(cmd.getOptionValue(KEY_LEN, "0"));
+
+            boolean bucketHistogram = Boolean.parseBoolean(cmd.getOptionValue(BUCKET_HISTOGRAM, "false"));
 
             double readWriteRatio = Double.parseDouble(cmd.getOptionValue(READ_WRITE_RATIO, ".5"));
 
@@ -104,7 +109,7 @@ public final class BenchmarkOHC
             printMessage("Initializing OHC cache...");
             Shared.cache = OHCacheBuilder.<Long, byte[]>newBuilder()
                                          .type((Class<? extends OHCache>) Class.forName("org.caffinitas.ohc."+type+".OHCacheImpl"))
-                                         .keySerializer(BenchmarkUtils.longSerializer)
+                                         .keySerializer(keyLen <= 0 ? BenchmarkUtils.longSerializer : new BenchmarkUtils.KeySerializer(keyLen))
                                          .valueSerializer(BenchmarkUtils.serializer)
                                          .hashTableSize(hashTableSize)
                                          .loadFactor(loadFactor)
@@ -138,7 +143,7 @@ public final class BenchmarkOHC
             if (warmUpSecs > 0)
             {
                 printMessage("Start warm-up...");
-                runFor(warmUpSecs, main, drivers);
+                runFor(warmUpSecs, main, drivers, bucketHistogram);
                 printMessage("");
                 logMemoryUse();
             }
@@ -154,7 +159,7 @@ public final class BenchmarkOHC
             // benchmark
 
             printMessage("Start benchmark...");
-            runFor(duration, main, drivers);
+            runFor(duration, main, drivers, bucketHistogram);
             printMessage("");
             logMemoryUse();
 
@@ -169,13 +174,15 @@ public final class BenchmarkOHC
         }
     }
 
-    private static void runFor(int duration, ExecutorService main, Driver[] drivers) throws InterruptedException, ExecutionException
+    private static void runFor(int duration, ExecutorService main, Driver[] drivers, boolean bucketHistogram) throws InterruptedException, ExecutionException
     {
 
         printMessage("%s: Running for %d seconds...", new Date(), duration);
 
         // clear all statistics, timers, etc
         Shared.clearStats();
+        for (Driver driver : drivers)
+            driver.clearStats();
 
         long endAt = System.currentTimeMillis() + duration * 1000L;
 
@@ -185,7 +192,9 @@ public final class BenchmarkOHC
             driver.future = main.submit(driver);
         }
 
+        long mergeInterval = 500L;
         long statsInterval = 10000L;
+        long nextMerge = System.currentTimeMillis() + mergeInterval;
         long nextStats = System.currentTimeMillis() + statsInterval;
 
         while (System.currentTimeMillis() < endAt)
@@ -196,9 +205,12 @@ public final class BenchmarkOHC
                 System.exit(1);
             }
 
+            if (nextMerge <= System.currentTimeMillis())
+                mergeTimers(drivers);
+
             if (nextStats <= System.currentTimeMillis())
             {
-                Shared.printStats("At " + new Date());
+                Shared.printStats("At " + new Date(), bucketHistogram);
                 nextStats += statsInterval;
             }
 
@@ -206,11 +218,24 @@ public final class BenchmarkOHC
         }
 
         printMessage("%s: Time over ... waiting for tasks to complete...", new Date());
+        mergeTimers(drivers);
 
         for (Driver driver : drivers)
             driver.future.get();
 
-        Shared.printStats("Final");
+        mergeTimers(drivers);
+        Shared.printStats("Final", bucketHistogram);
+    }
+
+    private static void mergeTimers(Driver[] drivers)
+    {
+        for (Driver driver : drivers)
+        {
+            for (int i = 0; i < Shared.timers.length; i++)
+            {
+                driver.timers[i].mergeTo(Shared.timers[i]);
+            }
+        }
     }
 
     private static CommandLine parseArguments(String[] args) throws ParseException
@@ -230,9 +255,12 @@ public final class BenchmarkOHC
         options.addOption(LOAD_FACTOR, true, "hash table load factor");
         options.addOption(SEGMENT_COUNT, true, "number of segments (number of individual off-heap-maps)");
 
+        options.addOption(KEY_LEN, true, "key length (additional) - default: 0");
         options.addOption(VALUE_SIZE_DIST, true, "value sizes - default: " + DEFAULT_VALUE_SIZE_DIST);
         options.addOption(READ_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);
         options.addOption(WRITE_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);
+
+        options.addOption(BUCKET_HISTOGRAM, true, "enable bucket histogram. Default: false");
 
         options.addOption(TYPE, true, "implementation type - default: linked - option: tables");
 

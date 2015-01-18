@@ -4,7 +4,7 @@
 
     <groupId>org.caffinitas.ohc</groupId>
     <artifactId>ohc-parent</artifactId>
-    <version>0.2.1</version>
+    <version>0.3</version>
     <packaging>pom</packaging>
 
     <name>OHC parent</name>
@@ -67,8 +67,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <version.com.google.guava>16.0</version.com.google.guava>
-        <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m2</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
-        <version.it.unimi.dsi.fastutil>6.5.7</version.it.unimi.dsi.fastutil>
+        <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m4.3</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
         <version.net.java.dev.jna>4.1.0</version.net.java.dev.jna>
         <version.org.apache.maven.plugins.maven-compiler-plugin>3.1</version.org.apache.maven.plugins.maven-compiler-plugin>
         <version.org.apache.maven.plugins.maven-gpg-plugin>1.5</version.org.apache.maven.plugins.maven-gpg-plugin>
@@ -79,6 +78,7 @@
         <version.org.apache.maven.plugins.maven-surefire-plugin>2.17</version.org.apache.maven.plugins.maven-surefire-plugin>
         <version.org.apache.maven.plugins.maven-surefire-report-plugin>2.17</version.org.apache.maven.plugins.maven-surefire-report-plugin>
         <version.org.apache.logging.log4j>2.1</version.org.apache.logging.log4j>
+        <version.org.codehaus.mojo.cobertura>2.6</version.org.codehaus.mojo.cobertura>
         <version.org.slf4j>1.7.7</version.org.slf4j>
         <version.org.testng>6.8.8</version.org.testng>
         <version.org.xerial.snappy>1.0.5</version.org.xerial.snappy>
@@ -125,12 +125,6 @@
             </dependency>
 
             <dependency>
-                <groupId>com.codahale.metrics</groupId>
-                <artifactId>metrics-core</artifactId>
-                <version>${version.com.codahale.metrics}</version>
-            </dependency>
-
-            <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
                 <version>${version.com.google.guava}</version>
@@ -146,12 +140,6 @@
                 <groupId>net.java.dev.jna</groupId>
                 <artifactId>jna</artifactId>
                 <version>${version.net.java.dev.jna}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>it.unimi.dsi</groupId>
-                <artifactId>fastutil</artifactId>
-                <version>${version.it.unimi.dsi.fastutil}</version>
             </dependency>
 
             <dependency>
@@ -204,7 +192,6 @@
                             href="http://www.apache.org/licenses/LICENSE-2.0" target="_new"&gt;Apache License, Version 2&lt;/a&gt;
                             - &lt;a href="http://caffinitas.org/" target="_new"&gt;Homepage&lt;/a&gt;</bottom>
                         <show>protected</show>
-                        <failOnError>false</failOnError>
                         <includeDependencySources>false</includeDependencySources>
                         <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
                     </configuration>
@@ -248,6 +235,7 @@
                             -->
                             <report>summary</report>
                             <report>modules</report>
+                            <report>cobertura</report>
                             <report>project-team</report>
                             <report>scm</report>
                             <report>issue-tracking</report>
@@ -327,6 +315,11 @@
             <id>deploy</id>
             <build>
                 <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                    </plugin>
+
                     <plugin>
                         <groupId>external.atlassian.jgitflow</groupId>
                         <artifactId>jgitflow-maven-plugin</artifactId>

@@ -13,26 +13,33 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.linked;
+package org.caffinitas.ohc.tables;
 
-import sun.misc.Unsafe;
+import org.testng.annotations.Test;
 
-abstract class UnsExt
+import static org.testng.Assert.assertEquals;
+
+public class LongArrayListTest
 {
-    final Unsafe unsafe;
-
-    UnsExt(Unsafe unsafe)
+    @Test
+    public void testLongArrayList()
     {
-        this.unsafe = unsafe;
+        LongArrayList l = new LongArrayList();
+
+        assertEquals(l.size(), 0);
+
+        l.add(0);
+        assertEquals(l.size(), 1);
+
+        for (int i=1;i<=20;i++)
+        {
+            l.add(i);
+            assertEquals(l.size(), i + 1);
+        }
+
+        for (int i=0;i<=20;i++)
+        {
+            assertEquals(l.getLong(i), i);
+        }
     }
-
-    abstract long getAndPutLong(long address, long offset, long value);
-
-    abstract long getAndAddLong(long address, long offset, long value);
-
-    abstract int getAndPutInt(long address, long offset, int value);
-
-    abstract int getAndAddInt(long address, long offset, int value);
-
-    abstract long crc32(long address, long offset, long len);
 }

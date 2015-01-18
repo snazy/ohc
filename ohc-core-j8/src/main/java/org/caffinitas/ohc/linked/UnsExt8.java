@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc.linked;
 
+import java.util.zip.CRC32;
+
 import sun.misc.Unsafe;
 
 final class UnsExt8 extends UnsExt
@@ -32,5 +34,24 @@ final class UnsExt8 extends UnsExt
     long getAndAddLong(long address, long offset, long value)
     {
         return unsafe.getAndAddLong(null, address + offset, value);
+    }
+
+    int getAndPutInt(long address, long offset, int value)
+    {
+        return unsafe.getAndSetInt(null, address + offset, value);
+    }
+
+    int getAndAddInt(long address, long offset, int value)
+    {
+        return unsafe.getAndAddInt(null, address + offset, value);
+    }
+
+    long crc32(long address, long offset, long len)
+    {
+        CRC32 crc = new CRC32();
+        crc.update(Uns.directBufferFor(address, offset, len));
+        long h = crc.getValue();
+        h |= h << 32;
+        return h;
     }
 }

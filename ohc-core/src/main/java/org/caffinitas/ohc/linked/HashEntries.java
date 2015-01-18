@@ -15,20 +15,19 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.util.Arrays;
-
 /**
  * Encapsulates access to hash entries.
  */
 final class HashEntries
 {
-    static void init(long hash, long keyLen, long valueLen, long hashEntryAdr)
+    static void init(long hash, long keyLen, long valueLen, long hashEntryAdr, int sentinel)
     {
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_HASH, hash);
         setNext(hashEntryAdr, 0L);
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, keyLen);
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_VALUE_LENGTH, valueLen);
-        Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_REFCOUNT, 1L);
+        Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_REFCOUNT, 1);
+        Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_SENTINEL, sentinel);
     }
 
     static boolean compareKey(long hashEntryAdr, KeyBuffer key, long serKeyLen)
@@ -117,6 +116,17 @@ final class HashEntries
         return hashEntryAdr != 0L ? Uns.getLong(hashEntryAdr, Util.ENTRY_OFF_NEXT) : 0L;
     }
 
+    static int getSentinel(long hashEntryAdr)
+    {
+        return hashEntryAdr != 0L ? Uns.getInt(hashEntryAdr, Util.ENTRY_OFF_SENTINEL) : 0;
+    }
+
+    static void setSentinel(long hashEntryAdr, int sentinelState)
+    {
+        if (hashEntryAdr != 0L)
+            Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_SENTINEL, sentinelState);
+    }
+
     static void setNext(long hashEntryAdr, long nextAdr)
     {
         if (hashEntryAdr == nextAdr)
@@ -149,146 +159,9 @@ final class HashEntries
     {
         if (Uns.decrement(hashEntryAdr, Util.ENTRY_OFF_REFCOUNT))
         {
-            HashEntries.free(hashEntryAdr, HashEntries.getAllocLen(hashEntryAdr));
+            Uns.free(hashEntryAdr);
             return true;
         }
         return false;
-    }
-
-    //
-    // malloc() or free() are very expensive operations. Write heavy workloads can spend most CPU time
-    // in system (OS). To reduce this, the following code implements a mem-buffer cache.
-    // Each free'd hash entry is added to the memBuffers array and each allocation tries to reuse such a
-    // cached mem-buffer.
-    // "Eviction" is performed on a free() operation - the oldest mem-buffer is released.
-    //
-    // Using direct calls to malloc()/free() can consume up to 70% in OS (system CPU usage).
-    //
-
-    private static final boolean MEM_BUFFERS_ENABLE = Boolean.parseBoolean(System.getProperty("MEM_BUFFERS_ENABLE", "false"));
-
-    private static final int BLOCK_BUFFERS = 512;
-    private static final long[] memBuffers = new long[BLOCK_BUFFERS * 3];
-
-    static final long BLOCK_SIZE = 16384L;
-    static final long BLOCK_MASK = BLOCK_SIZE - 1L;
-    private static final long MAX_BUFFERED_SIZE = 8L * 1024 * 1024;
-
-    static long memBufferHit;
-    static long memBufferMiss;
-    static long memBufferFree;
-    static long memBufferExpires;
-    static long memBufferClear;
-
-    static long allocate(long bytes)
-    {
-        if (MEM_BUFFERS_ENABLE && bytes <= MAX_BUFFERED_SIZE)
-        {
-            long blockAllocLen = blockAllocLen(bytes);
-            long adr = reuseMemBuffer(blockAllocLen);
-            if (adr != 0L)
-            {
-                memBufferHit++;
-                return adr;
-            }
-
-            memBufferMiss++;
-
-            return Uns.allocate(blockAllocLen);
-        }
-
-        return Uns.allocate(bytes);
-    }
-
-    static void free(long address, long allocLen)
-    {
-        if (address == 0L)
-            return;
-
-        if (MEM_BUFFERS_ENABLE && allocLen <= MAX_BUFFERED_SIZE)
-            address = releaseToMemBuffer(address, blockAllocLen(allocLen));
-
-        Uns.free(address);
-    }
-
-    private static long reuseMemBuffer(long blockAllocLen)
-    {
-        synchronized (memBuffers)
-        {
-            for (int i = 0; i < memBuffers.length; i += 3)
-            {
-                long mbAdr = memBuffers[i];
-                if (mbAdr != 0L && memBuffers[i + 1] == blockAllocLen)
-                {
-                    memBuffers[i] = 0L;
-                    return mbAdr;
-                }
-            }
-
-            return 0L;
-        }
-    }
-
-    private static long releaseToMemBuffer(long address, long allocLen)
-    {
-        synchronized (memBuffers)
-        {
-            memBufferFree++;
-
-            long blockAllocLen = blockAllocLen(allocLen);
-            long least = Long.MAX_VALUE;
-            int min = -1;
-            for (int i = 0; i < memBuffers.length; i += 3)
-            {
-                if (memBuffers[i] == 0L)
-                {
-                    memBuffers[i] = address;
-                    memBuffers[i + 1] = blockAllocLen;
-                    memBuffers[i + 2] = System.currentTimeMillis();
-                    return 0L;
-                }
-                else
-                {
-                    long ts = memBuffers[i + 2];
-                    if (ts < least)
-                    {
-                        least = ts;
-                        min = i;
-                    }
-                }
-            }
-
-            assert min != -1;
-
-            memBufferExpires++;
-
-            long freeAddress = memBuffers[min];
-
-            memBuffers[min] = address;
-            memBuffers[min + 1] = blockAllocLen;
-
-            return freeAddress;
-        }
-    }
-
-    static long blockAllocLen(long allocLen)
-    {
-        if ((allocLen & BLOCK_MASK) == 0L)
-            return allocLen;
-
-        return (allocLen & ~BLOCK_MASK) + BLOCK_SIZE;
-    }
-
-    static synchronized void memBufferClear()
-    {
-        synchronized (memBuffers)
-        {
-            memBufferClear++;
-
-            for (int i = 0; i < memBuffers.length; i += 3)
-                Uns.free(memBuffers[i]);
-
-            Arrays.fill(memBuffers, 0L);
-        }
     }
 }

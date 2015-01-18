@@ -16,6 +16,7 @@
 package org.caffinitas.ohc.linked;
 
 import java.util.Arrays;
+import java.util.zip.CRC32;
 
 final class KeyBuffer extends AbstractDataOutput
 {
@@ -38,6 +39,11 @@ final class KeyBuffer extends AbstractDataOutput
         return array;
     }
 
+    int position()
+    {
+        return p;
+    }
+
     int size()
     {
         return array.length;
@@ -49,6 +55,22 @@ final class KeyBuffer extends AbstractDataOutput
     }
 
     KeyBuffer finish()
+    {
+        hash = murmur3hash(); //crc32hash();
+
+        return this;
+    }
+
+    long crc32hash()
+    {
+        CRC32 crc = new CRC32();
+        crc.update(array);
+        long h = crc.getValue();
+        h |= h << 32;
+        return h;
+    }
+
+    long murmur3hash()
     {
         int o = 0;
         int r = size();
@@ -140,10 +162,7 @@ final class KeyBuffer extends AbstractDataOutput
         //h2 += h1;
 
         // padToLong()
-
-        hash = h1;
-
-        return this;
+        return h1;
     }
 
     private long getLong(int o)

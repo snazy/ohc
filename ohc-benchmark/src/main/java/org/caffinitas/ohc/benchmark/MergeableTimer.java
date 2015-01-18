@@ -13,26 +13,21 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.linked;
+package org.caffinitas.ohc.benchmark;
 
-import sun.misc.Unsafe;
+import com.codahale.metrics.Clock;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.UniformReservoir;
 
-abstract class UnsExt
+public class MergeableTimer
 {
-    final Unsafe unsafe;
+    final Meter meter;
+    final Histogram histogram;
 
-    UnsExt(Unsafe unsafe)
+    public MergeableTimer()
     {
-        this.unsafe = unsafe;
+        this.meter = new Meter(Clock.defaultClock());
+        this.histogram = new Histogram(new UniformReservoir());
     }
-
-    abstract long getAndPutLong(long address, long offset, long value);
-
-    abstract long getAndAddLong(long address, long offset, long value);
-
-    abstract int getAndPutInt(long address, long offset, int value);
-
-    abstract int getAndAddInt(long address, long offset, int value);
-
-    abstract long crc32(long address, long offset, long len);
 }

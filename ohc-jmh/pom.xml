@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.2.1</version>
+        <version>0.3</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-jmh</artifactId>
-    <version>0.2.1</version>
+    <version>0.3</version>
 
     <name>OHC core - micro benchmarks</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
@@ -96,11 +96,13 @@
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
+            <scope>compile</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-slf4j-impl</artifactId>
+            <scope>compile</scope>
         </dependency>
 
     </dependencies>
@@ -124,6 +126,7 @@
                 <version>2.0</version>
                 <executions>
                     <execution>
+                        <id>uberjar</id>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
@@ -144,6 +147,24 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>deploy</id>
+            <!-- do not include benchmark assemblies during release deployment -->
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-shade-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>uberjar</id>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
         <profile>
             <id>integration-tests</id>
             <activation>

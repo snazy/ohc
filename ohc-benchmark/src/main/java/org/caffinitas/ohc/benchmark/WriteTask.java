@@ -15,8 +15,6 @@
  */
 package org.caffinitas.ohc.benchmark;
 
-import com.codahale.metrics.Timer;
-
 class WriteTask implements Task
 {
     private final long key;
@@ -28,9 +26,9 @@ class WriteTask implements Task
         this.valueLen = valueLen;
     }
 
-    public Timer timer()
+    public int timer()
     {
-        return Shared.writeTimer;
+        return 1;
     }
 
     public Object call() throws Exception

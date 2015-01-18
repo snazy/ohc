@@ -33,6 +33,10 @@ final class Driver implements Runnable
     Future<?> future;
     boolean stop;
 
+    MergeableTimerSource[] timers = new MergeableTimerSource[]{
+                                                              new MergeableTimerSource(),
+                                                              new MergeableTimerSource() };
+
     Driver(Distribution readKeyDist, Distribution writeKeyDist, Distribution valueSizeDist, double readWriteRatio, long seed)
     {
         this.readKeyDist = readKeyDist;
@@ -61,7 +65,7 @@ final class Driver implements Runnable
                 Task task = read
                             ? new ReadTask(readKeyDist.next())
                             : new WriteTask(writeKeyDist.next(), (int) valueSizeDist.next());
-                task.timer().time(task);
+                timers[task.timer()].time(task);
 
                 if (Shared.fatal.get())
                 {
@@ -79,5 +83,11 @@ final class Driver implements Runnable
             Shared.fatal.set(true);
             stop = true;
         }
+    }
+
+    public void clearStats()
+    {
+        for (MergeableTimerSource timer : timers)
+            timer.clear();
     }
 }

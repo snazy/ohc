@@ -16,10 +16,8 @@
 package org.caffinitas.ohc.linked;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
-import it.unimi.dsi.fastutil.longs.LongArrayList;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
@@ -46,11 +44,11 @@ final class OffHeapMap
     private long rehashes;
     private long evictedEntries;
 
-    private final AtomicLong freeCapacity;
+    private long freeCapacity;
 
     private final ReentrantLock lock = new ReentrantLock();
 
-    OffHeapMap(OHCacheBuilder builder, AtomicLong freeCapacity)
+    OffHeapMap(OHCacheBuilder builder, long freeCapacity)
     {
         this.freeCapacity = freeCapacity;
 
@@ -130,6 +128,24 @@ final class OffHeapMap
         return rehashes;
     }
 
+    long freeCapacity()
+    {
+        return freeCapacity;
+    }
+
+    void updateFreeCapacity(long diff)
+    {
+        lock.lock();
+        try
+        {
+            freeCapacity += diff;
+        }
+        finally
+        {
+            lock.unlock();
+        }
+    }
+
     long evictedEntries()
     {
         return evictedEntries;
@@ -206,7 +222,7 @@ final class OffHeapMap
                 break;
             }
 
-            while (freeCapacity.get() < bytes)
+            while (freeCapacity < bytes)
             {
                 long eldestHashAdr = removeEldest();
                 if (eldestHashAdr == 0L)
@@ -228,7 +244,7 @@ final class OffHeapMap
                 size++;
             }
 
-            freeCapacity.addAndGet(-bytes);
+            freeCapacity -= bytes;
 
             add(newHashEntryAdr, hash);
 
@@ -284,7 +300,7 @@ final class OffHeapMap
                     freed += HashEntries.getAllocLen(hashEntryAdr);
                     HashEntries.dereference(hashEntryAdr);
                 }
-            freeCapacity.addAndGet(freed);
+            freeCapacity += freed;
 
             table.clear();
         }
@@ -563,6 +579,31 @@ final class OffHeapMap
             }
         }
 
+        void replaceLink(long hash, long hashEntryAdr, long prevEntryAdr, long newHashEntryAdr)
+        {
+            HashEntries.setNext(newHashEntryAdr, HashEntries.getNext(hashEntryAdr));
+
+            long head = getFirst(hash);
+            if (head == hashEntryAdr)
+            {
+                setFirst(hash, newHashEntryAdr);
+            }
+            else if (prevEntryAdr != 0L)
+            {
+                if (prevEntryAdr == -1L)
+                {
+                    for (long adr = head;
+                         adr != 0L;
+                         prevEntryAdr = adr, adr = HashEntries.getNext(adr))
+                    {
+                        if (adr == hashEntryAdr)
+                            break;
+                    }
+                }
+                HashEntries.setNext(prevEntryAdr, newHashEntryAdr);
+            }
+        }
+
         void addAsHead(long hash, long hashEntryAdr)
         {
             long head = getFirst(hash);
@@ -608,7 +649,80 @@ final class OffHeapMap
         if (prev != 0L)
             HashEntries.setLRUNext(prev, next);
 
-        freeCapacity.addAndGet(HashEntries.getAllocLen(hashEntryAdr));
+        freeCapacity += HashEntries.getAllocLen(hashEntryAdr);
+    }
+
+    boolean replaceEntry(long hash, long oldHashEntryAdr, long newHashEntryAdr, long bytes)
+    {
+        LongArrayList derefList = null;
+
+        lock.lock();
+        try
+        {
+            long prevEntryAdr = 0L;
+            for (long hashEntryAdr = table.getFirst(hash);
+                 hashEntryAdr != 0L;
+                 prevEntryAdr = hashEntryAdr, hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+            {
+                if (hashEntryAdr != oldHashEntryAdr)
+                    continue;
+
+                // remove existing entry
+
+                replaceInternal(oldHashEntryAdr, prevEntryAdr, newHashEntryAdr);
+
+                while (freeCapacity < bytes)
+                {
+                    long eldestHashAdr = removeEldest();
+                    if (eldestHashAdr == 0L)
+                    {
+                        return false;
+                    }
+                    if (derefList == null)
+                        derefList = new LongArrayList();
+                    derefList.add(eldestHashAdr);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+        finally
+        {
+            lock.unlock();
+
+            if (derefList != null)
+                for (int i = 0; i < derefList.size(); i++)
+                    HashEntries.dereference(derefList.getLong(i));
+        }
+    }
+
+    private void replaceInternal(long hashEntryAdr, long prevEntryAdr, long newHashEntryAdr)
+    {
+        long hash = HashEntries.getHash(hashEntryAdr);
+
+        table.replaceLink(hash, hashEntryAdr, prevEntryAdr, newHashEntryAdr);
+
+        // LRU stuff
+
+        long next = HashEntries.getLRUNext(hashEntryAdr);
+        long prev = HashEntries.getLRUPrev(hashEntryAdr);
+
+        HashEntries.setLRUNext(newHashEntryAdr, next);
+        HashEntries.setLRUPrev(newHashEntryAdr, prev);
+
+        if (lruHead == hashEntryAdr)
+            lruHead = newHashEntryAdr;
+        if (lruTail == hashEntryAdr)
+            lruTail = newHashEntryAdr;
+
+        if (next != 0L)
+            HashEntries.setLRUPrev(next, newHashEntryAdr);
+        if (prev != 0L)
+            HashEntries.setLRUNext(prev, newHashEntryAdr);
+
+        freeCapacity += HashEntries.getAllocLen(hashEntryAdr);
     }
 
     private void add(long hashEntryAdr, long hash)

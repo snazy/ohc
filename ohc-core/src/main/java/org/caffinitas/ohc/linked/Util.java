@@ -33,6 +33,8 @@ final class Util
     static final long ENTRY_OFF_NEXT = 16;
     // offset of entry reference counter
     static final long ENTRY_OFF_REFCOUNT = 24;
+    // offset of entry sentinel
+    static final long ENTRY_OFF_SENTINEL = 28;
     // offset of serialized hash value
     static final long ENTRY_OFF_HASH = 32;
     // offset of serialized value length
@@ -65,6 +67,14 @@ final class Util
     static final int HEADER_KEYS = 0x4f48434b;
     // 'OHCK' reversed
     static final int HEADER_KEYS_WRONG = 0x4b43484f;
+
+// sentinel values
+
+    static final int SENTINEL_NOT_PRESENT = 0;
+    static final int SENTINEL_LOADING = 1;
+    static final int SENTINEL_SUCCESS = 2;
+    static final int SENTINEL_TEMPORARY_FAILURE = 3;
+    static final int SENTINEL_PERMANENT_FAILURE = 4;
 
     static long roundUpTo8(long val)
     {

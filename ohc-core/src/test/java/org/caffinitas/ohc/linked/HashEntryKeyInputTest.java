@@ -31,7 +31,6 @@ public class HashEntryKeyInputTest
     @AfterMethod(alwaysRun = true)
     public void deinit()
     {
-        HashEntries.memBufferClear();
         Uns.clearUnsDebugForTest();
     }
 
@@ -250,7 +249,7 @@ public class HashEntryKeyInputTest
     @Test
     public void testReadUTF() throws Exception
     {
-        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio";
+        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio \u00e4\u00f6\u00fc \uff02 ";
 
         ByteArrayDataOutput out = ByteStreams.newDataOutput();
         out.writeUTF(ref);
@@ -268,10 +267,46 @@ public class HashEntryKeyInputTest
         }
     }
 
+    @Test(dependsOnMethods = "testReadUTF")
+    public void testReadUTFAllChars() throws Exception
+    {
+        StringBuilder sb = new StringBuilder(65536);
+        for (int i=0; i<=65535; i++)
+            sb.append((char) i);
+        String ref1 = sb.substring(0, 16384);
+        String ref2 = sb.substring(16384, 32768);
+        String ref3 = sb.substring(32768, 49152);
+        String ref4 = sb.substring(49152);
+
+        ByteArrayDataOutput out = ByteStreams.newDataOutput();
+        out.writeUTF(ref1);
+        out.writeUTF(ref2);
+        out.writeUTF(ref3);
+        out.writeUTF(ref4);
+        long adr = convertToKey(out);
+        try
+        {
+            HashEntryKeyInput input = new HashEntryKeyInput(adr);
+            String rd = input.readUTF();
+            assertEquals(rd, ref1);
+            rd = input.readUTF();
+            assertEquals(rd, ref2);
+            rd = input.readUTF();
+            assertEquals(rd, ref3);
+            rd = input.readUTF();
+            assertEquals(rd, ref4);
+            assertEquals(input.available(), 0);
+        }
+        finally
+        {
+            Uns.free(adr);
+        }
+    }
+
     @Test
     public void testReadMixed() throws Exception
     {
-        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio";
+        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio \u00e4\u00f6\u00fc \uff02 ";
 
         ByteArrayDataOutput out = ByteStreams.newDataOutput();
         out.writeUTF(ref);
@@ -446,7 +481,7 @@ public class HashEntryKeyInputTest
         long adr = Uns.allocate(MIN_ALLOC_LEN);
         try
         {
-            HashEntries.init(0L, 10L, 10L, adr);
+            HashEntries.init(0L, 10L, 10L, adr, 0);
             HashEntryKeyInput input = new HashEntryKeyInput(adr);
             input.readLine();
         }
@@ -460,7 +495,7 @@ public class HashEntryKeyInputTest
     {
         byte[] arr = out.toByteArray();
         long adr = Uns.allocate(Util.ENTRY_OFF_DATA + Util.roundUpTo8(arr.length));
-        HashEntries.init(0L, arr.length, 0L, adr);
+        HashEntries.init(0L, arr.length, 0L, adr, 0);
         Uns.copyMemory(arr, 0, adr, Util.ENTRY_OFF_DATA, arr.length);
         return adr;
     }

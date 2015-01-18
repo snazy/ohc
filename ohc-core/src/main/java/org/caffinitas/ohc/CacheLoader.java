@@ -13,26 +13,9 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.linked;
+package org.caffinitas.ohc;
 
-import sun.misc.Unsafe;
-
-abstract class UnsExt
+public interface CacheLoader<K, V>
 {
-    final Unsafe unsafe;
-
-    UnsExt(Unsafe unsafe)
-    {
-        this.unsafe = unsafe;
-    }
-
-    abstract long getAndPutLong(long address, long offset, long value);
-
-    abstract long getAndAddLong(long address, long offset, long value);
-
-    abstract int getAndPutInt(long address, long offset, int value);
-
-    abstract int getAndAddInt(long address, long offset, int value);
-
-    abstract long crc32(long address, long offset, long len);
+    V load(K key) throws PermanentLoadException, Exception;
 }

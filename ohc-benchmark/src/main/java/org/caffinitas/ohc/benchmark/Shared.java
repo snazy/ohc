@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-
 import javax.management.InstanceNotFoundException;
 import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
@@ -31,8 +30,6 @@ import javax.management.ObjectName;
 import javax.management.openmbean.CompositeDataSupport;
 
 import com.codahale.metrics.Snapshot;
-import com.codahale.metrics.Timer;
-import com.codahale.metrics.UniformReservoir;
 import org.caffinitas.ohc.OHCache;
 
 final class Shared
@@ -41,8 +38,7 @@ final class Shared
     static OHCache<Long, byte[]> cache;
 
     static final AtomicBoolean fatal = new AtomicBoolean();
-    static Timer readTimer = new Timer(new UniformReservoir());
-    static Timer writeTimer = new Timer(new UniformReservoir());
+    static MergeableTimer[] timers = new MergeableTimer[] { new MergeableTimer(), new MergeableTimer() };
     static final ConcurrentHashMap<String, GCStats> gcStats = new ConcurrentHashMap<>();
 
     static
@@ -83,8 +79,8 @@ final class Shared
 
     static void clearStats()
     {
-        readTimer = new Timer(new UniformReservoir());
-        writeTimer = new Timer(new UniformReservoir());
+        timers[0] = new MergeableTimer();
+        timers[1] = new MergeableTimer();
         gcStats.clear();
         cache.resetStatistics();
     }
@@ -96,39 +92,42 @@ final class Shared
         int cores;
     }
 
-    static void printStats(String title)
+    static void printStats(String title, boolean bucketHistogram)
     {
-        System.out.println(String.format("%s%n     %s%n" +
-                                         "   Histogram:%n%s", title, cache.stats(), cache.getBucketHistogram()));
+        if (bucketHistogram)
+            System.out.printf("%s%n     %s%n" +
+                              "   Histogram:%n%s%n", title, cache.stats(), cache.getBucketHistogram());
+        else
+            System.out.printf("%s%n     %s%n", title, cache.stats());
         for (Map.Entry<String, GCStats> gcStat : gcStats.entrySet())
         {
             GCStats gs = gcStat.getValue();
             long count = gs.count.longValue();
             long duration = gs.duration.longValue();
             double runtimeAvg = ((double) duration) / count;
-            System.out.println(String.format("     GC  %-15s : count: %8d    duration: %8dms (avg:%6.2fms)    cores: %d",
-                                             gcStat.getKey(),
-                                             count, duration, runtimeAvg, gs.cores));
+            System.out.printf("     GC  %-15s : count: %8d    duration: %8dms (avg:%6.2fms)    cores: %d%n",
+                              gcStat.getKey(),
+                              count, duration, runtimeAvg, gs.cores);
         }
-        dumpStats(readTimer, "Reads");
-        dumpStats(writeTimer, "Writes");
+        dumpStats(timers[0], "Reads");
+        dumpStats(timers[1], "Writes");
     }
 
-    private static void dumpStats(Timer timer, String header)
+    private static void dumpStats(MergeableTimer timer, String header)
     {
-        Snapshot snap = timer.getSnapshot();
+        Snapshot snap = timer.histogram.getSnapshot();
         System.out.printf("     %-10s: one/five/fifteen/mean:  %.0f/%.0f/%.0f/%.0f%n" +
                           "                 count:                  %10d %n" +
                           "                 min/max/mean/stddev:    %8.5f/%8.5f/%8.5f/%8.5f%n" +
                           "                 75/95/98/99/999/median: %8.5f/%8.5f/%8.5f/%8.5f/%8.5f/%8.5f%n",
                           header,
                           //
-                          timer.getOneMinuteRate(),
-                          timer.getFiveMinuteRate(),
-                          timer.getFifteenMinuteRate(),
-                          timer.getMeanRate(),
+                          timer.meter.getOneMinuteRate(),
+                          timer.meter.getFiveMinuteRate(),
+                          timer.meter.getFifteenMinuteRate(),
+                          timer.meter.getMeanRate(),
                           //
-                          timer.getCount(),
+                          timer.meter.getCount(),
                           //
                           ((double)snap.getMin()/NANOS_PER_MILLI),
                           ((double)snap.getMax()/NANOS_PER_MILLI),

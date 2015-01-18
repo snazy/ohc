@@ -28,7 +28,6 @@ public class HashEntryValueInputOutputTest
     @AfterMethod(alwaysRun = true)
     public void deinit()
     {
-        HashEntries.memBufferClear();
         Uns.clearUnsDebugForTest();
     }
 
@@ -41,7 +40,7 @@ public class HashEntryValueInputOutputTest
         try
         {
             out.writeBoolean(ref);
-            
+
             HashEntryValueInput input = new HashEntryValueInput(out.blkAdr);
             boolean rd = input.readBoolean();
             assertEquals(rd, ref);
@@ -237,9 +236,9 @@ public class HashEntryValueInputOutputTest
     @Test
     public void testReadUTF() throws Exception
     {
-        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio";
+        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio \u00e4\u00f6\u00fc \uff02 ";
 
-        HashEntryValueOutput out = build(ref.length() + 2);
+        HashEntryValueOutput out = build(TestUtils.writeUTFLen(ref));
         out.writeUTF(ref);
         try
         {
@@ -254,13 +253,51 @@ public class HashEntryValueInputOutputTest
         }
     }
 
+    @Test(dependsOnMethods = "testReadUTF")
+    public void testReadUTFAllChars() throws Exception
+    {
+        StringBuilder sb = new StringBuilder(65536);
+        for (int i = 0; i <= 65535; i++)
+            sb.append((char) i);
+        String ref1 = sb.substring(0, 16384);
+        String ref2 = sb.substring(16384, 32768);
+        String ref3 = sb.substring(32768, 49152);
+        String ref4 = sb.substring(49152);
+
+        HashEntryValueOutput out = build(TestUtils.writeUTFLen(ref1) +
+                                         TestUtils.writeUTFLen(ref2) +
+                                         TestUtils.writeUTFLen(ref3) +
+                                         TestUtils.writeUTFLen(ref4));
+        out.writeUTF(ref1);
+        out.writeUTF(ref2);
+        out.writeUTF(ref3);
+        out.writeUTF(ref4);
+        try
+        {
+            HashEntryValueInput input = new HashEntryValueInput(out.blkAdr);
+            String rd = input.readUTF();
+            assertEquals(rd, ref1);
+            rd = input.readUTF();
+            assertEquals(rd, ref2);
+            rd = input.readUTF();
+            assertEquals(rd, ref3);
+            rd = input.readUTF();
+            assertEquals(rd, ref4);
+            assertEquals(input.available(), 0);
+        }
+        finally
+        {
+            Uns.free(out.blkAdr);
+        }
+    }
+
     @Test
     public void testReadMixed() throws Exception
     {
-        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio";
+        String ref = "aiehwfuiewh oifjewo ifjoiewj foijew f jioew fio \u00e4\u00f6\u00fc \uff02 ";
 
-        HashEntryValueOutput out = build(ref.length() + 2 +
-                    3 + 6 + 12 + 12 + 12345 + 5432 + 321 + ref.length() + 2);
+        HashEntryValueOutput out = build(TestUtils.writeUTFLen(ref) +
+                                         3 + 6 + 12 + 12 + 12345 + 5432 + 321 + TestUtils.writeUTFLen(ref));
         out.writeUTF(ref);
         out.writeBoolean(false);
         out.writeByte(0x8f);
@@ -286,7 +323,7 @@ public class HashEntryValueInputOutputTest
             assertEquals(input.readByte(), (int) (byte) 0x8f);
             assertEquals(input.readUnsignedByte(), 0x8f);
             assertEquals(input.readChar(), 'R');
-            assertEquals(input.readShort(), (int)(short)0x9eab);
+            assertEquals(input.readShort(), (int) (short) 0x9eab);
             assertEquals(input.readUnsignedShort(), 0x9eab);
             assertEquals(input.readInt(), 0x11223344);
             assertEquals(input.readLong(), 0xaabbccddeeff1213L);
@@ -377,7 +414,7 @@ public class HashEntryValueInputOutputTest
         {
             HashEntryValueInput input = new HashEntryValueInput(out.blkAdr);
             input.skipBytes(12345);
-            byte[] b = new byte[bytes1.length*2];
+            byte[] b = new byte[bytes1.length * 2];
             input.assertAvail(bytes1.length - 1000 + bytes2.length - 100);
             assertEquals(input.available(), bytes1.length - 1000 + bytes2.length - 100);
             input.readFully(b, 1000, bytes1.length - 1000);
@@ -425,7 +462,7 @@ public class HashEntryValueInputOutputTest
     private static HashEntryValueOutput build(int len)
     {
         long adr = Uns.allocate(Util.ENTRY_OFF_DATA + 16 + len);
-        HashEntries.init(0, 11, len, adr);
+        HashEntries.init(0, 11, len, adr, 0);
         HashEntryValueOutput out = new HashEntryValueOutput(adr, 16, len);
         assertEquals(out.avail(), len);
         return out;
