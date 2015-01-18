@@ -20,12 +20,12 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.UniformReservoir;
 
-public class MergeableTimer
+public class MergeableTimerMaster
 {
     final Meter meter;
     final Histogram histogram;
 
-    public MergeableTimer()
+    public MergeableTimerMaster()
     {
         this.meter = new Meter(Clock.defaultClock());
         this.histogram = new Histogram(new UniformReservoir());

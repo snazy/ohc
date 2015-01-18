@@ -49,7 +49,7 @@ public final class MergeableTimerSource
         }
     }
 
-    public void mergeTo(MergeableTimer timer)
+    public void mergeTo(MergeableTimerMaster timer)
     {
         Histogram hist = this.histogram.getAndSet(new Histogram(new UniformReservoir()));
         for (long l : hist.getSnapshot().getValues())

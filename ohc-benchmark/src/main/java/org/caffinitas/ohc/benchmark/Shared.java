@@ -38,7 +38,7 @@ final class Shared
     static OHCache<Long, byte[]> cache;
 
     static final AtomicBoolean fatal = new AtomicBoolean();
-    static MergeableTimer[] timers = new MergeableTimer[] { new MergeableTimer(), new MergeableTimer() };
+    static MergeableTimerMaster[] timers = new MergeableTimerMaster[] { new MergeableTimerMaster(), new MergeableTimerMaster() };
     static final ConcurrentHashMap<String, GCStats> gcStats = new ConcurrentHashMap<>();
 
     static
@@ -79,8 +79,8 @@ final class Shared
 
     static void clearStats()
     {
-        timers[0] = new MergeableTimer();
-        timers[1] = new MergeableTimer();
+        timers[0] = new MergeableTimerMaster();
+        timers[1] = new MergeableTimerMaster();
         gcStats.clear();
         cache.resetStatistics();
     }
@@ -113,7 +113,7 @@ final class Shared
         dumpStats(timers[1], "Writes");
     }
 
-    private static void dumpStats(MergeableTimer timer, String header)
+    private static void dumpStats(MergeableTimerMaster timer, String header)
     {
         Snapshot snap = timer.histogram.getSnapshot();
         System.out.printf("     %-10s: one/five/fifteen/mean:  %.0f/%.0f/%.0f/%.0f%n" +
