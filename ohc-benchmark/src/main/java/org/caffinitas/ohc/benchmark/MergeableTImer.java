@@ -24,12 +24,10 @@ public class MergeableTimer
 {
     final Meter meter;
     final Histogram histogram;
-    final Clock clock;
 
     public MergeableTimer()
     {
-        this.clock = Clock.defaultClock();
-        this.meter = new Meter(this.clock);
+        this.meter = new Meter(Clock.defaultClock());
         this.histogram = new Histogram(new UniformReservoir());
     }
 }
