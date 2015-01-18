@@ -16,7 +16,6 @@
 - benchmark: make metrics in local to the driver threads
 - benchmark: disable bucket histogram in stats by default
 - default minimum capacity changed to 64MB
-- 
 
 0.2.1
 =====

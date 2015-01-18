@@ -4,7 +4,7 @@ OHC - A off-heap-cache
 Status
 ------
 
-This library should be considered as *experimental* and **not production ready**.
+This library should be considered as **nearly** *production ready*.
 
 Performance
 -----------
@@ -110,6 +110,8 @@ Available command line options::
  -wkd <arg>    hot key use distribution - default: uniform(1..10000)
  -wu <arg>     warm up - <work-secs>,<sleep-secs>
  -z <arg>      hash table size
+ -bh           show bucket historgram in stats
+ -kl <arg>     enable bucket histogram. Default: false
 
 Distributions for read keys, write keys and value sizes can be configured using the following functions::
 
@@ -140,8 +142,8 @@ Quick example with a read/write ratio of ``.9``, approx 1.5GB max capacity, 16 t
 
 On a 2.6GHz Core i7 system (OSX) the following numbers are typical running the above benchmark (.9 read/write ratio):
 
-- # of gets per second: 2300000
-- # of puts per second:  260000
+- # of gets per second: 2500000
+- # of puts per second:  270000
 
 Why off-heap memory
 -------------------
