@@ -15,11 +15,21 @@
  */
 package org.caffinitas.ohc.benchmark;
 
-import java.util.concurrent.Callable;
+import com.codahale.metrics.Clock;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.UniformReservoir;
 
-import com.codahale.metrics.Timer;
-
-public interface Task extends Callable<Object>
+public class MergeableTimer
 {
-    int timer();
+    final Meter meter;
+    final Histogram histogram;
+    final Clock clock;
+
+    public MergeableTimer()
+    {
+        this.clock = Clock.defaultClock();
+        this.meter = new Meter(this.clock);
+        this.histogram = new Histogram(new UniformReservoir());
+    }
 }

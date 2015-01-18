@@ -181,6 +181,8 @@ public final class BenchmarkOHC
 
         // clear all statistics, timers, etc
         Shared.clearStats();
+        for (Driver driver : drivers)
+            driver.clearStats();
 
         long endAt = System.currentTimeMillis() + duration * 1000L;
 
@@ -190,7 +192,9 @@ public final class BenchmarkOHC
             driver.future = main.submit(driver);
         }
 
+        long mergeInterval = 500L;
         long statsInterval = 10000L;
+        long nextMerge = System.currentTimeMillis() + mergeInterval;
         long nextStats = System.currentTimeMillis() + statsInterval;
 
         while (System.currentTimeMillis() < endAt)
@@ -200,6 +204,9 @@ public final class BenchmarkOHC
                 System.err.println("Unhandled exception caught - exiting");
                 System.exit(1);
             }
+
+            if (nextMerge <= System.currentTimeMillis())
+                mergeTimers(drivers);
 
             if (nextStats <= System.currentTimeMillis())
             {
@@ -211,11 +218,24 @@ public final class BenchmarkOHC
         }
 
         printMessage("%s: Time over ... waiting for tasks to complete...", new Date());
+        mergeTimers(drivers);
 
         for (Driver driver : drivers)
             driver.future.get();
 
+        mergeTimers(drivers);
         Shared.printStats("Final", bucketHistogram);
+    }
+
+    private static void mergeTimers(Driver[] drivers)
+    {
+        for (Driver driver : drivers)
+        {
+            for (int i = 0; i < Shared.timers.length; i++)
+            {
+                driver.timers[i].mergeTo(Shared.timers[i]);
+            }
+        }
     }
 
     private static CommandLine parseArguments(String[] args) throws ParseException

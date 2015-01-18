@@ -26,9 +26,9 @@ class ReadTask implements Task
         this.key = key;
     }
 
-    public Timer timer()
+    public int timer()
     {
-        return Shared.readTimer;
+        return 0;
     }
 
     public Object call() throws Exception

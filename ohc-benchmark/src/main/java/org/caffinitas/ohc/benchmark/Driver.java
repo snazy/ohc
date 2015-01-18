@@ -17,6 +17,8 @@ package org.caffinitas.ohc.benchmark;
 
 import java.util.concurrent.Future;
 
+import com.codahale.metrics.Timer;
+import com.codahale.metrics.UniformReservoir;
 import org.caffinitas.ohc.benchmark.distribution.Distribution;
 import org.caffinitas.ohc.benchmark.distribution.FasterRandom;
 
@@ -32,6 +34,10 @@ final class Driver implements Runnable
     long endAt;
     Future<?> future;
     boolean stop;
+
+    MergeableTimerSource[] timers = new MergeableTimerSource[]{
+                                                              new MergeableTimerSource(),
+                                                              new MergeableTimerSource() };
 
     Driver(Distribution readKeyDist, Distribution writeKeyDist, Distribution valueSizeDist, double readWriteRatio, long seed)
     {
@@ -61,7 +67,7 @@ final class Driver implements Runnable
                 Task task = read
                             ? new ReadTask(readKeyDist.next())
                             : new WriteTask(writeKeyDist.next(), (int) valueSizeDist.next());
-                task.timer().time(task);
+                timers[task.timer()].time(task);
 
                 if (Shared.fatal.get())
                 {
@@ -79,5 +85,11 @@ final class Driver implements Runnable
             Shared.fatal.set(true);
             stop = true;
         }
+    }
+
+    public void clearStats()
+    {
+        for (MergeableTimerSource timer : timers)
+            timer.clear();
     }
 }

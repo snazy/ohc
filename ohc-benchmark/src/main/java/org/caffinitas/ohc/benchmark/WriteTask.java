@@ -28,9 +28,9 @@ class WriteTask implements Task
         this.valueLen = valueLen;
     }
 
-    public Timer timer()
+    public int timer()
     {
-        return Shared.writeTimer;
+        return 1;
     }
 
     public Object call() throws Exception
