@@ -17,8 +17,6 @@ package org.caffinitas.ohc.benchmark;
 
 import java.util.concurrent.Future;
 
-import com.codahale.metrics.Timer;
-import com.codahale.metrics.UniformReservoir;
 import org.caffinitas.ohc.benchmark.distribution.Distribution;
 import org.caffinitas.ohc.benchmark.distribution.FasterRandom;
 
