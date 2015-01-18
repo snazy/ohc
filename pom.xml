@@ -317,6 +317,11 @@
             <build>
                 <plugins>
                     <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                    </plugin>
+
+                    <plugin>
                         <groupId>external.atlassian.jgitflow</groupId>
                         <artifactId>jgitflow-maven-plugin</artifactId>
                         <version>${version.external.atlassian.jgitflow.jgitflow-maven-plugin}</version>
