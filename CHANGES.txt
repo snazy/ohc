@@ -1,3 +1,9 @@
+0.3.1
+=====
+- change system property name from DISABLE_JEMALLOC to org.caffinitas.ohc.disableJEmalloc
+- change system property name from DEBUG_OFF_HEAP_MEMORY_ACCESS to org.caffinitas.ohc.debugOffHeapAccess
+- add option OHCacheBuilder to throw OutOfMemoryError when off-heap memory-allocation fails
+
 0.3
 ===
 - remove cassandra-all dependency from ohc-benchmark

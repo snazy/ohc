@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.alloc.IAllocator;
 import org.caffinitas.ohc.alloc.JEMallocAllocator;
 import org.caffinitas.ohc.alloc.JNANativeAllocator;
@@ -41,9 +42,9 @@ final class Uns
     private static final Unsafe unsafe;
     private static final IAllocator allocator;
 
-    private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty("DEBUG_OFF_HEAP_MEMORY_ACCESS", "false"));
-    private static final boolean __DISABLE_JEMALLOC = Boolean.parseBoolean(System.getProperty("DISABLE_JEMALLOC", "false"));
-    private static final String __ALLOCATOR = System.getProperty("org.caffinitas.ohc.allocator");
+    private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty(OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "debugOffHeapAccess", "false"));
+    private static final boolean __DISABLE_JEMALLOC = Boolean.parseBoolean(System.getProperty(OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "disableJEmalloc", "false"));
+    private static final String __ALLOCATOR = System.getProperty(OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "allocator");
 
     //
     // #ifdef __DEBUG_OFF_HEAP_MEMORY_ACCESS
@@ -149,7 +150,7 @@ final class Uns
             ext = e;
 
             if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
-                LOGGER.warn("Degraded performance due to off-heap memory allocations and access guarded by debug code enabled via system property DEBUG_OFF_HEAP_MEMORY_ACCESS=true");
+                LOGGER.warn("Degraded performance due to off-heap memory allocations and access guarded by debug code enabled via system property " + OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "debugOffHeapAccess=true");
 
             IAllocator alloc = null;
             String allocType = __ALLOCATOR != null ? __ALLOCATOR : "jemalloc";
@@ -165,7 +166,7 @@ final class Uns
                         LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
                     }
                 else
-                    LOGGER.warn("jemalloc disabled by system property setting DISABLE_JEMALLOC=true");
+                    LOGGER.warn("jemalloc disabled by system property setting " + OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "disableJEmalloc=true");
 
             if ("jna".equalsIgnoreCase(allocType))
             {
@@ -366,15 +367,27 @@ final class Uns
 
     static long allocate(long bytes)
     {
+        return allocate(bytes, false);
+    }
+
+    static long allocate(long bytes, boolean throwOOME)
+    {
         long address = allocator.allocate(bytes);
         if (address != 0L)
             allocated(address, bytes);
-        return address > 0L ? address : 0L;
+        else if (throwOOME)
+            throw new OutOfMemoryError("unable to allocate " + bytes + " in off-heap");
+        return address;
     }
 
     static long allocateIOException(long bytes) throws IOException
     {
-        long address = allocate(bytes);
+        return allocateIOException(bytes, false);
+    }
+
+    static long allocateIOException(long bytes, boolean throwOOME) throws IOException
+    {
+        long address = allocate(bytes, throwOOME);
         if (address == 0L)
             throw new IOException("unable to allocate " + bytes + " in off-heap");
         return address;
