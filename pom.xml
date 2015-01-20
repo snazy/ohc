@@ -26,6 +26,16 @@
             <email>robert@caffinitas.org</email>
         </developer>
     </developers>
+    <contributors>
+        <contributor>
+            <name>Benedict Elliott Smith</name>
+            <email>belliottsmith@datastax.com</email>
+        </contributor>
+        <contributor>
+            <name>Ariel Weisberg</name>
+            <email>ariel.weisberg@datastax.com</email>
+        </contributor>
+    </contributors>
 
     <licenses>
         <license>
