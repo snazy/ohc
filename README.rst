@@ -169,11 +169,11 @@ this library does its job for the cached data.
 History
 -------
 
-OHC was developed in 2014/15 for Apache Cassandra 3.0 to be used as the new row-cache backend for
-https://issues.apache.org/jira/browse/CASSANDRA-7438 .
+OHC was developed in 2014/15 for `Apache Cassandra <http://cassandra.apache.org/>`_ 3.0 to be used as the `new
+row-cache backend <https://issues.apache.org/jira/browse/CASSANDRA-7438>`_.
 Since there were no suitable fully off-heap cache implementations available, it has been decided to
 build a completely new one - and that's OHC. But it turned out that OHC alone might also be usable for
-other projects that's why OHC is a separate library.
+other projects - that's why OHC is a separate library.
 
 Contributors
 ------------
