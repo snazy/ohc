@@ -166,6 +166,23 @@ But off heap memory is great when you have to deal with a huge amount of several
 that dos not put any pressure on the Java garbage collector. Let the Java GC do its job for the application where
 this library does its job for the cached data.
 
+History
+-------
+
+OHC was developed in 2014/15 for Apache Cassandra 3.0 to be used as the new row-cache backend for
+https://issues.apache.org/jira/browse/CASSANDRA-7438 .
+Since there were no suitable fully off-heap cache implementations available, it has been decided to
+build a completely new one - and that's OHC. But it turned out that OHC alone might also be usable for
+other projects that's why OHC is a separate library.
+
+Contributors
+------------
+
+A big 'thank you' has to go to `Benedict Elliott Smith <https://twitter.com/_belliottsmith>`_ and
+`Ariel Weisberg <https://twitter.com/ArielWeisberg>`_ from DataStax for their very useful input to OHC!
+
+Developer: `Robert Stupp <https://twitter.com/snazy>`_
+
 License
 -------
 
