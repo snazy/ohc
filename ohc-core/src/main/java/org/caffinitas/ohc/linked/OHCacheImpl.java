@@ -70,6 +70,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     private final ScheduledExecutorService executorService;
 
+    private final boolean throwOOME;
+
     public OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
         long capacity = builder.getCapacity();
@@ -77,6 +79,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             throw new IllegalArgumentException("capacity");
 
         this.capacity = capacity;
+
+        this.throwOOME = builder.isThrowOOME();
 
         // build segments
         int segments = builder.getSegmentCount();
@@ -197,7 +201,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             if (old != null)
             {
                 oldValueLen = valueSerializer.serializedSize(old);
-                oldValueAdr = Uns.allocate(oldValueLen);
+                oldValueAdr = Uns.allocate(oldValueLen, throwOOME);
                 if (oldValueAdr == 0L)
                     throw new RuntimeException("Unable to allocate " + oldValueLen + " bytes in off-heap");
                 try
@@ -215,7 +219,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
 
             long hashEntryAdr;
-            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
+            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes, throwOOME)) == 0L)
             {
                 // entry too large to be inserted or OS is not able to provide enough memory
                 putFailCount++;
@@ -308,7 +312,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
             long bytes = Util.allocLen(keyLen, 0L);
 
-            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
+            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes, throwOOME)) == 0L)
             {
                 // entry too large to be inserted or OS is not able to provide enough memory
                 putFailCount++;
@@ -355,7 +359,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                             long bytes = Util.allocLen(keyLen, valueLen);
 
                             long hashEntryAdr;
-                            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
+                            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes, throwOOME)) == 0L)
                                 throw new RuntimeException("max entry size exceeded or malloc() failed");
 
                             long hash = serializeForPut(key, value, keyLen, valueLen, hashEntryAdr);
@@ -786,7 +790,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public CloseableIterator<K> deserializeKeys(final ReadableByteChannel channel) throws IOException
     {
-        long headerAddress = Uns.allocateIOException(8);
+        long headerAddress = Uns.allocateIOException(8, throwOOME);
         try
         {
             ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L);
@@ -859,7 +863,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                         bufAdr = 0L;
 
                         bufLen = Math.max(4096, Util.roundUpToPowerOf2(totalLen, 1 << 30));
-                        bufAdr = Uns.allocateIOException(bufLen);
+                        bufAdr = Uns.allocateIOException(bufLen, throwOOME);
                     }
 
                     if (!Util.readFully(channel, Uns.directBufferFor(bufAdr, Util.ENTRY_OFF_DATA, keyLen)))
@@ -916,7 +920,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long kvLen = Util.roundUpTo8(keyLen) + valueLen;
         long totalLen = kvLen + Util.ENTRY_OFF_DATA;
         long hashEntryAdr;
-        if ((maxEntrySize > 0L && totalLen > maxEntrySize) || (hashEntryAdr = Uns.allocate(totalLen)) == 0L)
+        if ((maxEntrySize > 0L && totalLen > maxEntrySize) || (hashEntryAdr = Uns.allocate(totalLen, throwOOME)) == 0L)
         {
             if (channel instanceof SeekableByteChannel)
             {
@@ -963,7 +967,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public int deserializeEntries(ReadableByteChannel channel) throws IOException
     {
-        long headerAddress = Uns.allocateIOException(8);
+        long headerAddress = Uns.allocateIOException(8, throwOOME);
         try
         {
             ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L);
@@ -1007,7 +1011,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         // This implementation may also return more results than expected just to keep it simple
         // (it does not really matter if you request 5000 keys and e.g. get 5015).
 
-        long headerAddress = Uns.allocateIOException(8);
+        long headerAddress = Uns.allocateIOException(8, throwOOME);
         try
         {
             ByteBuffer headerBuffer = Uns.directBufferFor(headerAddress, 0L, 8L);

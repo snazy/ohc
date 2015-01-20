@@ -107,8 +107,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <systemProperties>
-                        <DISABLE_JEMALLOC>false</DISABLE_JEMALLOC>
-                        <DEBUG_OFF_HEAP_MEMORY_ACCESS>true</DEBUG_OFF_HEAP_MEMORY_ACCESS>
+                        <org.caffinitas.ohc.disableJEmalloc>false</org.caffinitas.ohc.disableJEmalloc>
+                        <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
                     </systemProperties>
                     <testClassesDirectory>../ohc-core/target/test-classes</testClassesDirectory>
                     <testSourceDirectory>../ohc-core/src/test/java</testSourceDirectory>

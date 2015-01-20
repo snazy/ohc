@@ -51,9 +51,13 @@ final class OffHeapMap
 
     private final ReentrantLock lock = new ReentrantLock();
 
+    private final boolean throwOOME;
+
     OffHeapMap(OHCacheBuilder builder, long freeCapacity)
     {
         this.freeCapacity = freeCapacity;
+
+        this.throwOOME = builder.isThrowOOME();
 
         int hts = builder.getHashTableSize();
         if (hts <= 0)
@@ -65,7 +69,7 @@ final class OffHeapMap
             bl = 8;
         int buckets = (int) Util.roundUpToPowerOf2(hts, MAX_TABLE_SIZE);
         entriesPerBucket = (int) Util.roundUpToPowerOf2(bl, MAX_TABLE_SIZE);
-        table = Table.create(buckets, entriesPerBucket);
+        table = Table.create(buckets, entriesPerBucket, throwOOME);
         if (table == null)
             throw new RuntimeException("unable to allocate off-heap memory for segment");
 
@@ -428,7 +432,7 @@ final class OffHeapMap
             return;
         }
 
-        Table newTable = Table.create(tableSize * 2, entriesPerBucket);
+        Table newTable = Table.create(tableSize * 2, entriesPerBucket, throwOOME);
         if (newTable == null)
             return;
 
@@ -552,13 +556,13 @@ final class OffHeapMap
         private int lruWriteTarget;
         private int lruEldestIndex;
 
-        static Table create(int hashTableSize, int entriesPerBucket)
+        static Table create(int hashTableSize, int entriesPerBucket, boolean throwOOME)
         {
             int msz = (int) Util.BUCKET_ENTRY_LEN * hashTableSize * entriesPerBucket;
 
             msz += hashTableSize * Util.POINTER_LEN;
 
-            long address = Uns.allocate(msz);
+            long address = Uns.allocate(msz, throwOOME);
             return address != 0L ? new Table(address, hashTableSize, entriesPerBucket) : null;
         }
 

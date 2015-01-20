@@ -60,6 +60,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     private volatile long putFailCount;
 
+    private final boolean throwOOME;
+
     public OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
         long capacity = builder.getCapacity();
@@ -67,6 +69,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             throw new IllegalArgumentException("capacity");
 
         this.capacity = capacity;
+
+        this.throwOOME = builder.isThrowOOME();
 
         // build segments
         int segments = builder.getSegmentCount();
@@ -186,7 +190,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             if (old != null)
             {
                 oldValueLen = valueSerializer.serializedSize(old);
-                oldValueAdr = Uns.allocate(oldValueLen);
+                oldValueAdr = Uns.allocate(oldValueLen, throwOOME);
                 if (oldValueAdr == 0L)
                     throw new RuntimeException("Unable to allocate " + oldValueLen + " bytes in off-heap");
                 try
@@ -204,7 +208,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
 
             long hashEntryAdr;
-            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes)) == 0L)
+            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes, throwOOME)) == 0L)
             {
                 // entry too large to be inserted or OS is not able to provide enough memory
                 putFailCount++;
@@ -642,7 +646,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long kvLen = Util.roundUpTo8(keyLen) + valueLen;
         long totalLen = kvLen + Util.ENTRY_OFF_DATA;
         long hashEntryAdr;
-        if ((maxEntrySize > 0L && totalLen > maxEntrySize) || (hashEntryAdr = Uns.allocate(totalLen)) == 0L)
+        if ((maxEntrySize > 0L && totalLen > maxEntrySize) || (hashEntryAdr = Uns.allocate(totalLen, throwOOME)) == 0L)
         {
             if (channel instanceof SeekableByteChannel)
             {

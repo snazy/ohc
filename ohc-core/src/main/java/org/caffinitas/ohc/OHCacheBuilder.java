@@ -73,6 +73,11 @@ import org.caffinitas.ohc.linked.OHCacheImpl;
  *         <td>(For tables implementation only) Number of entries per bucket.</td>
  *         <td>{@code 8}</td>
  *     </tr>
+ *     <tr>
+ *         <td>{@code throwOOME}</td>
+ *         <td>Throw {@code OutOfMemoryError} if off-heap allocation fails</td>
+ *         <td>{@code false}</td>
+ *     </tr>
  * </table>
  * <p>
  *     You may also use system properties prefixed with {@code org.caffinitas.org.} to other defaults.
@@ -94,6 +99,7 @@ public class OHCacheBuilder<K, V>
     private long maxEntrySize;
     private Class<? extends OHCache> type = OHCacheImpl.class;
     private ScheduledExecutorService executorService;
+    private boolean throwOOME;
 
     private OHCacheBuilder()
     {
@@ -108,6 +114,7 @@ public class OHCacheBuilder<K, V>
         capacity = fromSystemProperties("capacity", capacity);
         loadFactor = fromSystemProperties("loadFactor", loadFactor);
         maxEntrySize = fromSystemProperties("maxEntrySize", maxEntrySize);
+        throwOOME = fromSystemProperties("throwOOME", throwOOME);
         String t = fromSystemProperties("type", null);
         if (t != null)
             try
@@ -127,21 +134,54 @@ public class OHCacheBuilder<K, V>
             }
     }
 
-    public static final String SYSTEM_PROPERTY_PREFIX = "org.caffinitas.org.";
+    public static final String SYSTEM_PROPERTY_PREFIX = "org.caffinitas.ohc.";
 
     private static float fromSystemProperties(String name, float defaultValue)
     {
-        return Float.parseFloat(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Float.toString(defaultValue)));
+        try
+        {
+            return Float.parseFloat(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Float.toString(defaultValue)));
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException("Failed to parse system property " + SYSTEM_PROPERTY_PREFIX + name, e);
+        }
     }
 
     private static long fromSystemProperties(String name, long defaultValue)
     {
-        return Long.parseLong(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Long.toString(defaultValue)));
+        try
+        {
+            return Long.parseLong(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Long.toString(defaultValue)));
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException("Failed to parse system property " + SYSTEM_PROPERTY_PREFIX + name, e);
+        }
     }
 
     private static int fromSystemProperties(String name, int defaultValue)
     {
-        return Integer.parseInt(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Integer.toString(defaultValue)));
+        try
+        {
+            return Integer.parseInt(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Integer.toString(defaultValue)));
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException("Failed to parse system property " + SYSTEM_PROPERTY_PREFIX + name, e);
+        }
+    }
+
+    private static boolean fromSystemProperties(String name, boolean defaultValue)
+    {
+        try
+        {
+            return Boolean.parseBoolean(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Boolean.toString(defaultValue)));
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException("Failed to parse system property " + SYSTEM_PROPERTY_PREFIX + name, e);
+        }
     }
 
     private static String fromSystemProperties(String name, String defaultValue)
@@ -280,6 +320,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> executorService(ScheduledExecutorService executorService)
     {
         this.executorService = executorService;
+        return this;
+    }
+
+    public boolean isThrowOOME()
+    {
+        return throwOOME;
+    }
+
+    public OHCacheBuilder<K, V> throwOOME(boolean throwOOME)
+    {
+        this.throwOOME = throwOOME;
         return this;
     }
 }

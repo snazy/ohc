@@ -51,7 +51,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     private final CacheSerializer<V> valueSerializer;
     private long capacity;
 
-    private final org.caffinitas.ohc.tables.CheckSegment[] maps;
+    private final CheckSegment[] maps;
     private final long maxEntrySize;
     private final int segmentShift;
     private final long segmentMask;

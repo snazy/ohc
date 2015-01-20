@@ -48,16 +48,20 @@ final class OffHeapMap
 
     private final ReentrantLock lock = new ReentrantLock();
 
+    private final boolean throwOOME;
+
     OffHeapMap(OHCacheBuilder builder, long freeCapacity)
     {
         this.freeCapacity = freeCapacity;
+
+        this.throwOOME = builder.isThrowOOME();
 
         int hts = builder.getHashTableSize();
         if (hts <= 0)
             hts = 8192;
         if (hts < 256)
             hts = 256;
-        table = Table.create((int) Util.roundUpToPowerOf2(hts, MAX_TABLE_SIZE));
+        table = Table.create((int) Util.roundUpToPowerOf2(hts, MAX_TABLE_SIZE), throwOOME);
         if (table == null)
             throw new RuntimeException("unable to allocate off-heap memory for segment");
 
@@ -406,7 +410,7 @@ final class OffHeapMap
             return;
         }
 
-        Table newTable = Table.create(tableSize * 2);
+        Table newTable = Table.create(tableSize * 2, throwOOME);
         if (newTable == null)
             return;
         long next;
@@ -500,10 +504,10 @@ final class OffHeapMap
         final long address;
         private boolean released;
 
-        static Table create(int hashTableSize)
+        static Table create(int hashTableSize, boolean throwOOME)
         {
             int msz = (int) Util.BUCKET_ENTRY_LEN * hashTableSize;
-            long address = Uns.allocate(msz);
+            long address = Uns.allocate(msz, throwOOME);
             return address != 0L ? new Table(address, hashTableSize) : null;
         }
 
