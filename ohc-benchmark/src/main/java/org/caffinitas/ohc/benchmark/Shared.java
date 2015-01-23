@@ -15,6 +15,7 @@
  */
 package org.caffinitas.ohc.benchmark;
 
+import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,7 +39,7 @@ final class Shared
     static OHCache<Long, byte[]> cache;
 
     static final AtomicBoolean fatal = new AtomicBoolean();
-    static MergeableTimer[] timers = new MergeableTimer[] { new MergeableTimer(), new MergeableTimer() };
+    static MergeableTimer[] timers = new MergeableTimer[]{ new MergeableTimer(), new MergeableTimer() };
     static final ConcurrentHashMap<String, GCStats> gcStats = new ConcurrentHashMap<>();
 
     static
@@ -92,7 +93,7 @@ final class Shared
         int cores;
     }
 
-    static void printStats(String title, boolean bucketHistogram)
+    static void printStats(String title, boolean bucketHistogram, PrintStream csv)
     {
         if (bucketHistogram)
             System.out.printf("%s%n     %s%n" +
@@ -109,35 +110,53 @@ final class Shared
                               gcStat.getKey(),
                               count, duration, runtimeAvg, gs.cores);
         }
-        dumpStats(timers[0], "Reads");
-        dumpStats(timers[1], "Writes");
+
+        if (csv != null)
+            csv.print(timers[0].runtime());
+
+        dumpStats(timers[0], "Reads", csv);
+        dumpStats(timers[1], "Writes", csv);
+
+        if (csv != null)
+            csv.println();
     }
 
-    private static void dumpStats(MergeableTimer timer, String header)
+    private static void dumpStats(MergeableTimer timer, String header, PrintStream csv)
     {
         Snapshot snap = timer.histogram.getSnapshot();
+        double snapMean = snap.getMean() / NANOS_PER_MILLI;
+        double snapStdDev = snap.getStdDev() / NANOS_PER_MILLI;
+        double snap75 = snap.get75thPercentile() / NANOS_PER_MILLI;
+        double snap95 = snap.get95thPercentile() / NANOS_PER_MILLI;
+        double snap98 = snap.get98thPercentile() / NANOS_PER_MILLI;
+        double snap99 = snap.get99thPercentile() / NANOS_PER_MILLI;
+        double snap999 = snap.get999thPercentile() / NANOS_PER_MILLI;
+        double snapMedian = snap.getMedian() / NANOS_PER_MILLI;
+        double snapMax = (double) snap.getMax() / NANOS_PER_MILLI;
+        double snapMin = (double) snap.getMin() / NANOS_PER_MILLI;
+        double meanRate = timer.meter.getMeanRate();
+        long count = timer.meter.getCount();
+        double oneMinuteRate = timer.meter.getOneMinuteRate();
+        double fiveMinuteRate = timer.meter.getFiveMinuteRate();
+        double fifteenMinuteRate = timer.meter.getFifteenMinuteRate();
         System.out.printf("     %-10s: one/five/fifteen/mean:  %.0f/%.0f/%.0f/%.0f%n" +
                           "                 count:                  %10d %n" +
                           "                 min/max/mean/stddev:    %8.5f/%8.5f/%8.5f/%8.5f%n" +
                           "                 75/95/98/99/999/median: %8.5f/%8.5f/%8.5f/%8.5f/%8.5f/%8.5f%n",
                           header,
                           //
-                          timer.meter.getOneMinuteRate(),
-                          timer.meter.getFiveMinuteRate(),
-                          timer.meter.getFifteenMinuteRate(),
-                          timer.meter.getMeanRate(),
+                          oneMinuteRate, fiveMinuteRate, fifteenMinuteRate, meanRate,
                           //
-                          timer.meter.getCount(),
+                          count,
                           //
-                          ((double)snap.getMin()/NANOS_PER_MILLI),
-                          ((double)snap.getMax()/NANOS_PER_MILLI),
-                          snap.getMean()/NANOS_PER_MILLI,
-                          snap.getStdDev()/NANOS_PER_MILLI,
-                          snap.get75thPercentile()/NANOS_PER_MILLI,
-                          snap.get95thPercentile()/NANOS_PER_MILLI,
-                          snap.get98thPercentile()/NANOS_PER_MILLI,
-                          snap.get99thPercentile()/NANOS_PER_MILLI,
-                          snap.get999thPercentile()/NANOS_PER_MILLI,
-                          snap.getMedian()/NANOS_PER_MILLI);
+                          snapMin, snapMax, snapMean, snapStdDev,
+                          snap75, snap95, snap98, snap99, snap999, snapMedian);
+
+        if (csv != null)
+            csv.printf(";%d;%.0f;%.0f;%.0f;%.0f;%.5f;%.5f;%.5f;%.5f;%.5f;%.5f;%.5f;%.5f;%.5f;%.5f",
+                       count,
+                       oneMinuteRate, fiveMinuteRate, fifteenMinuteRate, meanRate,
+                       snapMin, snapMax, snapMean, snapStdDev,
+                       snap75, snap95, snap98, snap99, snap999, snapMedian);
     }
 }

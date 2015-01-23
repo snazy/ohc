@@ -25,9 +25,16 @@ public class MergeableTimer
     final Meter meter;
     final Histogram histogram;
 
+    final long started = System.currentTimeMillis();
+
     public MergeableTimer()
     {
         this.meter = new Meter(Clock.defaultClock());
         this.histogram = new Histogram(new UniformReservoir());
+    }
+
+    long runtime()
+    {
+        return System.currentTimeMillis() - started;
     }
 }

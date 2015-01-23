@@ -5,3 +5,5 @@ target
 .DS_Store
 
 hs_err_*.log
+
+ohc-benchmark/batch-bench
