@@ -143,8 +143,8 @@ mode="exec"
 j_exec=""
 while [ $# -ne 0 ] ; do
     case $1 in
-        -warm)  warm_up=$1; shift;;
-        -cold)  cold_sleep=$1; shift;;
+        -warm)  warm_up=$2; shift;;
+        -cold)  cold_sleep=$2; shift;;
         -count) mode="count";;
         -dry)   mode="dry";;
         -pre)   j_exec="$1 "; shift;;
