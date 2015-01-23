@@ -220,9 +220,9 @@ for p in $PARAMS ; do
 
             j_run="$t_exec -o $log_dir/$name-time.csv"
             j_run="$j_run $j_exec -cap $capacity -d $duration -kl $key_len -r $ratio -sc $segments -t $threads -wu \"$warm_up,$cold_sleep\""
-            j_run="$j_run -rkd 'gaussian(1..$read_key_dist,2)'"
-            j_run="$j_run -wkd 'gaussian(1..$write_key_dist,2)'"
-            j_run="$j_run -vs 'gaussian(1024..$value_size,2)'"
+            j_run="$j_run -rkd gaussian(1..$read_key_dist,2)"
+            j_run="$j_run -wkd gaussian(1..$write_key_dist,2)"
+            j_run="$j_run -vs gaussian(1024..$value_size,2)"
             j_run="$j_run -csv $log_dir/$name.csv"
 
             case $mode in
