@@ -176,7 +176,7 @@ else
     time_cmd=time
 fi
 
-t_exec="$time_cmd -f \"%s;%S;%U;%M;%K;\\\"%C\\\"\" "
+t_exec="$time_cmd -f %s;%S;%U;%M;%K;\"%C\" "
 j_exec="$j_exec java $jvm_arg -jar $jar "
 
 capacity=
