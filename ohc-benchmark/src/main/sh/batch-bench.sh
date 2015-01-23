@@ -147,8 +147,8 @@ while [ $# -ne 0 ] ; do
         -cold)  cold_sleep=$2; shift;;
         -count) mode="count";;
         -dry)   mode="dry";;
-        -pre)   j_exec="$1 "; shift;;
-        -X)     jvm_arg="$JVM_ARG $1"; shift;;
+        -pre)   j_exec="$2 "; shift;;
+        -X)     jvm_arg="$JVM_ARG $2"; shift;;
     esac
     shift
 done
