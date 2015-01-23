@@ -6,4 +6,4 @@ target
 
 hs_err_*.log
 
-ohc-benchmark/batch-bench
+batch-bench
