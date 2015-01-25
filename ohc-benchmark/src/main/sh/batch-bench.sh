@@ -30,6 +30,7 @@ GIG_64=$((8*GIG_8))
 GIG_192=$((24*GIG_8))
 
 SEGMENTS=64
+SEGMENTS4=256
 
 #
 # entry sizes vs. capacity      key-len     value-size      entry-size      capacity    # of entries
@@ -137,17 +138,62 @@ PARAMS="$PARAMS     300         $GIG_192    64          $SEGMENTS   .2      0   
 
 #
 
+PARAMS="$PARAMS     300         $GIG_8      8           $SEGMENTS4  .8      0           4096        2000000         2000000"
+PARAMS="$PARAMS     300         $GIG_64     8           $SEGMENTS4  .8      0           4096        16000000        16000000"
+PARAMS="$PARAMS     300         $GIG_192    8           $SEGMENTS4  .8      0           4096        48000000        48000000"
+PARAMS="$PARAMS     300         $GIG_8      30          $SEGMENTS4  .8      0           4096        8000000         8000000"
+PARAMS="$PARAMS     300         $GIG_64     30          $SEGMENTS4  .8      0           4096        16000000        16000000"
+PARAMS="$PARAMS     300         $GIG_192    30          $SEGMENTS4  .8      0           4096        48000000        48000000"
+PARAMS="$PARAMS     300         $GIG_8      64          $SEGMENTS4  .8      0           4096        8000000         8000000"
+PARAMS="$PARAMS     300         $GIG_64     64          $SEGMENTS4  .8      0           4096        16000000        16000000"
+PARAMS="$PARAMS     300         $GIG_192    64          $SEGMENTS4  .8      0           4096        48000000        48000000"
+
+PARAMS="$PARAMS     300         $GIG_8      8           $SEGMENTS4  .8      0           16384       500000          500000"
+PARAMS="$PARAMS     300         $GIG_64     8           $SEGMENTS4  .8      0           16384       4000000         4000000"
+PARAMS="$PARAMS     300         $GIG_192    8           $SEGMENTS4  .8      0           16384       12000000        12000000"
+PARAMS="$PARAMS     300         $GIG_8      30          $SEGMENTS4  .8      0           16384       500000          500000"
+PARAMS="$PARAMS     300         $GIG_64     30          $SEGMENTS4  .8      0           16384       4000000         4000000"
+PARAMS="$PARAMS     300         $GIG_192    30          $SEGMENTS4  .8      0           16384       12000000        12000000"
+PARAMS="$PARAMS     300         $GIG_8      64          $SEGMENTS4  .8      0           16384       500000          500000"
+PARAMS="$PARAMS     300         $GIG_64     64          $SEGMENTS4  .8      0           16384       4000000         4000000"
+PARAMS="$PARAMS     300         $GIG_192    64          $SEGMENTS4  .8      0           16384       12000000        12000000"
+
+#
+
+PARAMS="$PARAMS     300         $GIG_8      8           $SEGMENTS4  .2      0           4096        2000000         2000000"
+PARAMS="$PARAMS     300         $GIG_64     8           $SEGMENTS4  .2      0           4096        16000000        16000000"
+PARAMS="$PARAMS     300         $GIG_192    8           $SEGMENTS4  .2      0           4096        48000000        48000000"
+PARAMS="$PARAMS     300         $GIG_8      30          $SEGMENTS4  .2      0           4096        8000000         8000000"
+PARAMS="$PARAMS     300         $GIG_64     30          $SEGMENTS4  .2      0           4096        16000000        16000000"
+PARAMS="$PARAMS     300         $GIG_192    30          $SEGMENTS4  .2      0           4096        48000000        48000000"
+PARAMS="$PARAMS     300         $GIG_8      64          $SEGMENTS4  .2      0           4096        8000000         8000000"
+PARAMS="$PARAMS     300         $GIG_64     64          $SEGMENTS4  .2      0           4096        16000000        16000000"
+PARAMS="$PARAMS     300         $GIG_192    64          $SEGMENTS4  .2      0           4096        48000000        48000000"
+
+PARAMS="$PARAMS     300         $GIG_8      8           $SEGMENTS4  .2      0           16384       500000          500000"
+PARAMS="$PARAMS     300         $GIG_64     8           $SEGMENTS4  .2      0           16384       4000000         4000000"
+PARAMS="$PARAMS     300         $GIG_192    8           $SEGMENTS4  .2      0           16384       12000000        12000000"
+PARAMS="$PARAMS     300         $GIG_8      30          $SEGMENTS4  .2      0           16384       500000          500000"
+PARAMS="$PARAMS     300         $GIG_64     30          $SEGMENTS4  .2      0           16384       4000000         4000000"
+PARAMS="$PARAMS     300         $GIG_192    30          $SEGMENTS4  .2      0           16384       12000000        12000000"
+PARAMS="$PARAMS     300         $GIG_8      64          $SEGMENTS4  .2      0           16384       500000          500000"
+PARAMS="$PARAMS     300         $GIG_64     64          $SEGMENTS4  .2      0           16384       4000000         4000000"
+PARAMS="$PARAMS     300         $GIG_192    64          $SEGMENTS4  .2      0           16384       12000000        12000000"
+
+#
+
 warm_up=15
 cold_sleep=5
 mode="exec"
 j_exec=""
+pre=""
 while [ $# -ne 0 ] ; do
     case $1 in
         -warm)  warm_up=$2; shift;;
         -cold)  cold_sleep=$2; shift;;
         -count) mode="count";;
         -dry)   mode="dry";;
-        -pre)   j_exec="$2 "; shift;;
+        -pre)   pre="$2 "; shift;;
         -X)     jvm_arg="$JVM_ARG $2"; shift;;
     esac
     shift
@@ -218,6 +264,7 @@ for p in $PARAMS ; do
             seconds=$((seconds+duration+warm_up+cold_sleep))
             name=`printf "bench-%03d" $count`"-c$capacity-kl$key_len-r$ratio-sc$segments-t$threads-rkd$read_key_dist-wkd$write_key_dist-vs$value_size"
 
+            export $pre
             j_run="$t_exec -o $log_dir/$name-time.csv"
             j_run="$j_run $j_exec -cap $capacity -d $duration -kl $key_len -r $ratio -sc $segments -t $threads -wu \"$warm_up,$cold_sleep\""
             j_run="$j_run -rkd gaussian(1..$read_key_dist,2)"
@@ -230,7 +277,7 @@ for p in $PARAMS ; do
                 "dry")      echo "   would execute:   $j_run"
                             ;;
                 "exec")
-                            $j_run
+                            $j_run > $log_dir/$name.log
                             ;;
             esac
 
