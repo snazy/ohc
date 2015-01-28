@@ -35,6 +35,7 @@ import com.google.common.io.ByteStreams;
 
 import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
+import org.caffinitas.ohc.DirectValueAccess;
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -152,6 +153,16 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     {
         for (CheckSegment map : maps)
             map.clear();
+    }
+
+    public DirectValueAccess getDirect(K key)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public DirectValueAccess putDirect(K key, long valueLen)
+    {
+        throw new UnsupportedOperationException();
     }
 
     public V get(K key)

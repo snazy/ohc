@@ -1,3 +1,8 @@
+0.4
+===
+#2 implement direct buffer access to cached values
+- added some support for unattended batch of benchmarks
+
 0.3.1
 =====
 - change system property name from DISABLE_JEMALLOC to org.caffinitas.ohc.disableJEmalloc
