@@ -172,7 +172,7 @@ public final class BenchmarkOHC
                             "\"r_count\";" +
                             "\"r_oneMinuteRate\";\"r_fiveMinuteRate\";\"r_fifteenMinuteRate\";\"r_meanRate\";" +
                             "\"r_snapMin\";\"r_snapMax\";\"r_snapMean\";\"r_snapStdDev\";" +
-                            "\"r_snap75\";\"r_snap95\";\"r_snap98\";\"r_snap99\";\"r_snap999\";\"r_snapMedian\"" +
+                            "\"r_snap75\";\"r_snap95\";\"r_snap98\";\"r_snap99\";\"r_snap999\";\"r_snapMedian\";" +
                             "\"w_count\";" +
                             "\"w_oneMinuteRate\";\"w_fiveMinuteRate\";\"w_fifteenMinuteRate\";\"w_meanRate\";" +
                             "\"w_snapMin\";\"w_snapMax\";\"w_snapMean\";\"w_snapStdDev\";" +
