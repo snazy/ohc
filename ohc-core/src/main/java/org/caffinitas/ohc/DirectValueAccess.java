@@ -13,28 +13,22 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.benchmark;
+package org.caffinitas.ohc;
 
-import com.codahale.metrics.Clock;
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.UniformReservoir;
+import java.io.Closeable;
+import java.nio.ByteBuffer;
 
-public class MergeableTimer
+/**
+ * Returned by {@link org.caffinitas.ohc.OHCache} for direct/random access to cached values and must be closed after use.
+ * <p>
+ * You must close the returned {@link DirectValueAccess} instance after use.
+ * After closing, you must not call any of the methods of the {@link java.nio.ByteBuffer}
+ * returned by {@link #buffer()}.
+ * </p>
+ */
+public interface DirectValueAccess extends Closeable
 {
-    final Meter meter;
-    final Histogram histogram;
+    ByteBuffer buffer();
 
-    final long started = System.currentTimeMillis();
-
-    public MergeableTimer()
-    {
-        this.meter = new Meter(Clock.defaultClock());
-        this.histogram = new Histogram(new UniformReservoir());
-    }
-
-    long runtime()
-    {
-        return System.currentTimeMillis() - started;
-    }
+    void abort();
 }

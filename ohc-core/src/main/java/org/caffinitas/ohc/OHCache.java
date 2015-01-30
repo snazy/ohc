@@ -63,6 +63,26 @@ public interface OHCache<K, V> extends Closeable
 
     boolean containsKey(K key);
 
+    // direct access support
+
+    /**
+     * Adds the key/value.
+     * If the entry size of key/value exceeds the configured maximum entry length, any previously existing entry
+     * for the key is removed.
+     * The entry is visible for other methods, when the returned {@link DirectValueAccess} is closed.
+     */
+    DirectValueAccess putDirect(K key, long valueLen);
+
+    /**
+     * Returns a closeable byte buffer.
+     * You must close the returned {@link DirectValueAccess} instance after use.
+     * After closing, you must not call any of the methods of the {@link java.nio.ByteBuffer}
+     * returned by {@link DirectValueAccess#buffer()}.
+     *
+     * @return reference-counted byte buffer or {@code null} if key does not exist.
+     */
+    DirectValueAccess getDirect(K key);
+
     // cache loader support
 
     Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader);

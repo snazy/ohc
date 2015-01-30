@@ -4,7 +4,7 @@
 
     <groupId>org.caffinitas.ohc</groupId>
     <artifactId>ohc-parent</artifactId>
-    <version>0.3.1</version>
+    <version>0.3.2</version>
     <packaging>pom</packaging>
 
     <name>OHC parent</name>
@@ -26,6 +26,16 @@
             <email>robert@caffinitas.org</email>
         </developer>
     </developers>
+    <contributors>
+        <contributor>
+            <name>Benedict Elliott Smith</name>
+            <email>belliottsmith@datastax.com</email>
+        </contributor>
+        <contributor>
+            <name>Ariel Weisberg</name>
+            <email>ariel.weisberg@datastax.com</email>
+        </contributor>
+    </contributors>
 
     <licenses>
         <license>

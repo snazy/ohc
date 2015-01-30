@@ -15,7 +15,14 @@
  */
 package org.caffinitas.ohc.benchmark;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
+import java.net.InetAddress;
 import java.util.Date;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -54,6 +61,7 @@ public final class BenchmarkOHC
     public static final String VALUE_SIZE_DIST = "vs";
     public static final String BUCKET_HISTOGRAM = "bh";
     public static final String TYPE = "type";
+    public static final String CSV = "csv";
 
     public static final String DEFAULT_VALUE_SIZE_DIST = "fixed(512)";
     public static final String DEFAULT_KEY_DIST = "uniform(1..10000)";
@@ -61,6 +69,9 @@ public final class BenchmarkOHC
 
     public static void main(String[] args) throws Exception
     {
+        Locale.setDefault(Locale.ENGLISH);
+        Locale.setDefault(Locale.Category.FORMAT, Locale.ENGLISH);
+
         try
         {
             CommandLine cmd = parseArguments(args);
@@ -90,25 +101,21 @@ public final class BenchmarkOHC
 
             Driver[] drivers = new Driver[threads];
             Random rnd = new Random();
-            DistributionFactory readKeyDist = OptionDistribution.get(cmd.getOptionValue(READ_KEY_DIST, DEFAULT_KEY_DIST));
-            DistributionFactory writeKeyDist = OptionDistribution.get(cmd.getOptionValue(WRITE_KEY_DIST, DEFAULT_KEY_DIST));
-            DistributionFactory valueSizeDist = OptionDistribution.get(cmd.getOptionValue(VALUE_SIZE_DIST, DEFAULT_VALUE_SIZE_DIST));
+            String readKeyDistStr = cmd.getOptionValue(READ_KEY_DIST, DEFAULT_KEY_DIST);
+            String writeKeyDistStr = cmd.getOptionValue(WRITE_KEY_DIST, DEFAULT_KEY_DIST);
+            String valueSizeDistStr = cmd.getOptionValue(VALUE_SIZE_DIST, DEFAULT_VALUE_SIZE_DIST);
+            DistributionFactory readKeyDist = OptionDistribution.get(readKeyDistStr);
+            DistributionFactory writeKeyDist = OptionDistribution.get(writeKeyDistStr);
+            DistributionFactory valueSizeDist = OptionDistribution.get(valueSizeDistStr);
             for (int i = 0; i < threads; i++)
             {
                 drivers[i] = new Driver(readKeyDist.get(), writeKeyDist.get(), valueSizeDist.get(),
                                         readWriteRatio, rnd.nextLong());
             }
 
-            printMessage("Starting benchmark with%n" +
-                         "   threads     : %d%n" +
-                         "   warm-up-secs: %d%n" +
-                         "   idle-secs   : %d%n" +
-                         "   runtime-secs: %d%n",
-                         threads, warmUpSecs, coldSleepSecs, duration);
-
             printMessage("Initializing OHC cache...");
             Shared.cache = OHCacheBuilder.<Long, byte[]>newBuilder()
-                                         .type((Class<? extends OHCache>) Class.forName("org.caffinitas.ohc."+type+".OHCacheImpl"))
+                                         .type((Class<? extends OHCache>) Class.forName("org.caffinitas.ohc." + type + ".OHCacheImpl"))
                                          .keySerializer(keyLen <= 0 ? BenchmarkUtils.longSerializer : new BenchmarkUtils.KeySerializer(keyLen))
                                          .valueSerializer(BenchmarkUtils.serializer)
                                          .hashTableSize(hashTableSize)
@@ -125,6 +132,59 @@ public final class BenchmarkOHC
                          Shared.cache.loadFactor(),
                          Shared.cache.segments(),
                          Shared.cache.capacity());
+
+            String csvFileName = cmd.getOptionValue(CSV, null);
+            PrintStream csv = null;
+            if (csvFileName != null)
+            {
+                File csvFile = new File(csvFileName);
+                csv = new PrintStream(new FileOutputStream(csvFile));
+                csv.println("# OHC benchmark - http://github.com/snazy/ohc");
+                csv.println("# ");
+                csv.printf("# started on %s (%s)%n", InetAddress.getLocalHost().getHostName(), InetAddress.getLocalHost().getHostAddress());
+                csv.println("# ");
+                csv.printf("# Warum-up/sleep seconds:   %d / %d%n", warmUpSecs, coldSleepSecs);
+                csv.printf("# Duration:                 %d seconds%n", duration);
+                csv.printf("# Threads:                  %d%n", threads);
+                csv.printf("# Capacity:                 %d bytes%n", capacity);
+                csv.printf("# Read/Write Ratio:         %f%n", readWriteRatio);
+                csv.printf("# Segment Count:            %d%n", segmentCount);
+                csv.printf("# Hash table size:          %d%n", hashTableSize);
+                csv.printf("# Load Factor:              %f%n", loadFactor);
+                csv.printf("# Additional key len:       %d%n", keyLen);
+                csv.printf("# Read key distribution:    '%s'%n", readKeyDistStr);
+                csv.printf("# Write key distribution:   '%s'%n", writeKeyDistStr);
+                csv.printf("# Value size distribution:  '%s'%n", valueSizeDistStr);
+                csv.printf("# Type: %s%n", Shared.cache.getClass().getName());
+                csv.println("# ");
+                csv.printf("# started at %s%n", new Date());
+                Properties props = System.getProperties();
+                csv.printf("# java.version:             %s%n", props.get("java.version"));
+                for (Map.Entry<Object, Object> e : props.entrySet())
+                {
+                    String k = (String) e.getKey();
+                    if (k.startsWith("org.caffinitas.ohc."))
+                        csv.printf("# %s: %s%n", k, e.getValue());
+                }
+                csv.printf("# number of cores: %d%n", Runtime.getRuntime().availableProcessors());
+                csv.println("# ");
+                csv.println("\"runtime\";" +
+                            "\"r_count\";" +
+                            "\"r_oneMinuteRate\";\"r_fiveMinuteRate\";\"r_fifteenMinuteRate\";\"r_meanRate\";" +
+                            "\"r_snapMin\";\"r_snapMax\";\"r_snapMean\";\"r_snapStdDev\";" +
+                            "\"r_snap75\";\"r_snap95\";\"r_snap98\";\"r_snap99\";\"r_snap999\";\"r_snapMedian\";" +
+                            "\"w_count\";" +
+                            "\"w_oneMinuteRate\";\"w_fiveMinuteRate\";\"w_fifteenMinuteRate\";\"w_meanRate\";" +
+                            "\"w_snapMin\";\"w_snapMax\";\"w_snapMean\";\"w_snapStdDev\";" +
+                            "\"w_snap75\";\"w_snap95\";\"w_snap98\";\"w_snap99\";\"w_snap999\";\"w_snapMedian\"");
+            }
+
+            printMessage("Starting benchmark with%n" +
+                         "   threads     : %d%n" +
+                         "   warm-up-secs: %d%n" +
+                         "   idle-secs   : %d%n" +
+                         "   runtime-secs: %d%n",
+                         threads, warmUpSecs, coldSleepSecs, duration);
 
             ThreadPoolExecutor main = new ThreadPoolExecutor(threads, threads, coldSleepSecs + 1, TimeUnit.SECONDS,
                                                              new LinkedBlockingQueue<Runnable>(), new ThreadFactory()
@@ -143,11 +203,13 @@ public final class BenchmarkOHC
             if (warmUpSecs > 0)
             {
                 printMessage("Start warm-up...");
-                runFor(warmUpSecs, main, drivers, bucketHistogram);
+                runFor(warmUpSecs, main, drivers, bucketHistogram, csv);
                 printMessage("");
                 logMemoryUse();
-            }
 
+                if (csv != null)
+                    csv.println("# warm up complete");
+            }
             // cold sleep
 
             if (coldSleepSecs > 0)
@@ -159,11 +221,17 @@ public final class BenchmarkOHC
             // benchmark
 
             printMessage("Start benchmark...");
-            runFor(duration, main, drivers, bucketHistogram);
+            runFor(duration, main, drivers, bucketHistogram, csv);
             printMessage("");
             logMemoryUse();
 
+            if (csv != null)
+                csv.println("# benchmark complete");
+
             // finish
+
+            if (csv != null)
+                csv.close();
 
             System.exit(0);
         }
@@ -174,7 +242,8 @@ public final class BenchmarkOHC
         }
     }
 
-    private static void runFor(int duration, ExecutorService main, Driver[] drivers, boolean bucketHistogram) throws InterruptedException, ExecutionException
+    private static void runFor(int duration, ExecutorService main, Driver[] drivers, boolean bucketHistogram, PrintStream csv)
+    throws InterruptedException, ExecutionException
     {
 
         printMessage("%s: Running for %d seconds...", new Date(), duration);
@@ -210,7 +279,7 @@ public final class BenchmarkOHC
 
             if (nextStats <= System.currentTimeMillis())
             {
-                Shared.printStats("At " + new Date(), bucketHistogram);
+                Shared.printStats("At " + new Date(), bucketHistogram, csv);
                 nextStats += statsInterval;
             }
 
@@ -224,7 +293,7 @@ public final class BenchmarkOHC
             driver.future.get();
 
         mergeTimers(drivers);
-        Shared.printStats("Final", bucketHistogram);
+        Shared.printStats("Final", bucketHistogram, csv);
     }
 
     private static void mergeTimers(Driver[] drivers)
@@ -264,6 +333,8 @@ public final class BenchmarkOHC
 
         options.addOption(TYPE, true, "implementation type - default: linked - option: tables");
 
+        options.addOption(CSV, true, "CSV stats output file");
+
         CommandLine cmd = parser.parse(options, args);
         if (cmd.hasOption("h"))
         {
@@ -272,7 +343,7 @@ public final class BenchmarkOHC
             for (String s : OptionDistribution.help())
                 help = help + '\n' + s;
             formatter.printHelp(160, "BenchmarkOHC", null, options, help);
-            System.exit(-1);
+            System.exit(0);
         }
 
         return cmd;

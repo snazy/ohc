@@ -178,7 +178,7 @@ final class Uns
                     }
                     catch (Throwable t)
                     {
-                        LOGGER.warn("jemalloc native library not found (" + t + ") - use jemalloc for better off-heap cache performance");
+                        LOGGER.warn("jemalloc native library not found - use jemalloc for better off-heap cache performance");
                     }
                 else
                     LOGGER.warn("jemalloc disabled by system property setting " + OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "disableJEmalloc=true");

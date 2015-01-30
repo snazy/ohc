@@ -2,15 +2,27 @@ package org.caffinitas.ohc;
 
 import java.io.DataInput;
 import java.io.DataOutput;
+import java.util.HashSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import org.caffinitas.ohc.linked.OHCacheImpl;
 import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
 public class OHCacheBuilderTest
 {
+    @AfterMethod
+    public void clearProperties()
+    {
+        for (Object k : new HashSet(System.getProperties().keySet()))
+        {
+            String key = (String)k;
+            if (key.startsWith("org.caffinitas.ohc."))
+                System.getProperties().remove(key);
+        }
+    }
 
     @Test
     public void testHashTableSize() throws Exception

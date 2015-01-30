@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.caffinitas.ohc.CacheLoader;
+import org.caffinitas.ohc.DirectValueAccess;
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -95,6 +96,16 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
     {
         prod.clear();
         check.clear();
+    }
+
+    public DirectValueAccess getDirect(K key)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public DirectValueAccess putDirect(K key, long valueLen)
+    {
+        throw new UnsupportedOperationException();
     }
 
     public V get(K key)

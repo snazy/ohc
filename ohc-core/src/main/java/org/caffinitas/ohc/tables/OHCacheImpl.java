@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
+import org.caffinitas.ohc.DirectValueAccess;
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -119,6 +120,21 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     //
     // map stuff
     //
+    public DirectValueAccess getDirect(K key)
+    {
+        if (key == null)
+            throw new NullPointerException();
+
+        KeyBuffer keySource = keySource(key);
+
+        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true);
+
+        if (hashEntryAdr == 0L)
+            return null;
+
+        return new DirectValueAccessImpl(hashEntryAdr);
+    }
+
 
     public V get(K key)
     {
@@ -155,6 +171,44 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer keySource = keySource(key);
 
         return segment(keySource.hash()).getEntry(keySource, false) != 0L;
+    }
+
+    public DirectValueAccess putDirect(K k, long valueLen)
+    {
+        if (k == null)
+            throw new NullPointerException();
+
+        final long keyLen = keySerializer.serializedSize(k);
+
+        final long bytes = Util.allocLen(keyLen, valueLen);
+
+        final long hashEntryAdr;
+        if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes, throwOOME)) == 0L)
+        {
+            // entry too large to be inserted or OS is not able to provide enough memory
+            putFailCount++;
+
+            remove(k);
+
+            return null;
+        }
+
+        final long hash = serializeForPut(k, null, keyLen, valueLen, hashEntryAdr);
+
+        // initialize hash entry
+        HashEntries.init(hash, keyLen, valueLen, hashEntryAdr); //, Util.SENTINEL_NOT_PRESENT);
+
+        return new DirectValueAccessImpl(hashEntryAdr)
+        {
+            public void close()
+            {
+                if (!closed)
+                {
+                    closed = true;
+                    segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, false, 0L, 0L);
+                }
+            }
+        };
     }
 
     public void put(K k, V v)

@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.3.1</version>
+        <version>0.3.2</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-core-j8</artifactId>
-    <version>0.3.1</version>
+    <version>0.3.2</version>
 
     <name>OHC core - Java8 optimization</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
@@ -33,8 +33,12 @@
     </developers>
     <contributors>
         <contributor>
-            <name>Robert Stupp</name>
-            <email>robert@caffinitas.org</email>
+            <name>Benedict Elliott Smith</name>
+            <email>belliottsmith@datastax.com</email>
+        </contributor>
+        <contributor>
+            <name>Ariel Weisberg</name>
+            <email>ariel.weisberg@datastax.com</email>
         </contributor>
     </contributors>
 
