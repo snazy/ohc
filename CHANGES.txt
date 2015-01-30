@@ -1,7 +1,8 @@
-0.4
-===
+0.3.2
+=====
 #2 implement direct buffer access to cached values
 - added some support for unattended batch of benchmarks
+- don't print whole exception message if jemalloc cannot be found (only if debug logging is enabled)
 
 0.3.1
 =====
