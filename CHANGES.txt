@@ -1,5 +1,6 @@
 0.4.0
 =====
+#8 use JNA Native instead of Unsafe
 - remove jemalloc via JNA Library allocator
 
 0.3.2

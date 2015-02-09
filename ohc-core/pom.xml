@@ -183,7 +183,7 @@
 
     <profiles>
         <profile>
-            <id>noJemalloc</id>
+            <id>unsafe</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>
@@ -200,10 +200,10 @@
                                 </goals>
                                 <configuration>
                                     <systemProperties>
-                                        <org.caffinitas.ohc.disableJEmalloc>true</org.caffinitas.ohc.disableJEmalloc>
+                                        <org.caffinitas.ohc.allocator>unsafe</org.caffinitas.ohc.allocator>
                                         <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
                                     </systemProperties>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/noJemalloc</reportsDirectory>
+                                    <reportsDirectory>${project.build.directory}/surefire-reports/unsafe</reportsDirectory>
                                 </configuration>
                             </execution>
                         </executions>

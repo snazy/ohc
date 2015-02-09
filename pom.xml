@@ -269,7 +269,7 @@
                 <version>${version.org.apache.maven.plugins.maven-surefire-report-plugin}</version>
                 <configuration>
                     <reportsDirectories>
-                        <reportsDirectory>ohc-core/target/surefire-reports/noJemalloc</reportsDirectory>
+                        <reportsDirectory>ohc-core/target/surefire-reports/unsafe</reportsDirectory>
                         <reportsDirectory>ohc-core/target/surefire-reports/normal</reportsDirectory>
                     </reportsDirectories>
                 </configuration>

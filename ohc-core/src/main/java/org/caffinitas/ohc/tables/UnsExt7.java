@@ -15,10 +15,13 @@
  */
 package org.caffinitas.ohc.tables;
 
+import com.sun.jna.Pointer;
 import sun.misc.Unsafe;
 
 final class UnsExt7 extends UnsExt
 {
+    private static final Pointer pointerHelper = new Pointer(0L);
+
     UnsExt7(Unsafe unsafe)
     {
         super(unsafe);
@@ -26,8 +29,8 @@ final class UnsExt7 extends UnsExt
 
     long getAndPutLong(long address, long offset, long value)
     {
-        long r = unsafe.getLong(null, address + offset);
-        unsafe.putLong(null, address + offset, value);
+        long r = pointerHelper.getLong(address + offset);
+        pointerHelper.setLong(address + offset, value);
         return r;
     }
 
@@ -45,8 +48,8 @@ final class UnsExt7 extends UnsExt
 
     int getAndPutInt(long address, long offset, int value)
     {
-        int r = unsafe.getInt(null, address + offset);
-        unsafe.putInt(null, address + offset, value);
+        int r = pointerHelper.getInt(address + offset);
+        pointerHelper.setInt(address + offset, value);
         return r;
     }
 
