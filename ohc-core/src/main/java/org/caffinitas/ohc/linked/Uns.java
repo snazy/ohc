@@ -16,9 +16,11 @@
 package org.caffinitas.ohc.linked;
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -26,8 +28,6 @@ import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.sun.jna.Native;
-import com.sun.jna.Pointer;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.alloc.IAllocator;
 import org.caffinitas.ohc.alloc.JNANativeAllocator;
@@ -43,8 +43,6 @@ final class Uns
 
     private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty(OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "debugOffHeapAccess", "false"));
     private static final String __ALLOCATOR = System.getProperty(OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "allocator");
-
-    private static final Pointer pointerHelper = new Pointer(0L);
 
     //
     // #ifdef __DEBUG_OFF_HEAP_MEMORY_ACCESS
@@ -217,103 +215,104 @@ final class Uns
     static long getAndPutLong(long address, long offset, long value)
     {
         validate(address, offset, 8L);
+
         return ext.getAndPutLong(address, offset, value);
     }
 
     static void putLong(long address, long offset, long value)
     {
         validate(address, offset, 8L);
-        pointerHelper.setLong(address + offset, value);
+        unsafe.putLong(null, address + offset, value);
     }
 
     static long getLong(long address, long offset)
     {
         validate(address, offset, 8L);
-        return pointerHelper.getLong(address + offset);
+        return unsafe.getLong(null, address + offset);
     }
 
     static void putInt(long address, long offset, int value)
     {
         validate(address, offset, 4L);
-        pointerHelper.setInt(address + offset, value);
+        unsafe.putInt(null, address + offset, value);
     }
 
     static int getInt(long address, long offset)
     {
         validate(address, offset, 4L);
-        return pointerHelper.getInt(address + offset);
+        return unsafe.getInt(null, address + offset);
     }
 
     static void putShort(long address, long offset, short value)
     {
         validate(address, offset, 2L);
-        pointerHelper.setShort(address + offset, value);
+        unsafe.putShort(null, address + offset, value);
     }
 
     static short getShort(long address, long offset)
     {
         validate(address, offset, 2L);
-        return pointerHelper.getShort(address + offset);
+        return unsafe.getShort(null, address + offset);
     }
 
     static void putByte(long address, long offset, byte value)
     {
         validate(address, offset, 1L);
-        pointerHelper.setByte(address + offset, value);
+        unsafe.putByte(null, address + offset, value);
     }
 
     static byte getByte(long address, long offset)
     {
         validate(address, offset, 1L);
-        return pointerHelper.getByte(address + offset);
+        return unsafe.getByte(null, address + offset);
     }
 
     static void putBoolean(long address, long offset, boolean value)
     {
         validate(address, offset, 1L);
-        pointerHelper.setByte(address + offset, (byte) (value ? 1 : 0));
+        unsafe.putBoolean(null, address + offset, value);
     }
 
     static boolean getBoolean(long address, long offset)
     {
         validate(address, offset, 1L);
-        return pointerHelper.getByte(address + offset) != 0;
+        return unsafe.getBoolean(null, address + offset);
     }
 
     static void putChar(long address, long offset, char value)
     {
         validate(address, offset, 2L);
-        pointerHelper.setChar(address + offset, value);
+        unsafe.putChar(null, address + offset, value);
     }
 
     static char getChar(long address, long offset)
     {
         validate(address, offset, 2L);
-        return pointerHelper.getChar(address + offset);
+        return unsafe.getChar(null, address + offset);
     }
 
     static void putFloat(long address, long offset, float value)
     {
         validate(address, offset, 4L);
-        pointerHelper.setFloat(address + offset, value);
+        unsafe.putFloat(null, address + offset, value);
     }
 
     static float getFloat(long address, long offset)
     {
         validate(address, offset, 4L);
-        return pointerHelper.getFloat(address + offset);
+        return unsafe.getFloat(null, address + offset);
     }
 
     static void putDouble(long address, long offset, double value)
     {
         validate(address, offset, 8L);
-        pointerHelper.setDouble(address + offset, value);
+        unsafe.putDouble(null, address + offset, value);
     }
 
     static double getDouble(long address, long offset)
     {
         validate(address, offset, 8L);
-        return pointerHelper.getDouble(address + offset);
+        return unsafe.getDouble(null, address + offset);
     }
 
     static boolean decrement(long address, long offset)
@@ -344,7 +343,7 @@ final class Uns
     static void setMemory(long address, long offset, long len, byte val)
     {
         validate(address, offset, len);
-        pointerHelper.setMemory(address + offset, len, val);
+        unsafe.setMemory(address + offset, len, val);
     }
 
     static long crc32(long address, long offset, long len)
@@ -394,8 +393,43 @@ final class Uns
         allocator.free(address);
     }
 
+    private static final MethodHandle directByteBufferHandle;
+    private static final Field byteBufferNativeByteOrder;
+
+    static
+    {
+        try
+        {
+            Constructor ctor = Class.forName("java.nio.DirectByteBuffer")
+                                    .getDeclaredConstructor(long.class, int.class, Object.class);
+            ctor.setAccessible(true);
+
+            byteBufferNativeByteOrder = ByteBuffer.class.getDeclaredField("nativeByteOrder");
+            byteBufferNativeByteOrder.setAccessible(true);
+
+            directByteBufferHandle = MethodHandles.lookup().unreflectConstructor(ctor);
+        }
+        catch (NoSuchMethodException | ClassNotFoundException | IllegalAccessException | NoSuchFieldException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
+
     static ByteBuffer directBufferFor(long address, long offset, long len)
     {
-        return Native.getDirectByteBuffer(address + offset, len).order(ByteOrder.nativeOrder());
+        try
+        {
+            ByteBuffer bb = (ByteBuffer) directByteBufferHandle.invoke(address + offset, (int) len, null);
+            byteBufferNativeByteOrder.setBoolean(bb, true);
+            return bb;
+        }
+        catch (Error e)
+        {
+            throw e;
+        }
+        catch (Throwable t)
+        {
+            throw new RuntimeException(t);
+        }
     }
 }
