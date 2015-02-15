@@ -1,6 +1,7 @@
 0.4.0
 =====
 - remove jemalloc via JNA Library allocator
+- make JNA Native.malloc the default memory allocation strategy
 
 0.3.2
 =====
