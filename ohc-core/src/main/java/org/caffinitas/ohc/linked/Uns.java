@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.alloc.IAllocator;
-import org.caffinitas.ohc.alloc.JEMallocAllocator;
 import org.caffinitas.ohc.alloc.JNANativeAllocator;
 import org.caffinitas.ohc.alloc.UnsafeAllocator;
 import sun.misc.Unsafe;
@@ -43,7 +42,6 @@ final class Uns
     private static final IAllocator allocator;
 
     private static final boolean __DEBUG_OFF_HEAP_MEMORY_ACCESS = Boolean.parseBoolean(System.getProperty(OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "debugOffHeapAccess", "false"));
-    private static final boolean __DISABLE_JEMALLOC = Boolean.parseBoolean(System.getProperty(OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "disableJEmalloc", "false"));
     private static final String __ALLOCATOR = System.getProperty(OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "allocator");
 
     //
@@ -167,32 +165,18 @@ final class Uns
             if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
                 LOGGER.warn("Degraded performance due to off-heap memory allocations and access guarded by debug code enabled via system property " + OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "debugOffHeapAccess=true");
 
-            IAllocator alloc = null;
-            String allocType = __ALLOCATOR != null ? __ALLOCATOR : "jemalloc";
-            if ("jemalloc".equalsIgnoreCase(allocType))
-                if (!__DISABLE_JEMALLOC)
-                    try
-                    {
-                        alloc = new JEMallocAllocator();
-                        LOGGER.info("OHC using jemalloc via JNA");
-                    }
-                    catch (Throwable t)
-                    {
-                        LOGGER.warn("jemalloc native library not found - use jemalloc for better off-heap cache performance");
-                    }
-                else
-                    LOGGER.warn("jemalloc disabled by system property setting " + OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "disableJEmalloc=true");
-
-            if ("jna".equalsIgnoreCase(allocType))
+            IAllocator alloc;
+            String allocType = __ALLOCATOR != null ? __ALLOCATOR : "jna";
+            switch (allocType)
             {
-                alloc = new JNANativeAllocator();
-                LOGGER.info("OHC using JNA OS native malloc/free");
-            }
-
-            if (alloc == null)
-            {
-                alloc = new UnsafeAllocator();
-                LOGGER.info("OHC using sun.misc.Unsafe memory allocation");
+                case "unsafe":
+                    alloc = new UnsafeAllocator();
+                    LOGGER.info("OHC using sun.misc.Unsafe memory allocation");
+                    break;
+                case "jna":
+                default:
+                    alloc = new JNANativeAllocator();
+                    LOGGER.info("OHC using JNA OS native malloc/free");
             }
 
             allocator = alloc;
