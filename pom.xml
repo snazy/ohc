@@ -79,6 +79,7 @@
         <version.com.google.guava>16.0</version.com.google.guava>
         <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m4.3</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
         <version.net.java.dev.jna>4.1.0</version.net.java.dev.jna>
+        <version.net.jpountz.lz4>1.3</version.net.jpountz.lz4>
         <version.org.apache.maven.plugins.maven-compiler-plugin>3.1</version.org.apache.maven.plugins.maven-compiler-plugin>
         <version.org.apache.maven.plugins.maven-gpg-plugin>1.5</version.org.apache.maven.plugins.maven-gpg-plugin>
         <version.org.apache.maven.plugins.maven-javadoc-plugin>2.9.1</version.org.apache.maven.plugins.maven-javadoc-plugin>
@@ -150,6 +151,12 @@
                 <groupId>net.java.dev.jna</groupId>
                 <artifactId>jna</artifactId>
                 <version>${version.net.java.dev.jna}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>net.jpountz.lz4</groupId>
+                <artifactId>lz4</artifactId>
+                <version>${version.net.jpountz.lz4}</version>
             </dependency>
 
             <dependency>
@@ -269,7 +276,9 @@
                 <version>${version.org.apache.maven.plugins.maven-surefire-report-plugin}</version>
                 <configuration>
                     <reportsDirectories>
-                        <reportsDirectory>ohc-core/target/surefire-reports/noJemalloc</reportsDirectory>
+                        <reportsDirectory>ohc-core/target/surefire-reports/unsafe</reportsDirectory>
+                        <reportsDirectory>ohc-core/target/surefire-reports/xxhash</reportsDirectory>
+                        <reportsDirectory>ohc-core/target/surefire-reports/crc32</reportsDirectory>
                         <reportsDirectory>ohc-core/target/surefire-reports/normal</reportsDirectory>
                     </reportsDirectories>
                 </configuration>

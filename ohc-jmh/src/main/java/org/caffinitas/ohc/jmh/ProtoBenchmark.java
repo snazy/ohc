@@ -18,6 +18,7 @@ package org.caffinitas.ohc.jmh;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
+import org.caffinitas.ohc.HashAlgorithm;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -36,16 +37,16 @@ import org.openjdk.jmh.annotations.Warmup;
 
 @BenchmarkMode({ Mode.AverageTime, Mode.Throughput })
 @State(Scope.Benchmark)
-@Warmup(iterations = 5)
-@Measurement(iterations = 5)
+@Warmup(iterations = 2)
+@Measurement(iterations = 3)
 @Threads(Threads.MAX)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
-@Fork(value = 3)
+@Fork(value = 1, jvmArgsAppend = "-Xmx512M")
 public class ProtoBenchmark
 {
     private OHCache<Integer, byte[]> cache;
 
-    @Param("2048")
+    @Param({"2048", "65536"})
     private int valueSize = 2048;
     @Param("1073741824")
     private long capacity = 1024 * 1024 * 1024;
@@ -55,8 +56,10 @@ public class ProtoBenchmark
     private int hashTableSize = -1;
     @Param("1000000")
     private int keys = 1000000;
-    @Param("linked")
+    @Param({"linked"})
     private String impl = "linked";
+    @Param({"MURMUR3", "CRC32", "XX"})
+    private HashAlgorithm hashAlgorithm;
 
     @State(Scope.Thread)
     public static class PutState

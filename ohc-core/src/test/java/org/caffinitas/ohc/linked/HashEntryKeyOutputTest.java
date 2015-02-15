@@ -22,6 +22,7 @@ import java.util.Arrays;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 
+import org.caffinitas.ohc.HashAlgorithm;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
@@ -56,7 +57,7 @@ public class HashEntryKeyOutputTest
             hasher.putBytes(ref);
             hasher.putByte((byte) 0xf0);
 
-            assertEquals(out.murmur3hash(), hasher.hash().asLong());
+            assertEquals(out.hash(org.caffinitas.ohc.linked.Hasher.create(HashAlgorithm.MURMUR3)), hasher.hash().asLong());
         }
         finally
         {
@@ -84,7 +85,7 @@ public class HashEntryKeyOutputTest
             hasher.putBytes(ref);
             hasher.putByte((byte) 0xf0);
 
-            assertEquals(out.murmur3hash(), hasher.hash().asLong());
+            assertEquals(out.hash(org.caffinitas.ohc.linked.Hasher.create(HashAlgorithm.MURMUR3)), hasher.hash().asLong());
         }
         finally
         {
@@ -108,7 +109,7 @@ public class HashEntryKeyOutputTest
                     Hasher hasher = Hashing.murmur3_128().newHasher();
                     hasher.putBytes(ref);
 
-                    assertEquals(out.murmur3hash(), hasher.hash().asLong());
+                    assertEquals(out.hash(org.caffinitas.ohc.linked.Hasher.create(HashAlgorithm.MURMUR3)), hasher.hash().asLong());
                 }
                 finally
                 {
@@ -131,12 +132,13 @@ public class HashEntryKeyOutputTest
             out.writeUTF(ref);
             assertEquals(out.avail(), 0);
 
-            long h2 = out.murmur3hash();
+            long h2 = out.hash(org.caffinitas.ohc.linked.Hasher.create(HashAlgorithm.MURMUR3));
 
             KeyBuffer kb = new KeyBuffer(len);
             kb.writeUTF(ref);
+            kb.finish(org.caffinitas.ohc.linked.Hasher.create(HashAlgorithm.MURMUR3));
 
-            long h3 = kb.murmur3hash();
+            long h3 = kb.hash();
 
             Hasher hasher = Hashing.murmur3_128().newHasher();
 
