@@ -1,3 +1,7 @@
+0.4
+===
+#5 add CRC32 and xx-hash as alternative hash algorithms
+
 0.3.3
 =====
 - remove jemalloc via JNA Library allocator
