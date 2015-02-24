@@ -15,6 +15,7 @@
  */
 package org.caffinitas.ohc.linked;
 
+import org.caffinitas.ohc.HashAlgorithm;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
@@ -70,7 +71,7 @@ public class HashEntriesTest
             key.write(0x44);
             key.write(0x55);
             key.write(0x88);
-            key.finish();
+            key.finish(Hasher.create(HashAlgorithm.MURMUR3));
 
             Uns.setMemory(adr, Util.ENTRY_OFF_DATA, 11, (byte) 0);
 

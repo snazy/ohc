@@ -1,3 +1,9 @@
+0.3.4
+=====
+#5 add CRC32 and xx-hash as alternative hash algorithms
+- use Unsafe to allocate DirectByteBuffer
+- Update to recent Maven plugins
+
 0.3.3
 =====
 - remove jemalloc via JNA Library allocator

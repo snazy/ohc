@@ -59,12 +59,14 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     private final float loadFactor;
     private final AtomicLong freeCapacity;
     private long putFailCount;
+    private final Hasher hasher;
 
     CheckOHCacheImpl(OHCacheBuilder<K, V> builder)
     {
         capacity = builder.getCapacity();
         loadFactor = builder.getLoadFactor();
         freeCapacity = new AtomicLong(capacity);
+        hasher = Hasher.create(builder.getHashAlgorighm());
 
         int segments = builder.getSegmentCount();
         int bitNum = Util.bitNum(segments) - 1;
@@ -558,7 +560,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             throw new IOError(e);
         }
-        return key.finish();
+        return key.finish(hasher);
     }
 
     private byte[] value(V value)

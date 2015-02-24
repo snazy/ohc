@@ -72,6 +72,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     private final ScheduledExecutorService executorService;
 
     private final boolean throwOOME;
+    private final Hasher hasher;
 
     public OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
@@ -82,6 +83,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         this.capacity = capacity;
 
         this.throwOOME = builder.isThrowOOME();
+        this.hasher = Hasher.create(builder.getHashAlgorighm());
 
         // build segments
         int segments = builder.getSegmentCount();
@@ -314,7 +316,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             freeAndThrow(e, hashEntryAdr);
         }
 
-        return key.hash();
+        return key.hash(hasher);
     }
 
     private static void freeAndThrow(Throwable e, long hashEntryAdr)
@@ -387,7 +389,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 freeAndThrow(e, hashEntryAdr);
             }
 
-            final long hash = keyOut.hash();
+            final long hash = keyOut.hash(hasher);
 
             // initialize hash entry
             HashEntries.init(hash, keyLen, 0L, hashEntryAdr, Util.SENTINEL_LOADING);
@@ -630,7 +632,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             throw new RuntimeException(e);
         }
-        return key.finish();
+        return key.finish(hasher);
     }
 
     //

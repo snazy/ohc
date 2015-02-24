@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.3.3</version>
+        <version>0.3.4</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-jmh</artifactId>
-    <version>0.3.3</version>
+    <version>0.3.4</version>
 
     <name>OHC core - micro benchmarks</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
@@ -72,7 +72,7 @@
     </issueManagement>
 
     <properties>
-        <jmh.version>1.4.1</jmh.version>
+        <jmh.version>1.6.1</jmh.version>
         <uberjar.name>benchmarks</uberjar.name>
     </properties>
 
@@ -95,6 +95,12 @@
             <artifactId>jmh-generator-annprocess</artifactId>
             <version>${jmh.version}</version>
             <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>net.jpountz.lz4</groupId>
+            <artifactId>lz4</artifactId>
+            <scope>compile</scope>
         </dependency>
 
         <dependency>

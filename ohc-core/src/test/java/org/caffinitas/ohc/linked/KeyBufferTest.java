@@ -22,6 +22,7 @@ import com.google.common.hash.Hashing;
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteStreams;
 
+import org.caffinitas.ohc.HashAlgorithm;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
@@ -43,13 +44,14 @@ public class KeyBufferTest
         out.write(42);
         out.write(ref);
         out.write(0xf0);
+        out.finish(org.caffinitas.ohc.linked.Hasher.create(HashAlgorithm.MURMUR3));
 
         Hasher hasher = Hashing.murmur3_128().newHasher();
         hasher.putByte((byte) 42);
         hasher.putBytes(ref);
         hasher.putByte((byte) 0xf0);
 
-        assertEquals(out.murmur3hash(), hasher.hash().asLong());
+        assertEquals(out.hash(), hasher.hash().asLong());
     }
 
     @Test(dependsOnMethods = "testHashFinish")
@@ -60,13 +62,14 @@ public class KeyBufferTest
         out.write(42);
         out.write(ref);
         out.write(0xf0);
+        out.finish(org.caffinitas.ohc.linked.Hasher.create(HashAlgorithm.MURMUR3));
 
         Hasher hasher = Hashing.murmur3_128().newHasher();
         hasher.putByte((byte) 42);
         hasher.putBytes(ref);
         hasher.putByte((byte) 0xf0);
 
-        assertEquals(out.murmur3hash(), hasher.hash().asLong());
+        assertEquals(out.hash(), hasher.hash().asLong());
     }
 
     @Test(dependsOnMethods = "testHashFinish16")
@@ -79,11 +82,12 @@ public class KeyBufferTest
                 byte[] ref = TestUtils.randomBytes(i);
                 KeyBuffer out = build(i);
                 out.write(ref);
+                out.finish(org.caffinitas.ohc.linked.Hasher.create(HashAlgorithm.MURMUR3));
 
                 Hasher hasher = Hashing.murmur3_128().newHasher();
                 hasher.putBytes(ref);
 
-                assertEquals(out.murmur3hash(), hasher.hash().asLong());
+                assertEquals(out.hash(), hasher.hash().asLong());
             }
         }
     }

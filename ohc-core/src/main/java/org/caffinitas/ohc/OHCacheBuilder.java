@@ -78,6 +78,13 @@ import org.caffinitas.ohc.linked.OHCacheImpl;
  *         <td>Throw {@code OutOfMemoryError} if off-heap allocation fails</td>
  *         <td>{@code false}</td>
  *     </tr>
+ *     <tr>
+ *         <td>{@code hashAlgorighm}</td>
+ *         <td>Hash algorithm to use internally. Valid options are: {@code XX} for xx-hash, {@code MURMUR3} or {@code CRC32}
+ *         Note: this setting does may only help to improve throughput in rare situations - i.e. if the key is
+ *         very long and you've proven that it really improves performace</td>
+ *         <td>{@code MURMUR3}</td>
+ *     </tr>
  * </table>
  * <p>
  *     You may also use system properties prefixed with {@code org.caffinitas.org.} to other defaults.
@@ -100,6 +107,7 @@ public class OHCacheBuilder<K, V>
     private Class<? extends OHCache> type = OHCacheImpl.class;
     private ScheduledExecutorService executorService;
     private boolean throwOOME;
+    private HashAlgorithm hashAlgorighm = HashAlgorithm.MURMUR3;
 
     private OHCacheBuilder()
     {
@@ -115,6 +123,7 @@ public class OHCacheBuilder<K, V>
         loadFactor = fromSystemProperties("loadFactor", loadFactor);
         maxEntrySize = fromSystemProperties("maxEntrySize", maxEntrySize);
         throwOOME = fromSystemProperties("throwOOME", throwOOME);
+        hashAlgorighm = HashAlgorithm.valueOf(fromSystemProperties("hashAlgorighm", hashAlgorighm.name()));
         String t = fromSystemProperties("type", null);
         if (t != null)
             try
@@ -320,6 +329,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> executorService(ScheduledExecutorService executorService)
     {
         this.executorService = executorService;
+        return this;
+    }
+
+    public HashAlgorithm getHashAlgorighm()
+    {
+        return hashAlgorighm;
+    }
+
+    public OHCacheBuilder<K, V> hashMode(HashAlgorithm hashMode)
+    {
+        this.hashAlgorighm = hashMode;
         return this;
     }
 

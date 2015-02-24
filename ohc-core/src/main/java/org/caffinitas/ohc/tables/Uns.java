@@ -16,11 +16,10 @@
 package org.caffinitas.ohc.tables;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -385,23 +384,22 @@ final class Uns
         allocator.free(address);
     }
 
-    private static final MethodHandle directByteBufferHandle;
-    private static final Field byteBufferNativeByteOrder;
+    private static final Class<?> DIRECT_BYTE_BUFFER_CLASS;
+    private static final long DIRECT_BYTE_BUFFER_ADDRESS_OFFSET;
+    private static final long DIRECT_BYTE_BUFFER_CAPACITY_OFFSET;
+    private static final long DIRECT_BYTE_BUFFER_LIMIT_OFFSET;
 
     static
     {
         try
         {
-            Constructor ctor = Class.forName("java.nio.DirectByteBuffer")
-                                    .getDeclaredConstructor(long.class, int.class, Object.class);
-            ctor.setAccessible(true);
-
-            byteBufferNativeByteOrder = ByteBuffer.class.getDeclaredField("nativeByteOrder");
-            byteBufferNativeByteOrder.setAccessible(true);
-
-            directByteBufferHandle = MethodHandles.lookup().unreflectConstructor(ctor);
+            Class<?> clazz = ByteBuffer.allocateDirect(0).getClass();
+            DIRECT_BYTE_BUFFER_ADDRESS_OFFSET = unsafe.objectFieldOffset(Buffer.class.getDeclaredField("address"));
+            DIRECT_BYTE_BUFFER_CAPACITY_OFFSET = unsafe.objectFieldOffset(Buffer.class.getDeclaredField("capacity"));
+            DIRECT_BYTE_BUFFER_LIMIT_OFFSET = unsafe.objectFieldOffset(Buffer.class.getDeclaredField("limit"));
+            DIRECT_BYTE_BUFFER_CLASS = clazz;
         }
-        catch (NoSuchMethodException | ClassNotFoundException | IllegalAccessException | NoSuchFieldException e)
+        catch (NoSuchFieldException e)
         {
             throw new RuntimeException(e);
         }
@@ -409,10 +407,15 @@ final class Uns
 
     static ByteBuffer directBufferFor(long address, long offset, long len)
     {
+        if (len > Integer.MAX_VALUE || len < 0L)
+            throw new IllegalArgumentException();
         try
         {
-            ByteBuffer bb = (ByteBuffer) directByteBufferHandle.invoke(address + offset, (int) len, null);
-            byteBufferNativeByteOrder.setBoolean(bb, true);
+            ByteBuffer bb = (ByteBuffer) unsafe.allocateInstance(DIRECT_BYTE_BUFFER_CLASS);
+            unsafe.putLong(bb, DIRECT_BYTE_BUFFER_ADDRESS_OFFSET, address + offset);
+            unsafe.putInt(bb, DIRECT_BYTE_BUFFER_CAPACITY_OFFSET, (int) len);
+            unsafe.putInt(bb, DIRECT_BYTE_BUFFER_LIMIT_OFFSET, (int) len);
+            bb.order(ByteOrder.nativeOrder());
             return bb;
         }
         catch (Error e)
