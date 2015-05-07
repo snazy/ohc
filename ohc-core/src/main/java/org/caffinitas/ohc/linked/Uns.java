@@ -21,6 +21,7 @@ import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Map;
+import java.util.StringTokenizer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -146,19 +147,30 @@ final class Uns
             if (unsafe.addressSize() > 8)
                 throw new RuntimeException("Address size " + unsafe.addressSize() + " not supported yet (max 8 bytes)");
 
+            String javaVersion = System.getProperty("java.version");
+            StringTokenizer st = new StringTokenizer(javaVersion, ".");
+            int major = Integer.parseInt(st.nextToken());
+            int minor = Integer.parseInt(st.nextToken());
             UnsExt e;
-            try
-            {
-                Unsafe.class.getDeclaredMethod("getAndAddLong", Object.class, long.class, long.class);
-                // use new Java8 methods in sun.misc.Unsafe
-                Class<? extends UnsExt> cls = (Class<? extends UnsExt>) Class.forName(UnsExt7.class.getName().replace('7', '8'));
-                e = cls.getDeclaredConstructor(Unsafe.class).newInstance(unsafe);
-                LOGGER.info("OHC using Java8 Unsafe API");
-            }
-            catch (Exception ignored)
-            {
+            if (major > 1 || minor >= 8)
+                try
+                {
+                    // use new Java8 methods in sun.misc.Unsafe
+                    Class<? extends UnsExt> cls = (Class<? extends UnsExt>) Class.forName(UnsExt7.class.getName().replace('7', '8'));
+                    e = cls.getDeclaredConstructor(Class.class).newInstance(unsafe);
+                    LOGGER.info("OHC using Java8 Unsafe API");
+                }
+                catch (VirtualMachineError ex)
+                {
+                    throw ex;
+                }
+                catch (Throwable ex)
+                {
+                    LOGGER.warn("Failed to load Java8 implementation ohc-core-j8 : " + ex);
+                    e = new UnsExt7(unsafe);
+                }
+            else
                 e = new UnsExt7(unsafe);
-            }
             ext = e;
 
             if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
