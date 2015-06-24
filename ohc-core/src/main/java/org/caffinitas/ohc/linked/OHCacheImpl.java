@@ -210,7 +210,10 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
 
         if (segment(hash).hasEntry(hashEntryAdr, hash, keyLen))
+        {
+            Uns.free(hashEntryAdr);
             return null;
+        }
 
         return new DirectValueAccessImpl(hashEntryAdr, keyLen, valueLen, false)
         {
@@ -223,11 +226,13 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             {
                 if (closed)
                     return false;
-                closed = true;
-                if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L))
+                if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L, 0L))
+                {
+                    closed = true;
                     return true;
+                }
 
-                Uns.free(hashEntryAdr);
+                super.close();
                 return false;
             }
         };
@@ -263,7 +268,10 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
 
         if (!segment(hash).hasEntry(hashEntryAdr, hash, keyLen))
+        {
+            Uns.free(hashEntryAdr);
             return null;
+        }
 
         return new DirectValueAccessImpl(hashEntryAdr, keyLen, valueLen, false)
         {
@@ -276,13 +284,17 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             {
                 if (closed)
                     return false;
-                closed = true;
-                if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, false,
-                                       oldImpl != null ? oldImpl.valueAdr() : 0L,
-                                       oldImpl != null ? oldImpl.valueLen() : 0L))
-                    return true;
 
-                Uns.free(hashEntryAdr);
+                if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, false,
+                                           oldImpl != null ? oldImpl.hashEntryAdr() : 0L,
+                                           oldImpl != null ? oldImpl.valueOffset() : 0L,
+                                           oldImpl != null ? oldImpl.valueLen() : 0L))
+                {
+                    closed = true;
+                    return true;
+                }
+
+                super.close();
                 return false;
             }
         };
@@ -324,11 +336,13 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             {
                 if (closed)
                     return false;
-                closed = true;
-                if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, false, 0L, 0L))
+                if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, false, 0L, 0L, 0L))
+                {
+                    closed = true;
                     return true;
+                }
 
-                Uns.free(hashEntryAdr);
+                super.close();
                 return false;
             }
         };
@@ -400,7 +414,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             // initialize hash entry
             HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
 
-            if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, oldValueLen))
+            if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, 0L, oldValueLen))
                 return true;
 
             Uns.free(hashEntryAdr);
@@ -504,7 +518,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             // initialize hash entry
             HashEntries.init(hash, keyLen, 0L, hashEntryAdr, Util.SENTINEL_LOADING);
 
-            if (segment.putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L))
+            if (segment.putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L, 0L))
             {
                 // this request IS the initial requestor for the key
 
@@ -1114,7 +1128,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         // read key + value
         if (!Util.readFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, kvLen, false)) ||
-            !segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, 0L, 0L))
+            !segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, 0L, 0L, 0L))
         {
             Uns.free(hashEntryAdr);
             return false;

@@ -36,9 +36,14 @@ class DirectValueAccessImpl implements DirectValueAccess
         this.buffer = Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), valueLen, readOnly);
     }
 
-    long valueAdr()
+    long hashEntryAdr()
     {
-        return hashEntryAdr + Util.ENTRY_OFF_DATA + Util.roundUpTo8(HashEntries.getKeyLen(hashEntryAdr));
+        return hashEntryAdr;
+    }
+
+    long valueOffset()
+    {
+        return Util.ENTRY_OFF_DATA + Util.roundUpTo8(HashEntries.getKeyLen(hashEntryAdr));
     }
 
     long valueLen()

@@ -213,7 +213,7 @@ final class OffHeapMap
         }
     }
 
-    boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
+    boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAddr, long oldValueOffset, long oldValueLen)
     {
         long removeHashEntryAdr = 0L;
         LongArrayList derefList = null;
@@ -235,11 +235,11 @@ final class OffHeapMap
                 if (ifAbsent)
                     return false;
 
-                if (oldValueAdr != 0L)
+                if (oldValueAddr != 0L)
                 {
                     // code for replace() operation
                     long valueLen = HashEntries.getValueLen(hashEntryAdr);
-                    if (valueLen != oldValueLen || !HashEntries.compare(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), oldValueAdr, 0L, oldValueLen))
+                    if (valueLen != oldValueLen || !HashEntries.compare(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), oldValueAddr, oldValueOffset, oldValueLen))
                         return false;
                 }
 

@@ -139,6 +139,8 @@ public class DirectAccessTest
                                                             .capacity(64 * 1024 * 1024)
                                                             .build())
         {
+
+            // simple put-if-absent
             for (int i = 0; i < 100; i++)
             {
                 Assert.assertNull(cache.addOrReplaceDirect(i, null, i + 10));
@@ -156,8 +158,47 @@ public class DirectAccessTest
                 {
                     Assert.assertTrue(direct.commit());
                 }
+
+                // do it again - must fail
+                Assert.assertNull(cache.putIfAbsentDirect(i, i + 10));
             }
 
+            cache.clear();
+
+            // put-if-absent - but added concurrently
+            for (int i = 0; i < 100; i++)
+            {
+                Assert.assertNull(cache.addOrReplaceDirect(i, null, i + 10));
+
+                DirectValueAccess direct = cache.putIfAbsentDirect(i, i + 10);
+                try
+                {
+                    // do the put that will prevent direct.commit() to succeed
+                    try (DirectValueAccess conc = cache.putDirect(i, i + 10))
+                    {
+                        for (int c = 0; c < i + 10; c++)
+                            conc.buffer().put((byte) i);
+                    }
+
+                    for (int j = 0; j < 100; j++)
+                        try (DirectValueAccess chk = cache.getDirect(i))
+                        {
+                            Assert.assertNotNull(chk);
+                        }
+
+                    for (int c = 0; c < i + 10; c++)
+                        direct.buffer().put((byte) i);
+                }
+                finally
+                {
+                    Assert.assertFalse(direct.commit());
+                }
+
+                // do it again - must fail
+                Assert.assertNull(cache.putIfAbsentDirect(i, i + 10));
+            }
+
+            // replace with compare of other value
             for (int i = 0; i < 100; i++)
             {
                 try (DirectValueAccess ex = cache.getDirect(i))
@@ -177,6 +218,31 @@ public class DirectAccessTest
                 }
             }
 
+            // replace with compare of other value - but changed concurrently
+            for (int i = 0; i < 100; i++)
+            {
+                try (DirectValueAccess ex = cache.getDirect(i))
+                {
+                    Assert.assertNotNull(ex);
+
+                    cache.put(i, "xx" + i);
+
+                    DirectValueAccess direct = cache.addOrReplaceDirect(i, ex, i + 10);
+                    try
+                    {
+                        for (int c = 0; c < i + 10; c++)
+                            direct.buffer().put((byte) i);
+                    }
+                    finally
+                    {
+                        Assert.assertFalse(direct.commit());
+                    }
+
+                    Assert.assertEquals(cache.get(i), "xx" + i);
+                }
+            }
+
+            // unconditional add
             for (int i = 0; i < 100; i++)
             {
                 DirectValueAccess direct = cache.addOrReplaceDirect(i, null, i + 10);

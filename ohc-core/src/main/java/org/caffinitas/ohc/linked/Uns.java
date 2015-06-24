@@ -72,7 +72,7 @@ final class Uns
                 {
                     for (Map.Entry<Long, AllocInfo> addrSize : ohDebug.entrySet())
                     {
-                        System.err.printf("  still allocated: address=%d, size=%d%n", addrSize.getKey(), addrSize.getValue().size);
+                        System.err.printf("  still allocated: address=%d, size=%d, refCount=%d%n", addrSize.getKey(), addrSize.getValue().size, getInt(addrSize.getKey(), Util.ENTRY_OFF_REFCOUNT));
                         addrSize.getValue().trace.printStackTrace();
                     }
                     throw new RuntimeException("Not all allocated memory has been freed!");
