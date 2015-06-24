@@ -147,7 +147,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         if (hashEntryAdr == 0L)
             return null;
 
-        return new DirectValueAccessImpl(hashEntryAdr);
+        return new DirectValueAccessImpl(hashEntryAdr, true);
     }
 
     public V get(K key)
@@ -186,6 +186,120 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         return segment(keySource.hash()).getEntry(keySource, false) != 0L;
     }
 
+    public DirectValueAccess putIfAbsentDirect(K k, long valueLen)
+    {
+        if (k == null)
+            throw new NullPointerException();
+
+        final long keyLen = keySerializer.serializedSize(k);
+
+        final long bytes = Util.allocLen(keyLen, valueLen);
+
+        final long hashEntryAdr;
+        if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes, throwOOME)) == 0L)
+        {
+            // entry too large to be inserted or OS is not able to provide enough memory
+            putFailCount++;
+
+            return null;
+        }
+
+        final long hash = serializeForPut(k, null, keyLen, valueLen, hashEntryAdr);
+
+        // initialize hash entry
+        HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
+
+        if (segment(hash).hasEntry(hashEntryAdr, hash, keyLen))
+        {
+            Uns.free(hashEntryAdr);
+            return null;
+        }
+
+        return new DirectValueAccessImpl(hashEntryAdr, keyLen, valueLen, false)
+        {
+            public void close()
+            {
+                commit();
+            }
+
+            public boolean commit()
+            {
+                if (closed)
+                    return false;
+                if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L, 0L))
+                {
+                    closed = true;
+                    return true;
+                }
+
+                super.close();
+                return false;
+            }
+        };
+    }
+
+    public DirectValueAccess addOrReplaceDirect(K k, DirectValueAccess old, long valueLen)
+    {
+        if (k == null)
+            throw new NullPointerException();
+
+        final DirectValueAccessImpl oldImpl = (DirectValueAccessImpl) old;
+        if (oldImpl != null && oldImpl.closed)
+            throw new IllegalStateException("old value already closed");
+
+        final long keyLen = keySerializer.serializedSize(k);
+
+        final long bytes = Util.allocLen(keyLen, valueLen);
+
+        final long hashEntryAdr;
+        if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes, throwOOME)) == 0L)
+        {
+            // entry too large to be inserted or OS is not able to provide enough memory
+            putFailCount++;
+
+            remove(k);
+
+            return null;
+        }
+
+        final long hash = serializeForPut(k, null, keyLen, valueLen, hashEntryAdr);
+
+        // initialize hash entry
+        HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
+
+        if (!segment(hash).hasEntry(hashEntryAdr, hash, keyLen))
+        {
+            Uns.free(hashEntryAdr);
+            return null;
+        }
+
+        return new DirectValueAccessImpl(hashEntryAdr, keyLen, valueLen, false)
+        {
+            public void close()
+            {
+                commit();
+            }
+
+            public boolean commit()
+            {
+                if (closed)
+                    return false;
+
+                if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, false,
+                                           oldImpl != null ? oldImpl.hashEntryAdr() : 0L,
+                                           oldImpl != null ? oldImpl.valueOffset() : 0L,
+                                           oldImpl != null ? oldImpl.valueLen() : 0L))
+                {
+                    closed = true;
+                    return true;
+                }
+
+                super.close();
+                return false;
+            }
+        };
+    }
+
     public DirectValueAccess putDirect(K k, long valueLen)
     {
         if (k == null)
@@ -211,15 +325,25 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         // initialize hash entry
         HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
 
-        return new DirectValueAccessImpl(hashEntryAdr)
+        return new DirectValueAccessImpl(hashEntryAdr, keyLen, valueLen, false)
         {
             public void close()
             {
-                if (!closed)
+                commit();
+            }
+
+            public boolean commit()
+            {
+                if (closed)
+                    return false;
+                if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, false, 0L, 0L, 0L))
                 {
                     closed = true;
-                    segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, false, 0L, 0L);
+                    return true;
                 }
+
+                super.close();
+                return false;
             }
         };
     }
@@ -290,7 +414,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             // initialize hash entry
             HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
 
-            if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, oldValueLen))
+            if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, oldValueAdr, 0L, oldValueLen))
                 return true;
 
             Uns.free(hashEntryAdr);
@@ -394,7 +518,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             // initialize hash entry
             HashEntries.init(hash, keyLen, 0L, hashEntryAdr, Util.SENTINEL_LOADING);
 
-            if (segment.putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L))
+            if (segment.putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L, 0L))
             {
                 // this request IS the initial requestor for the key
 
@@ -850,7 +974,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long headerAddress = Uns.allocateIOException(8, throwOOME);
         try
         {
-            ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L);
+            ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             Util.readFully(channel, header);
             header.flip();
             int magic = header.getInt();
@@ -923,7 +1047,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                         bufAdr = Uns.allocateIOException(bufLen, throwOOME);
                     }
 
-                    if (!Util.readFully(channel, Uns.directBufferFor(bufAdr, Util.ENTRY_OFF_DATA, keyLen)))
+                    if (!Util.readFully(channel, Uns.directBufferFor(bufAdr, Util.ENTRY_OFF_DATA, keyLen, false)))
                     {
                         eod = true;
                         throw new EOFException();
@@ -1003,8 +1127,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT);
 
         // read key + value
-        if (!Util.readFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, kvLen)) ||
-            !segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, 0L, 0L))
+        if (!Util.readFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, kvLen, false)) ||
+            !segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, 0L, 0L, 0L))
         {
             Uns.free(hashEntryAdr);
             return false;
@@ -1027,7 +1151,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long headerAddress = Uns.allocateIOException(8, throwOOME);
         try
         {
-            ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L);
+            ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             Util.readFully(channel, header);
             header.flip();
             int magic = header.getInt();
@@ -1071,7 +1195,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long headerAddress = Uns.allocateIOException(8, throwOOME);
         try
         {
-            ByteBuffer headerBuffer = Uns.directBufferFor(headerAddress, 0L, 8L);
+            ByteBuffer headerBuffer = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             headerBuffer.putInt(entries ? Util.HEADER_ENTRIES : Util.HEADER_KEYS);
             headerBuffer.putInt(1);
             headerBuffer.flip();
@@ -1132,7 +1256,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             long totalLen = 3 * 8L + Util.roundUpTo8(keyLen) + valueLen;
 
             // write hash, keyLen, valueLen + key + value
-            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_HASH, totalLen));
+            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_HASH, totalLen, true));
 
             return true;
         }
@@ -1151,7 +1275,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             long totalLen = 8L + keyLen;
 
             // write hash, keyLen, valueLen + key + value
-            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, totalLen));
+            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, totalLen, true));
 
             return true;
         }
@@ -1212,7 +1336,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             ByteBuffer buildResult(long hashEntryAdr)
             {
-                return Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr));
+                return Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr), true);
             }
         };
     }
@@ -1241,7 +1365,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             ByteBuffer buildResult(long hashEntryAdr)
             {
-                return Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr));
+                return Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr), true);
             }
         };
     }

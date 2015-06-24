@@ -72,7 +72,7 @@ final class Uns
                 {
                     for (Map.Entry<Long, AllocInfo> addrSize : ohDebug.entrySet())
                     {
-                        System.err.printf("  still allocated: address=%d, size=%d%n", addrSize.getKey(), addrSize.getValue().size);
+                        System.err.printf("  still allocated: address=%d, size=%d, refCount=%d%n", addrSize.getKey(), addrSize.getValue().size, getInt(addrSize.getKey(), Util.ENTRY_OFF_REFCOUNT));
                         addrSize.getValue().trace.printStackTrace();
                     }
                     throw new RuntimeException("Not all allocated memory has been freed!");
@@ -405,6 +405,7 @@ final class Uns
     }
 
     private static final Class<?> DIRECT_BYTE_BUFFER_CLASS;
+    private static final Class<?> DIRECT_BYTE_BUFFER_CLASS_R;
     private static final long DIRECT_BYTE_BUFFER_ADDRESS_OFFSET;
     private static final long DIRECT_BYTE_BUFFER_CAPACITY_OFFSET;
     private static final long DIRECT_BYTE_BUFFER_LIMIT_OFFSET;
@@ -413,11 +414,15 @@ final class Uns
     {
         try
         {
-            Class<?> clazz = ByteBuffer.allocateDirect(0).getClass();
+            ByteBuffer directBuffer = ByteBuffer.allocateDirect(0);
+            ByteBuffer directReadOnly = directBuffer.asReadOnlyBuffer();
+            Class<?> clazz = directBuffer.getClass();
+            Class<?> clazzReadOnly = directReadOnly.getClass();
             DIRECT_BYTE_BUFFER_ADDRESS_OFFSET = unsafe.objectFieldOffset(Buffer.class.getDeclaredField("address"));
             DIRECT_BYTE_BUFFER_CAPACITY_OFFSET = unsafe.objectFieldOffset(Buffer.class.getDeclaredField("capacity"));
             DIRECT_BYTE_BUFFER_LIMIT_OFFSET = unsafe.objectFieldOffset(Buffer.class.getDeclaredField("limit"));
             DIRECT_BYTE_BUFFER_CLASS = clazz;
+            DIRECT_BYTE_BUFFER_CLASS_R = clazzReadOnly;
         }
         catch (NoSuchFieldException e)
         {
@@ -425,13 +430,13 @@ final class Uns
         }
     }
 
-    static ByteBuffer directBufferFor(long address, long offset, long len)
+    static ByteBuffer directBufferFor(long address, long offset, long len, boolean readOnly)
     {
         if (len > Integer.MAX_VALUE || len < 0L)
             throw new IllegalArgumentException();
         try
         {
-            ByteBuffer bb = (ByteBuffer) unsafe.allocateInstance(DIRECT_BYTE_BUFFER_CLASS);
+            ByteBuffer bb = (ByteBuffer) unsafe.allocateInstance(readOnly ? DIRECT_BYTE_BUFFER_CLASS_R : DIRECT_BYTE_BUFFER_CLASS);
             unsafe.putLong(bb, DIRECT_BYTE_BUFFER_ADDRESS_OFFSET, address + offset);
             unsafe.putInt(bb, DIRECT_BYTE_BUFFER_CAPACITY_OFFSET, (int) len);
             unsafe.putInt(bb, DIRECT_BYTE_BUFFER_LIMIT_OFFSET, (int) len);

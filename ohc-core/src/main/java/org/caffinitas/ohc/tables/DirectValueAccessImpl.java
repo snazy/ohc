@@ -33,7 +33,7 @@ class DirectValueAccessImpl implements DirectValueAccess
     DirectValueAccessImpl(long hashEntryAdr, long keyLen, long valueLen)
     {
         this.hashEntryAdr = hashEntryAdr;
-        this.buffer = Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), valueLen);
+        this.buffer = Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), valueLen, false);
     }
 
     public ByteBuffer buffer()
@@ -51,6 +51,12 @@ class DirectValueAccessImpl implements DirectValueAccess
     public void close()
     {
         deref();
+    }
+
+    public boolean commit()
+    {
+        close();
+        return false;
     }
 
     private void deref()

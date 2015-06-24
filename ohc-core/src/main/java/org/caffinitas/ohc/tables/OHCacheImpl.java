@@ -173,6 +173,16 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         return segment(keySource.hash()).getEntry(keySource, false) != 0L;
     }
 
+    public DirectValueAccess addOrReplaceDirect(K k, DirectValueAccess old, long valueLen)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public DirectValueAccess putIfAbsentDirect(K k, long valueLen)
+    {
+        throw new UnsupportedOperationException();
+    }
+
     public DirectValueAccess putDirect(K k, long valueLen)
     {
         if (k == null)
@@ -573,7 +583,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long headerAddress = Uns.allocateIOException(8);
         try
         {
-            ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L);
+            ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             Util.readFully(channel, header);
             header.flip();
             int magic = header.getInt();
@@ -646,7 +656,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                         bufAdr = Uns.allocateIOException(bufLen);
                     }
 
-                    if (!Util.readFully(channel, Uns.directBufferFor(bufAdr, Util.ENTRY_OFF_DATA, keyLen)))
+                    if (!Util.readFully(channel, Uns.directBufferFor(bufAdr, Util.ENTRY_OFF_DATA, keyLen, false)))
                     {
                         eod = true;
                         throw new EOFException();
@@ -726,7 +736,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         HashEntries.init(hash, keyLen, valueLen, hashEntryAdr);
 
         // read key + value
-        if (!Util.readFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, kvLen)) ||
+        if (!Util.readFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, kvLen, false)) ||
             !segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, 0L, 0L))
         {
             Uns.free(hashEntryAdr);
@@ -751,7 +761,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long headerAddress = Uns.allocateIOException(8);
         try
         {
-            ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L);
+            ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             Util.readFully(channel, header);
             header.flip();
             int magic = header.getInt();
@@ -795,7 +805,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         long headerAddress = Uns.allocateIOException(8);
         try
         {
-            ByteBuffer headerBuffer = Uns.directBufferFor(headerAddress, 0L, 8L);
+            ByteBuffer headerBuffer = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             headerBuffer.putInt(entries ? Util.HEADER_ENTRIES : Util.HEADER_KEYS);
             headerBuffer.putInt(1);
             headerBuffer.flip();
@@ -856,7 +866,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             long totalLen = 3 * 8L + Util.roundUpTo8(keyLen) + valueLen;
 
             // write hash, keyLen, valueLen + key + value
-            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_HASH, totalLen));
+            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_HASH, totalLen, false));
 
             return true;
         }
@@ -875,7 +885,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             long totalLen = 8L + keyLen;
 
             // write hash, keyLen, valueLen + key + value
-            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, totalLen));
+            Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, totalLen, false));
 
             return true;
         }
@@ -936,7 +946,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             ByteBuffer buildResult(long hashEntryAdr)
             {
-                return Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr));
+                return Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr), false);
             }
         };
     }
@@ -965,7 +975,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             ByteBuffer buildResult(long hashEntryAdr)
             {
-                return Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr));
+                return Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA, HashEntries.getKeyLen(hashEntryAdr), false);
             }
         };
     }

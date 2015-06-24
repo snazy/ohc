@@ -89,7 +89,7 @@ public class UnsTest
     {
         fillRandom();
 
-        ByteBuffer buf = Uns.directBufferFor(((DirectBuffer) directBuffer).address(), 0, directBuffer.capacity());
+        ByteBuffer buf = Uns.directBufferFor(((DirectBuffer) directBuffer).address(), 0, directBuffer.capacity(), false);
 
         for (int i = 0; i < CAPACITY; i++)
         {
@@ -301,7 +301,7 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8);
+                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 long l = Uns.getLong(adr, i);
                 assertEquals(buf.getLong(0), Uns.getLong(adr, i));
                 assertEquals(unsafe.getLong(adr + i), Uns.getLong(adr, i));
@@ -327,7 +327,7 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8);
+                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 int l = Uns.getInt(adr, i);
                 assertEquals(buf.getInt(0), Uns.getInt(adr, i));
                 assertEquals(unsafe.getInt(adr + i), Uns.getInt(adr, i));
@@ -353,7 +353,7 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8);
+                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 short l = Uns.getShort(adr, i);
                 assertEquals(buf.getShort(0), Uns.getShort(adr, i));
                 assertEquals(unsafe.getShort(adr + i), Uns.getShort(adr, i));
@@ -379,7 +379,7 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8);
+                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 byte l = Uns.getByte(adr, i);
                 assertEquals(buf.get(0), Uns.getByte(adr, i));
                 assertEquals(unsafe.getByte(adr + i), Uns.getByte(adr, i));
@@ -405,7 +405,7 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8);
+                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 boolean l = Uns.getBoolean(adr, i);
                 assertEquals(buf.get(0) != 0, Uns.getBoolean(adr, i));
                 assertEquals(unsafe.getByte(adr + i) != 0, Uns.getBoolean(adr, i));
@@ -431,7 +431,7 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8);
+                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 char l = Uns.getChar(adr, i);
                 assertEquals(buf.getChar(0), Uns.getChar(adr, i));
                 assertEquals(unsafe.getChar(adr + i), Uns.getChar(adr, i));
@@ -457,7 +457,7 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8);
+                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 float l = Uns.getFloat(adr, i);
                 assertEquals(buf.getFloat(0), Uns.getFloat(adr, i));
                 assertEquals(unsafe.getFloat(adr + i), Uns.getFloat(adr, i));
@@ -483,7 +483,7 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8);
+                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 double l = Uns.getDouble(adr, i);
                 assertEquals(buf.getDouble(0), Uns.getDouble(adr, i));
                 assertEquals(unsafe.getDouble(adr + i), Uns.getDouble(adr, i));

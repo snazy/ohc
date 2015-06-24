@@ -32,7 +32,7 @@ final class BufferedWritableByteChannel implements WritableByteChannel
     {
         this.delegate = delegate;
         this.bufferAddress = Uns.allocateIOException(bufferSize);
-        this.buffer = Uns.directBufferFor(bufferAddress, 0L, bufferSize);
+        this.buffer = Uns.directBufferFor(bufferAddress, 0L, bufferSize, false);
     }
 
     public int write(ByteBuffer src) throws IOException

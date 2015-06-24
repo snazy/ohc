@@ -46,7 +46,7 @@ final class DecompressingInputChannel implements ReadableByteChannel
         int maxCLen;
         try
         {
-            ByteBuffer header = Uns.directBufferFor(headerAdr, 0, 16);
+            ByteBuffer header = Uns.directBufferFor(headerAdr, 0, 16, false);
             if (!readFully(delegate, header))
                 throw new EOFException("Could not read file header");
             header.flip();
@@ -67,10 +67,10 @@ final class DecompressingInputChannel implements ReadableByteChannel
 
         this.delegate = delegate;
         this.compressedAddress = Uns.allocateIOException(maxCLen + bufferSize);
-        this.compressedBuffer = Uns.directBufferFor(compressedAddress, 0L, maxCLen);
+        this.compressedBuffer = Uns.directBufferFor(compressedAddress, 0L, maxCLen, false);
         this.compressedBuffer.position(compressedBuffer.limit());
 
-        this.decompressedBuffer = Uns.directBufferFor(compressedAddress, maxCLen, bufferSize);
+        this.decompressedBuffer = Uns.directBufferFor(compressedAddress, maxCLen, bufferSize, false);
         this.decompressedBuffer.position(decompressedBuffer.limit());
     }
 

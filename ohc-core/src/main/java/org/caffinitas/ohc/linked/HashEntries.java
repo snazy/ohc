@@ -59,6 +59,12 @@ final class HashEntries
         if (hashEntryAdr == 0L)
             return false;
 
+        if (hashEntryAdr == otherHashEntryAdr)
+        {
+            assert offset == otherOffset;
+            return true;
+        }
+
         int p = 0;
         for (; p <= len - 8; p += 8, offset += 8, otherOffset += 8)
             if (Uns.getLong(hashEntryAdr, offset) != Uns.getLong(otherHashEntryAdr, otherOffset))
