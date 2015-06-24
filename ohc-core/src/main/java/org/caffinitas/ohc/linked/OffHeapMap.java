@@ -188,6 +188,31 @@ final class OffHeapMap
         }
     }
 
+    boolean hasEntry(long newHashEntryAdr, long hash, long keyLen)
+    {
+        lock.lock();
+        try
+        {
+            for (long hashEntryAdr = table.getFirst(hash);
+                 hashEntryAdr != 0L;
+                 hashEntryAdr = HashEntries.getNext(hashEntryAdr))
+            {
+                if (notSameKey(newHashEntryAdr, hash, keyLen, hashEntryAdr))
+                    continue;
+
+                // replace existing entry
+
+                return true;
+            }
+
+            return false;
+        }
+        finally
+        {
+            lock.unlock();
+        }
+    }
+
     boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAdr, long oldValueLen)
     {
         long removeHashEntryAdr = 0L;

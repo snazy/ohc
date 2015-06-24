@@ -42,7 +42,7 @@ final class CompressingOutputChannel implements WritableByteChannel
         int maxCLen = Snappy.maxCompressedLength(uncompressedChunkSize);
         int bufferCapacity = 4 + maxCLen;
         this.bufferAddress = Uns.allocateIOException(bufferCapacity);
-        this.buffer = Uns.directBufferFor(bufferAddress, 0L, bufferCapacity);
+        this.buffer = Uns.directBufferFor(bufferAddress, 0L, bufferCapacity, false);
         this.uncompressedChunkSize = uncompressedChunkSize - 4;
 
         buffer.putInt(HEADER_COMPRESSED);

@@ -108,6 +108,16 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
         throw new UnsupportedOperationException();
     }
 
+    public DirectValueAccess addOrReplaceDirect(K k, DirectValueAccess old, long valueLen)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public DirectValueAccess putIfAbsentDirect(K k, long valueLen)
+    {
+        throw new UnsupportedOperationException();
+    }
+
     public V get(K key)
     {
         V rProd = prod.get(key);

@@ -25,15 +25,25 @@ class DirectValueAccessImpl implements DirectValueAccess
     volatile boolean closed;
     private final ByteBuffer buffer;
 
-    DirectValueAccessImpl(long hashEntryAdr)
+    DirectValueAccessImpl(long hashEntryAdr, boolean readOnly)
     {
-        this(hashEntryAdr, HashEntries.getKeyLen(hashEntryAdr), HashEntries.getValueLen(hashEntryAdr));
+        this(hashEntryAdr, HashEntries.getKeyLen(hashEntryAdr), HashEntries.getValueLen(hashEntryAdr), readOnly);
     }
 
-    DirectValueAccessImpl(long hashEntryAdr, long keyLen, long valueLen)
+    DirectValueAccessImpl(long hashEntryAdr, long keyLen, long valueLen, boolean readOnly)
     {
         this.hashEntryAdr = hashEntryAdr;
-        this.buffer = Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), valueLen);
+        this.buffer = Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), valueLen, readOnly);
+    }
+
+    long valueAdr()
+    {
+        return hashEntryAdr + Util.ENTRY_OFF_DATA + Util.roundUpTo8(HashEntries.getKeyLen(hashEntryAdr));
+    }
+
+    long valueLen()
+    {
+        return HashEntries.getValueLen(hashEntryAdr);
     }
 
     public ByteBuffer buffer()
@@ -51,6 +61,12 @@ class DirectValueAccessImpl implements DirectValueAccess
     public void close()
     {
         deref();
+    }
+
+    public boolean commit()
+    {
+        deref();
+        return false;
     }
 
     private void deref()
