@@ -801,4 +801,10 @@ final class OffHeapMap
             HashEntries.setLRUPrev(head, hashEntryAdr);
         lruHead = hashEntryAdr;
     }
+
+    @Override
+    public String toString()
+    {
+        return String.valueOf(size);
+    }
 }

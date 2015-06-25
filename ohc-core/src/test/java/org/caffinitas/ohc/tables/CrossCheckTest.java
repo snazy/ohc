@@ -27,8 +27,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 
-import com.google.common.io.ByteStreams;
-
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -604,9 +602,9 @@ public class CrossCheckTest
                 while (iter.hasNext())
                 {
                     ByteBuffer k = iter.next();
-                    ByteBuffer k2 = ByteBuffer.allocate(k.remaining());
+                    ByteBuffer k2 = Util.allocateByteBuffer(k.remaining());
                     k2.put(k);
-                    Integer key = TestUtils.intSerializer.deserialize(ByteStreams.newDataInput(k2.array()));
+                    Integer key = TestUtils.intSerializer.deserialize(Util.wrap(k2.array()));
                     Assert.assertTrue(keys.add(key));
                 }
             }
@@ -779,7 +777,7 @@ public class CrossCheckTest
     @Test
     public void testTooBigEntryOnPut() throws IOException
     {
-        try (OHCache<Integer, String> cache = cache(8, -1, -1, TestUtils.intSerializer.serializedSize(1) + Util.ENTRY_OFF_DATA + Util.roundUpTo8(5)))
+        try (OHCache<Integer, String> cache = cache(8, -1, -1, Util.roundUpTo8(TestUtils.intSerializer.serializedSize(1)) + Util.ENTRY_OFF_DATA + 5))
         {
             cache.put(1, new String(new byte[100]));
             Assert.assertEquals(cache.size(), 0);

@@ -18,19 +18,20 @@ package org.caffinitas.ohc.benchmark;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import org.caffinitas.ohc.CacheSerializer;
 
 public final class BenchmarkUtils {
     public static final CacheSerializer<byte[]> serializer = new CacheSerializer<byte[]>() {
-        public void serialize(byte[] bytes, DataOutput stream) throws IOException {
-            stream.writeInt(bytes.length);
-            stream.write(bytes);
+        public void serialize(byte[] bytes, ByteBuffer buf) {
+            buf.putInt(bytes.length);
+            buf.put(bytes);
         }
 
-        public byte[] deserialize(DataInput stream) throws IOException {
-            byte[] bytes = new byte[stream.readInt()];
-            stream.readFully(bytes);
+        public byte[] deserialize(ByteBuffer buf) {
+            byte[] bytes = new byte[buf.getInt()];
+            buf.get(bytes);
             return bytes;
         }
 
@@ -41,14 +42,14 @@ public final class BenchmarkUtils {
 
     public static final CacheSerializer<Long> longSerializer = new CacheSerializer<Long>()
     {
-        public void serialize(Long val, DataOutput out) throws IOException
+        public void serialize(Long val, ByteBuffer buf)
         {
-            out.writeLong(val);
+            buf.putLong(val);
         }
 
-        public Long deserialize(DataInput in) throws IOException
+        public Long deserialize(ByteBuffer buf)
         {
-            return in.readLong();
+            return buf.getLong();
         }
 
         public int serializedSize(Long value)
@@ -66,18 +67,18 @@ public final class BenchmarkUtils {
             this.keyLen = keyLen;
         }
 
-        public void serialize(Long val, DataOutput out) throws IOException
+        public void serialize(Long val, ByteBuffer buf)
         {
-            out.writeLong(val);
+            buf.putLong(val);
             for (int i = 0; i < keyLen; i++)
-                out.write(0);
+                buf.put((byte)(0 & 0xff));
         }
 
-        public Long deserialize(DataInput in) throws IOException
+        public Long deserialize(ByteBuffer buf)
         {
-            long v = in.readLong();
+            long v = buf.getLong();
             for (int i = 0; i < keyLen; i++)
-                in.readByte();
+                buf.get();
             return v;
         }
 
