@@ -22,7 +22,7 @@ import org.caffinitas.ohc.DirectValueAccess;
 class DirectValueAccessImpl implements DirectValueAccess
 {
     private final long hashEntryAdr;
-    volatile boolean closed;
+    boolean closed;
     private final ByteBuffer buffer;
 
     DirectValueAccessImpl(long hashEntryAdr, boolean readOnly)
@@ -58,20 +58,9 @@ class DirectValueAccessImpl implements DirectValueAccess
         return buffer;
     }
 
-    public void abort()
-    {
-        deref();
-    }
-
     public void close()
     {
         deref();
-    }
-
-    public boolean commit()
-    {
-        deref();
-        return false;
     }
 
     private void deref()

@@ -27,11 +27,11 @@ import java.util.concurrent.ConcurrentMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.alloc.IAllocator;
 import org.caffinitas.ohc.alloc.JNANativeAllocator;
 import org.caffinitas.ohc.alloc.UnsafeAllocator;
+
 import sun.misc.Unsafe;
 
 final class Uns
@@ -443,5 +443,45 @@ final class Uns
         {
             throw new RuntimeException(t);
         }
+    }
+
+    static ByteBuffer keyBufferR(long hashEntryAdr, long keyLen)
+    {
+        return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA, 0, keyLen, true);
+    }
+
+    static ByteBuffer keyBufferR(long hashEntryAdr)
+    {
+        return keyBufferR(hashEntryAdr, HashEntries.getKeyLen(hashEntryAdr));
+    }
+
+    static ByteBuffer keyBuffer(long hashEntryAdr, long keyLen)
+    {
+        return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA, 0, keyLen, false);
+    }
+
+    static ByteBuffer keyBuffer(long hashEntryAdr)
+    {
+        return keyBuffer(hashEntryAdr, HashEntries.getKeyLen(hashEntryAdr));
+    }
+
+    static ByteBuffer valueBufferR(long hashEntryAdr, long valueLen)
+    {
+        return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA + Util.roundUpTo8(HashEntries.getKeyLen(hashEntryAdr)), 0, valueLen, true);
+    }
+
+    static ByteBuffer valueBufferR(long hashEntryAdr)
+    {
+        return valueBufferR(hashEntryAdr, HashEntries.getValueLen(hashEntryAdr));
+    }
+
+    static ByteBuffer valueBuffer(long hashEntryAdr, long keyLen, long valueLen)
+    {
+        return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), 0, valueLen, false);
+    }
+
+    static ByteBuffer valueBuffer(long hashEntryAdr)
+    {
+        return valueBuffer(hashEntryAdr, HashEntries.getKeyLen(hashEntryAdr), HashEntries.getValueLen(hashEntryAdr));
     }
 }

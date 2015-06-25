@@ -17,6 +17,7 @@ package org.caffinitas.ohc.tables;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 
@@ -110,5 +111,26 @@ final class Util
         return number >= max
                ? max
                : (number > 1) ? Long.highestOneBit((number - 1) << 1) : 1;
+    }
+
+    static ByteBuffer allocateByteBuffer(int size)
+    {
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        buf.order(ByteOrder.nativeOrder());
+        return buf;
+    }
+
+    static ByteBuffer allocateDirectByteBuffer(int size)
+    {
+        ByteBuffer buf = ByteBuffer.allocateDirect(size);
+        buf.order(ByteOrder.nativeOrder());
+        return buf;
+    }
+
+    static ByteBuffer wrap(byte bytes[])
+    {
+        ByteBuffer buf = ByteBuffer.wrap(bytes);
+        buf.order(ByteOrder.nativeOrder());
+        return buf;
     }
 }
