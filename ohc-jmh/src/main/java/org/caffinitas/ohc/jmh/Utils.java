@@ -15,9 +15,7 @@
  */
 package org.caffinitas.ohc.jmh;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import org.caffinitas.ohc.CacheSerializer;
 
@@ -25,16 +23,16 @@ public final class Utils
 {
     public static final CacheSerializer<byte[]> byteArraySerializer = new CacheSerializer<byte[]>()
     {
-        public void serialize(byte[] bytes, DataOutput out) throws IOException
+        public void serialize(byte[] bytes, ByteBuffer buf)
         {
-            out.writeInt(bytes.length);
-            out.write(bytes);
+            buf.putInt(bytes.length);
+            buf.put(bytes);
         }
 
-        public byte[] deserialize(DataInput in) throws IOException
+        public byte[] deserialize(ByteBuffer buf)
         {
-            byte[] arr = new byte[in.readInt()];
-            in.readFully(arr);
+            byte[] arr = new byte[buf.getInt()];
+            buf.get(arr);
             return arr;
         }
 
@@ -46,14 +44,14 @@ public final class Utils
 
     public static final CacheSerializer<Integer> intSerializer = new CacheSerializer<Integer>()
     {
-        public void serialize(Integer integer, DataOutput out) throws IOException
+        public void serialize(Integer integer, ByteBuffer buf)
         {
-            out.writeInt(integer);
+            buf.putInt(integer);
         }
 
-        public Integer deserialize(DataInput in) throws IOException
+        public Integer deserialize(ByteBuffer buf)
         {
-            return in.readInt();
+            return buf.getInt();
         }
 
         public int serializedSize(Integer integer)

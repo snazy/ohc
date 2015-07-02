@@ -15,7 +15,6 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ReadOnlyBufferException;
 
@@ -25,6 +24,8 @@ import org.caffinitas.ohc.OHCacheBuilder;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
+
+import com.google.common.base.Charsets;
 
 public class DirectAccessTest
 {
@@ -45,21 +46,10 @@ public class DirectAccessTest
         {
             for (int i = 0; i < 100; i++)
             {
-                try (DirectValueAccess direct = cache.putDirect(i, i + 10))
-                {
-                    for (int c = 0; c < i + 10; c++)
-                        direct.buffer().put((byte) i);
-
-                    try
-                    {
-                        direct.buffer().put((byte) 0);
-                        Assert.fail();
-                    }
-                    catch (BufferOverflowException e)
-                    {
-                        // fine
-                    }
-                }
+                String s = "";
+                for (int c = 0; c < i + 10; c++)
+                    s = s + "42";
+                cache.put(i, s);
             }
 
             for (int i = 0; i < 100; i++)
@@ -67,11 +57,15 @@ public class DirectAccessTest
                 Assert.assertTrue(cache.containsKey(i));
                 try (DirectValueAccess direct = cache.getDirect(i))
                 {
-                    Assert.assertEquals(direct.buffer().capacity(), i + 10);
-                    Assert.assertEquals(direct.buffer().limit(), i + 10);
-
+                    String s = "";
                     for (int c = 0; c < i + 10; c++)
-                        Assert.assertEquals(direct.buffer().get(), i);
+                        s = s + "42";
+                    byte[] bytes = s.getBytes(Charsets.UTF_8);
+
+                    Assert.assertEquals(direct.buffer().capacity(), bytes.length + 2);
+                    Assert.assertEquals(direct.buffer().limit(), bytes.length + 2);
+
+                    Assert.assertEquals(TestUtils.stringSerializer.deserialize(direct.buffer()), s);
 
                     try
                     {
@@ -92,168 +86,6 @@ public class DirectAccessTest
                     {
                         // fine
                     }
-                }
-            }
-        }
-    }
-
-    @Test
-    public void testDirectPutIfAbsent() throws Exception
-    {
-        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                            .keySerializer(TestUtils.intSerializer)
-                                                            .valueSerializer(TestUtils.stringSerializer)
-                                                            .capacity(64 * 1024 * 1024)
-                                                            .build())
-        {
-            for (int i = 0; i < 100; i++)
-            {
-                DirectValueAccess direct = cache.putIfAbsentDirect(i, i + 10);
-                try
-                {
-                    for (int j = 0; j < 100; j++)
-                        Assert.assertNull(cache.getDirect(i));
-
-                    for (int c = 0; c < i + 10; c++)
-                        direct.buffer().put((byte) i);
-                }
-                finally
-                {
-                    Assert.assertTrue(direct.commit());
-                }
-            }
-
-            for (int i = 0; i < 100; i++)
-            {
-                Assert.assertNull(cache.putIfAbsentDirect(i, i + 10));
-            }
-        }
-    }
-
-    @Test
-    public void testDirectAddOrReplace() throws Exception
-    {
-        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                            .keySerializer(TestUtils.intSerializer)
-                                                            .valueSerializer(TestUtils.stringSerializer)
-                                                            .capacity(64 * 1024 * 1024)
-                                                            .build())
-        {
-
-            // simple put-if-absent
-            for (int i = 0; i < 100; i++)
-            {
-                Assert.assertNull(cache.addOrReplaceDirect(i, null, i + 10));
-
-                DirectValueAccess direct = cache.putIfAbsentDirect(i, i + 10);
-                try
-                {
-                    for (int j = 0; j < 100; j++)
-                        Assert.assertNull(cache.getDirect(i));
-
-                    for (int c = 0; c < i + 10; c++)
-                        direct.buffer().put((byte) i);
-                }
-                finally
-                {
-                    Assert.assertTrue(direct.commit());
-                }
-
-                // do it again - must fail
-                Assert.assertNull(cache.putIfAbsentDirect(i, i + 10));
-            }
-
-            cache.clear();
-
-            // put-if-absent - but added concurrently
-            for (int i = 0; i < 100; i++)
-            {
-                Assert.assertNull(cache.addOrReplaceDirect(i, null, i + 10));
-
-                DirectValueAccess direct = cache.putIfAbsentDirect(i, i + 10);
-                try
-                {
-                    // do the put that will prevent direct.commit() to succeed
-                    try (DirectValueAccess conc = cache.putDirect(i, i + 10))
-                    {
-                        for (int c = 0; c < i + 10; c++)
-                            conc.buffer().put((byte) i);
-                    }
-
-                    for (int j = 0; j < 100; j++)
-                        try (DirectValueAccess chk = cache.getDirect(i))
-                        {
-                            Assert.assertNotNull(chk);
-                        }
-
-                    for (int c = 0; c < i + 10; c++)
-                        direct.buffer().put((byte) i);
-                }
-                finally
-                {
-                    Assert.assertFalse(direct.commit());
-                }
-
-                // do it again - must fail
-                Assert.assertNull(cache.putIfAbsentDirect(i, i + 10));
-            }
-
-            // replace with compare of other value
-            for (int i = 0; i < 100; i++)
-            {
-                try (DirectValueAccess ex = cache.getDirect(i))
-                {
-                    Assert.assertNotNull(ex);
-
-                    DirectValueAccess direct = cache.addOrReplaceDirect(i, ex, i + 10);
-                    try
-                    {
-                        for (int c = 0; c < i + 10; c++)
-                            direct.buffer().put((byte) i);
-                    }
-                    finally
-                    {
-                        Assert.assertTrue(direct.commit());
-                    }
-                }
-            }
-
-            // replace with compare of other value - but changed concurrently
-            for (int i = 0; i < 100; i++)
-            {
-                try (DirectValueAccess ex = cache.getDirect(i))
-                {
-                    Assert.assertNotNull(ex);
-
-                    cache.put(i, "xx" + i);
-
-                    DirectValueAccess direct = cache.addOrReplaceDirect(i, ex, i + 10);
-                    try
-                    {
-                        for (int c = 0; c < i + 10; c++)
-                            direct.buffer().put((byte) i);
-                    }
-                    finally
-                    {
-                        Assert.assertFalse(direct.commit());
-                    }
-
-                    Assert.assertEquals(cache.get(i), "xx" + i);
-                }
-            }
-
-            // unconditional add
-            for (int i = 0; i < 100; i++)
-            {
-                DirectValueAccess direct = cache.addOrReplaceDirect(i, null, i + 10);
-                try
-                {
-                    for (int c = 0; c < i + 10; c++)
-                        direct.buffer().put((byte) i);
-                }
-                finally
-                {
-                    Assert.assertTrue(direct.commit());
                 }
             }
         }

@@ -29,12 +29,4 @@ import java.nio.ByteBuffer;
 public interface DirectValueAccess extends Closeable
 {
     ByteBuffer buffer();
-
-    void abort();
-
-    /**
-     * Similar to {@link #close()} but returns a success result for {@link OHCache#putIfAbsentDirect(Object, long)}
-     * and {@link OHCache#addOrReplaceDirect(Object, DirectValueAccess, long)}.
-     */
-    boolean commit();
 }

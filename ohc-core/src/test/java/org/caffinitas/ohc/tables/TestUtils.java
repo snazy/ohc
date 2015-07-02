@@ -15,28 +15,35 @@
  */
 package org.caffinitas.ohc.tables;
 
-import java.io.DataInput;
-import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Random;
 
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.OHCache;
 import org.testng.Assert;
 
+import com.google.common.base.Charsets;
+
 final class TestUtils
 {
     public static final long ONE_MB = 1024 * 1024;
     public static final CacheSerializer<String> stringSerializer = new CacheSerializer<String>()
     {
-        public void serialize(String s, DataOutput out) throws IOException
+        public void serialize(String s, ByteBuffer buf)
         {
-            out.writeUTF(s);
+            byte[] bytes = s.getBytes(Charsets.UTF_8);
+            buf.put((byte) ((bytes.length >>> 8) & 0xFF));
+            buf.put((byte) ((bytes.length >>> 0) & 0xFF));
+            buf.put(bytes);
         }
 
-        public String deserialize(DataInput in) throws IOException
+        public String deserialize(ByteBuffer buf)
         {
-            return in.readUTF();
+            int length = (((buf.get() & 0xff) << 8) + ((buf.get() & 0xff) << 0));
+            byte[] bytes = new byte[length];
+            buf.get(bytes);
+            return new String(bytes, Charsets.UTF_8);
         }
 
         public int serializedSize(String s)
@@ -46,14 +53,17 @@ final class TestUtils
     };
     public static final CacheSerializer<String> stringSerializerFailSerialize = new CacheSerializer<String>()
     {
-        public void serialize(String s, DataOutput out)
+        public void serialize(String s, ByteBuffer buf)
         {
             throw new RuntimeException("foo bar");
         }
 
-        public String deserialize(DataInput in) throws IOException
+        public String deserialize(ByteBuffer buf)
         {
-            return in.readUTF();
+            int length = (buf.get() << 8) + (buf.get() << 0);
+            byte[] bytes = new byte[length];
+            buf.get(bytes);
+            return new String(bytes, Charsets.UTF_8);
         }
 
         public int serializedSize(String s)
@@ -63,12 +73,15 @@ final class TestUtils
     };
     public static final CacheSerializer<String> stringSerializerFailDeserialize = new CacheSerializer<String>()
     {
-        public void serialize(String s, DataOutput out) throws IOException
+        public void serialize(String s, ByteBuffer buf)
         {
-            out.writeUTF(s);
+            byte[] bytes = s.getBytes(Charsets.UTF_8);
+            buf.put((byte) ((bytes.length >>> 8) & 0xFF));
+            buf.put((byte) ((bytes.length >>> 0) & 0xFF));
+            buf.put(bytes);
         }
 
-        public String deserialize(DataInput in)
+        public String deserialize(ByteBuffer buf)
         {
             throw new RuntimeException("foo bar");
         }
@@ -105,99 +118,87 @@ final class TestUtils
     public static final byte[] dummyByteArray;
     public static final CacheSerializer<Integer> intSerializer = new CacheSerializer<Integer>()
     {
-        public void serialize(Integer s, DataOutput out) throws IOException
+        public void serialize(Integer s, ByteBuffer buf)
         {
-            out.writeBoolean(true);
-            out.writeByte(1);
-            out.writeChar('A');
-            out.writeDouble(42.42424242d);
-            out.writeFloat(11.111f);
-            out.writeInt(s);
-            out.writeLong(Long.MAX_VALUE);
-            out.writeShort(0x7654);
-            out.writeByte(0xf8);
-            out.writeShort(0xf987);
-            out.write(dummyByteArray);
+            buf.put((byte)(1 & 0xff));
+            buf.putChar('A');
+            buf.putDouble(42.42424242d);
+            buf.putFloat(11.111f);
+            buf.putInt(s);
+            buf.putLong(Long.MAX_VALUE);
+            buf.putShort((short)(0x7654 & 0xFFFF));
+            buf.put(dummyByteArray);
         }
 
-        public Integer deserialize(DataInput in) throws IOException
+        public Integer deserialize(ByteBuffer buf)
         {
-            Assert.assertEquals(in.readBoolean(), true);
-            Assert.assertEquals(in.readByte(), (byte) 1);
-            Assert.assertEquals(in.readChar(), 'A');
-            Assert.assertEquals(in.readDouble(), 42.42424242d);
-            Assert.assertEquals(in.readFloat(), 11.111f);
-            int r = in.readInt();
-            Assert.assertEquals(in.readLong(), Long.MAX_VALUE);
-            Assert.assertEquals(in.readShort(), 0x7654);
-            Assert.assertEquals(in.readUnsignedByte(), 0xf8);
-            Assert.assertEquals(in.readUnsignedShort(), 0xf987);
+            Assert.assertEquals(buf.get(), (byte) 1);
+            Assert.assertEquals(buf.getChar(), 'A');
+            Assert.assertEquals(buf.getDouble(), 42.42424242d);
+            Assert.assertEquals(buf.getFloat(), 11.111f);
+            int r = buf.getInt();
+            Assert.assertEquals(buf.getLong(), Long.MAX_VALUE);
+            Assert.assertEquals(buf.getShort(), 0x7654);
             byte[] b = new byte[dummyByteArray.length];
-            in.readFully(b);
+            buf.get(b);
             Assert.assertEquals(b, dummyByteArray);
             return r;
         }
 
         public int serializedSize(Integer s)
         {
-            return 533;
+            return 529;
         }
     };
     public static final CacheSerializer<Integer> intSerializerFailSerialize = new CacheSerializer<Integer>()
     {
-        public void serialize(Integer s, DataOutput out)
+        public void serialize(Integer s, ByteBuffer buf)
         {
             throw new RuntimeException("foo bar");
         }
 
-        public Integer deserialize(DataInput in) throws IOException
+        public Integer deserialize(ByteBuffer buf)
         {
-            Assert.assertEquals(in.readBoolean(), true);
-            Assert.assertEquals(in.readByte(), (byte) 1);
-            Assert.assertEquals(in.readChar(), 'A');
-            Assert.assertEquals(in.readDouble(), 42.42424242d);
-            Assert.assertEquals(in.readFloat(), 11.111f);
-            int r = in.readInt();
-            Assert.assertEquals(in.readLong(), Long.MAX_VALUE);
-            Assert.assertEquals(in.readShort(), 0x7654);
-            Assert.assertEquals(in.readUnsignedByte(), 0xf8);
-            Assert.assertEquals(in.readUnsignedShort(), 0xf987);
+            Assert.assertEquals(buf.get(), (byte) 1);
+            Assert.assertEquals(buf.getChar(), 'A');
+            Assert.assertEquals(buf.getDouble(), 42.42424242d);
+            Assert.assertEquals(buf.getFloat(), 11.111f);
+            int r = buf.getInt();
+            Assert.assertEquals(buf.getLong(), Long.MAX_VALUE);
+            Assert.assertEquals(buf.getShort(), 0x7654);
             byte[] b = new byte[dummyByteArray.length];
-            in.readFully(b);
+            buf.get(b);
             Assert.assertEquals(b, dummyByteArray);
             return r;
         }
 
         public int serializedSize(Integer s)
         {
-            return 533;
+            return 529;
         }
     };
     public static final CacheSerializer<Integer> intSerializerFailDeserialize = new CacheSerializer<Integer>()
     {
-        public void serialize(Integer s, DataOutput out) throws IOException
+        public void serialize(Integer s, ByteBuffer buf)
         {
-            out.writeBoolean(true);
-            out.writeByte(1);
-            out.writeChar('A');
-            out.writeDouble(42.42424242d);
-            out.writeFloat(11.111f);
-            out.writeInt(s);
-            out.writeLong(Long.MAX_VALUE);
-            out.writeShort(0x7654);
-            out.writeByte(0xf8);
-            out.writeShort(0xf987);
-            out.write(dummyByteArray);
+            buf.put((byte)(1 & 0xff));
+            buf.putChar('A');
+            buf.putDouble(42.42424242d);
+            buf.putFloat(11.111f);
+            buf.putInt(s);
+            buf.putLong(Long.MAX_VALUE);
+            buf.putShort((short)(0x7654 & 0xFFFF));
+            buf.put(dummyByteArray);
         }
 
-        public Integer deserialize(DataInput in)
+        public Integer deserialize(ByteBuffer buf)
         {
             throw new RuntimeException("foo bar");
         }
 
         public int serializedSize(Integer s)
         {
-            return 533;
+            return 529;
         }
     };
     static final String big;
