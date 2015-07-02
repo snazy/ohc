@@ -1,3 +1,8 @@
+0.4.0
+=====
+
+#15 Refactor serialization to use java.nio.ByteBuffer instead of streams
+
 0.3.6
 =====
 #11 add putIfAbsentDirect() and addOrReplaceDirect()

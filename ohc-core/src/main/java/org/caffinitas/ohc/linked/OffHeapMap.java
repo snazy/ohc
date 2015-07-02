@@ -188,31 +188,6 @@ final class OffHeapMap
         }
     }
 
-    boolean hasEntry(long newHashEntryAdr, long hash, long keyLen)
-    {
-        lock.lock();
-        try
-        {
-            for (long hashEntryAdr = table.getFirst(hash);
-                 hashEntryAdr != 0L;
-                 hashEntryAdr = HashEntries.getNext(hashEntryAdr))
-            {
-                if (notSameKey(newHashEntryAdr, hash, keyLen, hashEntryAdr))
-                    continue;
-
-                // replace existing entry
-
-                return true;
-            }
-
-            return false;
-        }
-        finally
-        {
-            lock.unlock();
-        }
-    }
-
     boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAddr, long oldValueOffset, long oldValueLen)
     {
         long removeHashEntryAdr = 0L;
@@ -800,5 +775,11 @@ final class OffHeapMap
         if (head != 0L)
             HashEntries.setLRUPrev(head, hashEntryAdr);
         lruHead = hashEntryAdr;
+    }
+
+    @Override
+    public String toString()
+    {
+        return String.valueOf(size);
     }
 }

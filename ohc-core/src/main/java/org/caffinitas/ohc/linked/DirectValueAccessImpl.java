@@ -22,7 +22,7 @@ import org.caffinitas.ohc.DirectValueAccess;
 class DirectValueAccessImpl implements DirectValueAccess
 {
     private final long hashEntryAdr;
-    volatile boolean closed;
+    boolean closed;
     private final ByteBuffer buffer;
 
     DirectValueAccessImpl(long hashEntryAdr, boolean readOnly)
@@ -36,21 +36,6 @@ class DirectValueAccessImpl implements DirectValueAccess
         this.buffer = Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), valueLen, readOnly);
     }
 
-    long hashEntryAdr()
-    {
-        return hashEntryAdr;
-    }
-
-    long valueOffset()
-    {
-        return Util.ENTRY_OFF_DATA + Util.roundUpTo8(HashEntries.getKeyLen(hashEntryAdr));
-    }
-
-    long valueLen()
-    {
-        return HashEntries.getValueLen(hashEntryAdr);
-    }
-
     public ByteBuffer buffer()
     {
         if (closed)
@@ -58,20 +43,9 @@ class DirectValueAccessImpl implements DirectValueAccess
         return buffer;
     }
 
-    public void abort()
-    {
-        deref();
-    }
-
     public void close()
     {
         deref();
-    }
-
-    public boolean commit()
-    {
-        deref();
-        return false;
     }
 
     private void deref()

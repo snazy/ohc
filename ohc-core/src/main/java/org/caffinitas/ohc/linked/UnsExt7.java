@@ -33,25 +33,6 @@ final class UnsExt7 extends UnsExt
         return r;
     }
 
-    long getAndAddLong(long address, long offset, long value)
-    {
-        address += offset;
-        long v;
-        while (true)
-        {
-            v = unsafe.getLongVolatile(null, address);
-            if (unsafe.compareAndSwapLong(null, address, v, v + value))
-                return v;
-        }
-    }
-
-    int getAndPutInt(long address, long offset, int value)
-    {
-        int r = unsafe.getInt(null, address + offset);
-        unsafe.putInt(null, address + offset, value);
-        return r;
-    }
-
     int getAndAddInt(long address, long offset, int value)
     {
         address += offset;

@@ -28,9 +28,5 @@ abstract class UnsExt
 
     abstract long getAndPutLong(long address, long offset, long value);
 
-    abstract long getAndAddLong(long address, long offset, long value);
-
-    abstract int getAndPutInt(long address, long offset, int value);
-
     abstract int getAndAddInt(long address, long offset, int value);
 }

@@ -43,20 +43,9 @@ class DirectValueAccessImpl implements DirectValueAccess
         return buffer;
     }
 
-    public void abort()
-    {
-        deref();
-    }
-
     public void close()
     {
         deref();
-    }
-
-    public boolean commit()
-    {
-        close();
-        return false;
     }
 
     private void deref()

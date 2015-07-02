@@ -15,6 +15,9 @@
  */
 package org.caffinitas.ohc.linked;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
 import org.caffinitas.ohc.HashAlgorithm;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
@@ -65,13 +68,13 @@ public class HashEntriesTest
         long adr = Uns.allocate(MIN_ALLOC_LEN);
         try
         {
-            KeyBuffer key = new KeyBuffer(11);
-            key.writeInt(0x98765432);
-            key.writeInt(0xabcdabba);
-            key.write(0x44);
-            key.write(0x55);
-            key.write(0x88);
-            key.finish(Hasher.create(HashAlgorithm.MURMUR3));
+            ByteBuffer keyBuffer = Util.allocateByteBuffer(11);
+            keyBuffer.putInt(0x98765432);
+            keyBuffer.putInt(0xabcdabba);
+            keyBuffer.put((byte)(0x44 & 0xff));
+            keyBuffer.put((byte)(0x55 & 0xff));
+            keyBuffer.put((byte)(0x88 & 0xff));
+            KeyBuffer key = new KeyBuffer(keyBuffer.array()).finish(Hasher.create(HashAlgorithm.MURMUR3));
 
             Uns.setMemory(adr, Util.ENTRY_OFF_DATA, 11, (byte) 0);
 
