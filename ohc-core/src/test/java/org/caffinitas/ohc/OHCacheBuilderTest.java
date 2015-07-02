@@ -5,6 +5,7 @@ import java.io.DataOutput;
 import java.util.HashSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.nio.ByteBuffer;
 
 import org.caffinitas.ohc.linked.OHCacheImpl;
 import org.testng.Assert;
@@ -152,12 +153,12 @@ public class OHCacheBuilderTest
 
         CacheSerializer<String> inst = new CacheSerializer<String>()
         {
-            public void serialize(String s, DataOutput out)
+            public void serialize(String s, ByteBuffer out)
             {
 
             }
 
-            public String deserialize(DataInput in)
+            public String deserialize(ByteBuffer in)
             {
                 return null;
             }
@@ -179,12 +180,12 @@ public class OHCacheBuilderTest
 
         CacheSerializer<String> inst = new CacheSerializer<String>()
         {
-            public void serialize(String s, DataOutput out)
+            public void serialize(String s, ByteBuffer out)
             {
 
             }
 
-            public String deserialize(DataInput in)
+            public String deserialize(ByteBuffer in)
             {
                 return null;
             }

@@ -63,35 +63,6 @@ public interface OHCache<K, V> extends Closeable
 
     boolean containsKey(K key);
 
-    // direct access support
-
-    /**
-     * Adds the key/value.
-     * If the entry size of key/value exceeds the configured maximum entry length, any previously existing entry
-     * for the key is removed.
-     * The entry is visible for other methods, when the returned {@link DirectValueAccess} is closed.
-     */
-    DirectValueAccess putDirect(K key, long valueLen);
-
-    /**
-     * Adds the key/value if no key is present at the time the method is invoked.
-     * If the entry size of key/value exceeds the configured maximum entry length, any previously existing entry
-     * for the key is removed.
-     * The entry is visible for other methods, when the returned {@link DirectValueAccess} is closed.
-     *
-     * @return the modifiable byte buffer or {@code null} if a matching key already exists
-     */
-    DirectValueAccess putIfAbsentDirect(K k, long valueLen);
-
-    /**
-     * Adds key/value if either the key is not present or the existing value matches parameter {@code old}.
-     * If the entry size of key/value exceeds the configured maximum entry length, the old value is removed.
-     * The entry is visible for other methods, when the returned {@link DirectValueAccess} is closed.
-     *
-     * @return the modifiable byte buffer or {@code null} if no matching key exists
-     */
-    DirectValueAccess addOrReplaceDirect(K k, DirectValueAccess old, long valueLen);
-
     /**
      * Returns a closeable byte buffer.
      * You must close the returned {@link DirectValueAccess} instance after use.

@@ -17,10 +17,9 @@ package org.caffinitas.ohc.linked;
 
 import java.util.Arrays;
 
-final class KeyBuffer extends AbstractDataOutput
+final class KeyBuffer
 {
     private final byte[] array;
-    private int p;
     private long hash;
 
     // TODO maybe move 'array' to off-heap - depends on actual use.
@@ -28,19 +27,14 @@ final class KeyBuffer extends AbstractDataOutput
     // pro: harmonize code for key + value (de)serialization in DataIn/Output implementations
     // con: puts pressure on jemalloc
 
-    KeyBuffer(int size)
+    KeyBuffer(byte[] bytes)
     {
-        array = new byte[size];
+        array = bytes;
     }
 
     byte[] array()
     {
         return array;
-    }
-
-    int position()
-    {
-        return p;
     }
 
     int size()
@@ -60,59 +54,6 @@ final class KeyBuffer extends AbstractDataOutput
         return this;
     }
 
-    public void write(int b)
-    {
-        array[p++] = (byte) b;
-    }
-
-    public void write(byte[] b, int off, int len)
-    {
-        System.arraycopy(b, off, array, p, len);
-        p += len;
-    }
-
-    public void writeShort(int v)
-    {
-        write((v >>> 8) & 0xFF);
-        write(v & 0xFF);
-    }
-
-    public void writeChar(int v)
-    {
-        write((v >>> 8) & 0xFF);
-        write(v & 0xFF);
-    }
-
-    public void writeInt(int v)
-    {
-        write((v >>> 24) & 0xFF);
-        write((v >>> 16) & 0xFF);
-        write((v >>> 8) & 0xFF);
-        write(v & 0xFF);
-    }
-
-    public void writeLong(long v)
-    {
-        write((int) ((v >>> 56) & 0xFF));
-        write((int) ((v >>> 48) & 0xFF));
-        write((int) ((v >>> 40) & 0xFF));
-        write((int) ((v >>> 32) & 0xFF));
-        write((int) ((v >>> 24) & 0xFF));
-        write((int) ((v >>> 16) & 0xFF));
-        write((int) ((v >>> 8) & 0xFF));
-        write((int) (v & 0xFF));
-    }
-
-    public void writeFloat(float v)
-    {
-        writeInt(Float.floatToIntBits(v));
-    }
-
-    public void writeDouble(double v)
-    {
-        writeLong(Double.doubleToLongBits(v));
-    }
-
     public boolean equals(Object o)
     {
         if (this == o) return true;
@@ -126,5 +67,25 @@ final class KeyBuffer extends AbstractDataOutput
     public int hashCode()
     {
         return (int) hash;
+    }
+
+    static String padToEight(int val)
+    {
+        String str = Integer.toBinaryString(val & 0xff);
+        while (str.length() < 8)
+            str = "0" + str;
+        return str;
+    }
+
+    @Override
+    public String toString()
+    {
+        StringBuilder sb = new StringBuilder();
+        for (int ii = 0; ii < array.length; ii++) {
+            if (ii % 8 == 0 && ii != 0) sb.append("\n");
+            sb.append(padToEight(array[ii]));
+            sb.append(" ");
+        }
+        return sb.toString();
     }
 }

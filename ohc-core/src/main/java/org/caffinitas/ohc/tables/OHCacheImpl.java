@@ -18,6 +18,7 @@ package org.caffinitas.ohc.tables;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
@@ -32,9 +33,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.google.common.collect.AbstractIterator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.DirectValueAccess;
@@ -151,11 +152,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         try
         {
-            return valueSerializer.deserialize(new HashEntryValueInput(hashEntryAdr));
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
+            return valueSerializer.deserialize(Uns.valueBufferR(hashEntryAdr));
         }
         finally
         {
@@ -171,54 +168,6 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer keySource = keySource(key);
 
         return segment(keySource.hash()).getEntry(keySource, false) != 0L;
-    }
-
-    public DirectValueAccess addOrReplaceDirect(K k, DirectValueAccess old, long valueLen)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    public DirectValueAccess putIfAbsentDirect(K k, long valueLen)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    public DirectValueAccess putDirect(K k, long valueLen)
-    {
-        if (k == null)
-            throw new NullPointerException();
-
-        final long keyLen = keySerializer.serializedSize(k);
-
-        final long bytes = Util.allocLen(keyLen, valueLen);
-
-        final long hashEntryAdr;
-        if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes, throwOOME)) == 0L)
-        {
-            // entry too large to be inserted or OS is not able to provide enough memory
-            putFailCount++;
-
-            remove(k);
-
-            return null;
-        }
-
-        final long hash = serializeForPut(k, null, keyLen, valueLen, hashEntryAdr);
-
-        // initialize hash entry
-        HashEntries.init(hash, keyLen, valueLen, hashEntryAdr); //, Util.SENTINEL_NOT_PRESENT);
-
-        return new DirectValueAccessImpl(hashEntryAdr)
-        {
-            public void close()
-            {
-                if (!closed)
-                {
-                    closed = true;
-                    segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, false, 0L, 0L);
-                }
-            }
-        };
     }
 
     public void put(K k, V v)
@@ -259,7 +208,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                     throw new RuntimeException("Unable to allocate " + oldValueLen + " bytes in off-heap");
                 try
                 {
-                    valueSerializer.serialize(old, new HashEntryValueOutput(oldValueAdr, oldValueLen));
+                    valueSerializer.serialize(old, Uns.directBufferFor(oldValueAdr, 0, oldValueLen, false));
                 }
                 catch (RuntimeException | Error e)
                 {
@@ -301,18 +250,17 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     private long serializeForPut(K k, V v, long keyLen, long valueLen, long hashEntryAdr)
     {
-        HashEntryKeyOutput key = new HashEntryKeyOutput(hashEntryAdr, keyLen);
         try
         {
-            keySerializer.serialize(k, key);
-            valueSerializer.serialize(v, new HashEntryValueOutput(hashEntryAdr, keyLen, valueLen));
+            keySerializer.serialize(k, Uns.keyBuffer(hashEntryAdr, keyLen));
+            valueSerializer.serialize(v, Uns.valueBuffer(hashEntryAdr, keyLen, valueLen));
         }
         catch (Throwable e)
         {
             freeAndThrow(e, hashEntryAdr);
         }
 
-        return key.hash();
+        return hash(hashEntryAdr,  keyLen);
     }
 
     private static void freeAndThrow(Throwable e, long hashEntryAdr)
@@ -360,16 +308,10 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         int size = keySerializer.serializedSize(o);
 
-        KeyBuffer key = new KeyBuffer(size);
-        try
-        {
-            keySerializer.serialize(o, key);
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
-        return key.finish();
+        ByteBuffer key = Util.allocateByteBuffer(size);
+        keySerializer.serialize(o, key);
+        assert(key.position() == key.capacity()) && (key.capacity() == size);
+        return new KeyBuffer(key.array()).finish();
     }
 
     //
@@ -607,7 +549,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             private boolean eod;
 
             private final byte[] keyLenBuf = new byte[8];
-            private final ByteBuffer bb = ByteBuffer.wrap(keyLenBuf);
+            private final ByteBuffer bb = Util.wrap(keyLenBuf);
 
             private long bufAdr;
             private long bufLen;
@@ -662,7 +604,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                         throw new EOFException();
                     }
                     HashEntries.init(0L, keyLen, 0L, bufAdr);
-                    next = keySerializer.deserialize(new HashEntryKeyInput(bufAdr));
+                    next = keySerializer.deserialize(Uns.keyBufferR(bufAdr));
                 }
                 catch (IOException e)
                 {
@@ -699,7 +641,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         // read hash, keyLen, valueLen
         byte[] hashKeyValueLen = new byte[3 * 8];
-        ByteBuffer bb = ByteBuffer.wrap(hashKeyValueLen);
+        ByteBuffer bb = Util.wrap(hashKeyValueLen);
         if (!Util.readFully(channel, bb))
             return false;
 
@@ -719,7 +661,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
             else
             {
-                ByteBuffer tmp = ByteBuffer.allocate(8192);
+                ByteBuffer tmp = Util.allocateByteBuffer(8192);
                 while (kvLen > 0L)
                 {
                     tmp.clear();
@@ -928,14 +870,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             K buildResult(long hashEntryAdr)
             {
-                try
-                {
-                    return keySerializer.deserialize(new HashEntryKeyInput(hashEntryAdr));
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException(e);
-                }
+                return keySerializer.deserialize(Uns.keyBufferR(hashEntryAdr));
             }
         };
     }
@@ -957,14 +892,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         {
             K buildResult(long hashEntryAdr)
             {
-                try
-                {
-                    return keySerializer.deserialize(new HashEntryKeyInput(hashEntryAdr));
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException(e);
-                }
+                return keySerializer.deserialize(Uns.keyBufferR(hashEntryAdr));
             }
         };
     }
@@ -1134,5 +1062,115 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 subIndex = 0;
             }
         }
+    }
+
+    public static long hash(long blkAdr, long keyLen)
+    {
+        long o = Util.ENTRY_OFF_DATA;
+        long r = keyLen;
+
+        long h1 = 0L;
+        long h2 = 0L;
+        long k1, k2;
+
+        for (; r >= 16; r -= 16)
+        {
+            k1 = getLong(blkAdr, o);
+            o += 8;
+            k2 = getLong(blkAdr, o);
+            o += 8;
+
+            // bmix64()
+
+            h1 ^= Murmur3.mixK1(k1);
+
+            h1 = Long.rotateLeft(h1, 27);
+            h1 += h2;
+            h1 = h1 * 5 + 0x52dce729;
+
+            h2 ^= Murmur3.mixK2(k2);
+
+            h2 = Long.rotateLeft(h2, 31);
+            h2 += h1;
+            h2 = h2 * 5 + 0x38495ab5;
+        }
+
+        if (r > 0)
+        {
+            k1 = 0;
+            k2 = 0;
+            switch ((int) r)
+            {
+                case 15:
+                    k2 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 14)) << 48; // fall through
+                case 14:
+                    k2 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 13)) << 40; // fall through
+                case 13:
+                    k2 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 12)) << 32; // fall through
+                case 12:
+                    k2 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 11)) << 24; // fall through
+                case 11:
+                    k2 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 10)) << 16; // fall through
+                case 10:
+                    k2 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 9)) << 8; // fall through
+                case 9:
+                    k2 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 8)); // fall through
+                case 8:
+                    k1 ^= getLong(blkAdr, o);
+                    break;
+                case 7:
+                    k1 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 6)) << 48; // fall through
+                case 6:
+                    k1 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 5)) << 40; // fall through
+                case 5:
+                    k1 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 4)) << 32; // fall through
+                case 4:
+                    k1 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 3)) << 24; // fall through
+                case 3:
+                    k1 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 2)) << 16; // fall through
+                case 2:
+                    k1 ^= Murmur3.toLong(Uns.getByte(blkAdr, o + 1)) << 8; // fall through
+                case 1:
+                    k1 ^= Murmur3.toLong(Uns.getByte(blkAdr, o));
+                    break;
+                default:
+                    throw new AssertionError("Should never get here.");
+            }
+
+            h1 ^= Murmur3.mixK1(k1);
+            h2 ^= Murmur3.mixK2(k2);
+        }
+
+        // makeHash()
+
+        h1 ^= keyLen;
+        h2 ^= keyLen;
+
+        h1 += h2;
+        h2 += h1;
+
+        h1 = Murmur3.fmix64(h1);
+        h2 = Murmur3.fmix64(h2);
+
+        h1 += h2;
+        //h2 += h1;
+
+        // padToLong()
+
+        return h1;
+    }
+
+    private static long getLong(long blkAdr, long o)
+    {
+
+        long l = Murmur3.toLong(Uns.getByte(blkAdr, o + 7)) << 56;
+        l |= Murmur3.toLong(Uns.getByte(blkAdr, o + 6)) << 48;
+        l |= Murmur3.toLong(Uns.getByte(blkAdr, o + 5)) << 40;
+        l |= Murmur3.toLong(Uns.getByte(blkAdr, o + 4)) << 32;
+        l |= Murmur3.toLong(Uns.getByte(blkAdr, o + 3)) << 24;
+        l |= Murmur3.toLong(Uns.getByte(blkAdr, o + 2)) << 16;
+        l |= Murmur3.toLong(Uns.getByte(blkAdr, o + 1)) << 8;
+        l |= Murmur3.toLong(Uns.getByte(blkAdr, o));
+        return l;
     }
 }

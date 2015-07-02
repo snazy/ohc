@@ -18,6 +18,7 @@ package org.caffinitas.ohc.linked;
 import java.io.IOError;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collections;
@@ -29,9 +30,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
-
-import com.google.common.io.ByteArrayDataOutput;
-import com.google.common.io.ByteStreams;
 
 import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
@@ -162,21 +160,6 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         throw new UnsupportedOperationException();
     }
 
-    public DirectValueAccess putDirect(K key, long valueLen)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    public DirectValueAccess addOrReplaceDirect(K k, DirectValueAccess old, long valueLen)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    public DirectValueAccess putIfAbsentDirect(K k, long valueLen)
-    {
-        throw new UnsupportedOperationException();
-    }
-
     public V get(K key)
     {
         KeyBuffer keyBuffer = keySource(key);
@@ -186,14 +169,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         if (value == null)
             return null;
 
-        try
-        {
-            return valueSerializer.deserialize(ByteStreams.newDataInput(value));
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
+        return valueSerializer.deserialize(Util.wrap(value));
     }
 
     public boolean containsKey(K key)
@@ -224,14 +200,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected K construct(KeyBuffer next)
             {
-                try
-                {
-                    return keySerializer.deserialize(ByteStreams.newDataInput(next.array()));
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException(e);
-                }
+                return keySerializer.deserialize(Util.wrap(next.array()));
             }
         };
     }
@@ -242,7 +211,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected ByteBuffer construct(KeyBuffer next)
             {
-                return ByteBuffer.wrap(next.array());
+                return Util.wrap(next.array());
             }
         };
     }
@@ -253,14 +222,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected K construct(KeyBuffer next)
             {
-                try
-                {
-                    return keySerializer.deserialize(ByteStreams.newDataInput(next.array()));
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException(e);
-                }
+                return keySerializer.deserialize(Util.wrap(next.array()));
             }
         };
     }
@@ -271,7 +233,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected ByteBuffer construct(KeyBuffer next)
             {
-                return ByteBuffer.wrap(next.array());
+                return Util.wrap(next.array());
             }
         };
     }
@@ -561,29 +523,16 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     {
         int size = keySerializer.serializedSize(o);
 
-        KeyBuffer key = new KeyBuffer(size);
-        try
-        {
-            keySerializer.serialize(o, key);
-        }
-        catch (IOException e)
-        {
-            throw new IOError(e);
-        }
-        return key.finish(hasher);
+        ByteBuffer keyBuffer = Util.allocateByteBuffer(size);
+        keySerializer.serialize(o, keyBuffer);
+        assert(keyBuffer.position() == keyBuffer.capacity()) && (keyBuffer.capacity() == size);
+        return new KeyBuffer(keyBuffer.array()).finish(hasher);
     }
 
     private byte[] value(V value)
     {
-        try
-        {
-            ByteArrayDataOutput output = ByteStreams.newDataOutput(valueSerializer.serializedSize(value));
-            valueSerializer.serialize(value, output);
-            return output.toByteArray();
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
-        }
+        ByteBuffer buf = Util.allocateByteBuffer(valueSerializer.serializedSize(value));
+        valueSerializer.serialize(value, buf);
+        return buf.array();
     }
 }
