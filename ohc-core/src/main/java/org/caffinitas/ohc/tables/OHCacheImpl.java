@@ -296,7 +296,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         int size = keySerializer.serializedSize(o);
 
-        ByteBuffer key = Util.allocateByteBuffer(size);
+        ByteBuffer key = ByteBuffer.allocate(size);
         keySerializer.serialize(o, key);
         assert(key.position() == key.capacity()) && (key.capacity() == size);
         return new KeyBuffer(key.array()).finish();
@@ -537,7 +537,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             private boolean eod;
 
             private final byte[] keyLenBuf = new byte[8];
-            private final ByteBuffer bb = Util.wrap(keyLenBuf);
+            private final ByteBuffer bb = ByteBuffer.wrap(keyLenBuf);
 
             private long bufAdr;
             private long bufLen;
@@ -629,7 +629,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         // read hash, keyLen, valueLen
         byte[] hashKeyValueLen = new byte[3 * 8];
-        ByteBuffer bb = Util.wrap(hashKeyValueLen);
+        ByteBuffer bb = ByteBuffer.wrap(hashKeyValueLen);
         if (!Util.readFully(channel, bb))
             return false;
 
@@ -649,7 +649,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
             else
             {
-                ByteBuffer tmp = Util.allocateByteBuffer(8192);
+                ByteBuffer tmp = ByteBuffer.allocate(8192);
                 while (kvLen > 0L)
                 {
                     tmp.clear();

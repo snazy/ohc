@@ -17,7 +17,6 @@ package org.caffinitas.ohc.linked;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -610,9 +609,9 @@ public class CrossCheckTest
                 while (iter.hasNext())
                 {
                     ByteBuffer k = iter.next();
-                    ByteBuffer k2 = Util.allocateByteBuffer(k.remaining());
+                    ByteBuffer k2 = ByteBuffer.allocate(k.remaining());
                     k2.put(k);
-                    Integer key = TestUtils.intSerializer.deserialize(Util.wrap(k2.array()));
+                    Integer key = TestUtils.intSerializer.deserialize(ByteBuffer.wrap(k2.array()));
                     Assert.assertTrue(keys.add(key));
                 }
             }

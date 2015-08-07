@@ -37,7 +37,7 @@ public class KeyBufferTest
     public void testHashFinish() throws Exception
     {
         byte[] ref = TestUtils.randomBytes(10);
-        ByteBuffer buf = Util.allocateByteBuffer(12);
+        ByteBuffer buf = ByteBuffer.allocate(12);
         buf.put((byte)(42 & 0xff));
         buf.put(ref);
         buf.put((byte)(0xf0 & 0xff));
@@ -55,7 +55,7 @@ public class KeyBufferTest
     public void testHashFinish16() throws Exception
     {
         byte[] ref = TestUtils.randomBytes(14);
-        ByteBuffer buf = Util.allocateByteBuffer(16);
+        ByteBuffer buf = ByteBuffer.allocate(16);
         buf.put((byte)(42 & 0xff));
         buf.put(ref);
         buf.put((byte)(0xf0 & 0xff));
