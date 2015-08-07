@@ -602,9 +602,9 @@ public class CrossCheckTest
                 while (iter.hasNext())
                 {
                     ByteBuffer k = iter.next();
-                    ByteBuffer k2 = Util.allocateByteBuffer(k.remaining());
+                    ByteBuffer k2 = ByteBuffer.allocate(k.remaining());
                     k2.put(k);
-                    Integer key = TestUtils.intSerializer.deserialize(Util.wrap(k2.array()));
+                    Integer key = TestUtils.intSerializer.deserialize(ByteBuffer.wrap(k2.array()));
                     Assert.assertTrue(keys.add(key));
                 }
             }

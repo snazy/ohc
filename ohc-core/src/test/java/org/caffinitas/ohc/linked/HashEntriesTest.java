@@ -16,7 +16,6 @@
 package org.caffinitas.ohc.linked;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import org.caffinitas.ohc.HashAlgorithm;
 import org.testng.annotations.AfterMethod;
@@ -68,7 +67,7 @@ public class HashEntriesTest
         long adr = Uns.allocate(MIN_ALLOC_LEN);
         try
         {
-            ByteBuffer keyBuffer = Util.allocateByteBuffer(11);
+            ByteBuffer keyBuffer = ByteBuffer.allocate(11);
             keyBuffer.putInt(0x98765432);
             keyBuffer.putInt(0xabcdabba);
             keyBuffer.put((byte)(0x44 & 0xff));

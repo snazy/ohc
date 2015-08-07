@@ -15,10 +15,8 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.io.IOError;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Collections;
@@ -169,7 +167,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         if (value == null)
             return null;
 
-        return valueSerializer.deserialize(Util.wrap(value));
+        return valueSerializer.deserialize(ByteBuffer.wrap(value));
     }
 
     public boolean containsKey(K key)
@@ -200,7 +198,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected K construct(KeyBuffer next)
             {
-                return keySerializer.deserialize(Util.wrap(next.array()));
+                return keySerializer.deserialize(ByteBuffer.wrap(next.array()));
             }
         };
     }
@@ -211,7 +209,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected ByteBuffer construct(KeyBuffer next)
             {
-                return Util.wrap(next.array());
+                return ByteBuffer.wrap(next.array());
             }
         };
     }
@@ -222,7 +220,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected K construct(KeyBuffer next)
             {
-                return keySerializer.deserialize(Util.wrap(next.array()));
+                return keySerializer.deserialize(ByteBuffer.wrap(next.array()));
             }
         };
     }
@@ -233,7 +231,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected ByteBuffer construct(KeyBuffer next)
             {
-                return Util.wrap(next.array());
+                return ByteBuffer.wrap(next.array());
             }
         };
     }
@@ -523,7 +521,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     {
         int size = keySerializer.serializedSize(o);
 
-        ByteBuffer keyBuffer = Util.allocateByteBuffer(size);
+        ByteBuffer keyBuffer = ByteBuffer.allocate(size);
         keySerializer.serialize(o, keyBuffer);
         assert(keyBuffer.position() == keyBuffer.capacity()) && (keyBuffer.capacity() == size);
         return new KeyBuffer(keyBuffer.array()).finish(hasher);
@@ -531,7 +529,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
     private byte[] value(V value)
     {
-        ByteBuffer buf = Util.allocateByteBuffer(valueSerializer.serializedSize(value));
+        ByteBuffer buf = ByteBuffer.allocate(valueSerializer.serializedSize(value));
         valueSerializer.serialize(value, buf);
         return buf.array();
     }

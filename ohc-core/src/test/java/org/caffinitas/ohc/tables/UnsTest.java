@@ -18,6 +18,7 @@ package org.caffinitas.ohc.tables;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Random;
 
 import org.testng.annotations.AfterMethod;
@@ -41,7 +42,6 @@ public class UnsTest
     private static final Unsafe unsafe;
 
     static final int CAPACITY = 65536;
-    static final Field byteBufferNativeByteOrder;
     static final ByteBuffer directBuffer;
 
     static
@@ -54,25 +54,12 @@ public class UnsTest
             if (unsafe.addressSize() > 8)
                 throw new RuntimeException("Address size " + unsafe.addressSize() + " not supported yet (max 8 bytes)");
 
-            byteBufferNativeByteOrder = ByteBuffer.class.getDeclaredField("nativeByteOrder");
-            byteBufferNativeByteOrder.setAccessible(true);
-
             directBuffer = ByteBuffer.allocateDirect(CAPACITY);
-            makeNativeByteOrder(directBuffer);
         }
         catch (Exception e)
         {
             throw new AssertionError(e);
         }
-    }
-
-    private static void makeNativeByteOrder(ByteBuffer buffer) throws IllegalAccessException
-    {
-        //
-        // Direct byte buffers always use native byte order for faster memory access.
-        // But "normal" direct byte buffers do not necessarily use native byte order ... force to do so ...
-        //
-        byteBufferNativeByteOrder.setBoolean(buffer, true);
     }
 
     private static void fillRandom()
@@ -280,14 +267,23 @@ public class UnsTest
     public void testGetLongFromByteArray() throws Exception
     {
         byte[] arr = TestUtils.randomBytes(32);
-        for (int i = 0; i < 14; i++)
+        ByteOrder order = directBuffer.order();
+        directBuffer.order(ByteOrder.nativeOrder());
+        try
         {
-            long u = Uns.getLongFromByteArray(arr, i);
-            directBuffer.clear();
-            directBuffer.put(arr);
-            directBuffer.flip();
-            long b = directBuffer.getLong(i);
-            assertEquals(b, u);
+            for (int i = 0; i < 14; i++)
+            {
+                long u = Uns.getLongFromByteArray(arr, i);
+                directBuffer.clear();
+                directBuffer.put(arr);
+                directBuffer.flip();
+                long b = directBuffer.getLong(i);
+                assertEquals(b, u);
+            }
+        }
+        finally
+        {
+            directBuffer.order(order);
         }
     }
 
@@ -301,13 +297,10 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 long l = Uns.getLong(adr, i);
-                assertEquals(buf.getLong(0), Uns.getLong(adr, i));
                 assertEquals(unsafe.getLong(adr + i), Uns.getLong(adr, i));
 
                 Uns.putLong(adr, i, l);
-                assertEquals(buf.getLong(0), l);
                 assertEquals(unsafe.getLong(adr + i), l);
             }
         }
@@ -327,13 +320,10 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 int l = Uns.getInt(adr, i);
-                assertEquals(buf.getInt(0), Uns.getInt(adr, i));
                 assertEquals(unsafe.getInt(adr + i), Uns.getInt(adr, i));
 
                 Uns.putInt(adr, i, l);
-                assertEquals(buf.getInt(0), l);
                 assertEquals(unsafe.getInt(adr + i), l);
             }
         }
@@ -353,13 +343,10 @@ public class UnsTest
 
             for (int i = 0; i < 14; i++)
             {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
                 short l = Uns.getShort(adr, i);
-                assertEquals(buf.getShort(0), Uns.getShort(adr, i));
                 assertEquals(unsafe.getShort(adr + i), Uns.getShort(adr, i));
 
                 Uns.putShort(adr, i, l);
-                assertEquals(buf.getShort(0), l);
                 assertEquals(unsafe.getShort(adr + i), l);
             }
         }
@@ -387,110 +374,6 @@ public class UnsTest
                 Uns.putByte(adr, i, l);
                 assertEquals(buf.get(0), l);
                 assertEquals(unsafe.getByte(adr + i), l);
-            }
-        }
-        finally
-        {
-            Uns.free(adr);
-        }
-    }
-
-    @Test
-    public void testGetPutBoolean() throws Exception
-    {
-        long adr = Uns.allocate(128);
-        try
-        {
-            Uns.copyMemory(TestUtils.randomBytes(128), 0, adr, 0, 128);
-
-            for (int i = 0; i < 14; i++)
-            {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
-                boolean l = Uns.getBoolean(adr, i);
-                assertEquals(buf.get(0) != 0, Uns.getBoolean(adr, i));
-                assertEquals(unsafe.getByte(adr + i) != 0, Uns.getBoolean(adr, i));
-
-                Uns.putBoolean(adr, i, l);
-                assertEquals(buf.get(0) != 0, l);
-                assertEquals(unsafe.getByte(adr + i) != 0, l);
-            }
-        }
-        finally
-        {
-            Uns.free(adr);
-        }
-    }
-
-    @Test
-    public void testGetPutChar() throws Exception
-    {
-        long adr = Uns.allocate(128);
-        try
-        {
-            Uns.copyMemory(TestUtils.randomBytes(128), 0, adr, 0, 128);
-
-            for (int i = 0; i < 14; i++)
-            {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
-                char l = Uns.getChar(adr, i);
-                assertEquals(buf.getChar(0), Uns.getChar(adr, i));
-                assertEquals(unsafe.getChar(adr + i), Uns.getChar(adr, i));
-
-                Uns.putChar(adr, i, l);
-                assertEquals(buf.getChar(0), l);
-                assertEquals(unsafe.getChar(adr + i), l);
-            }
-        }
-        finally
-        {
-            Uns.free(adr);
-        }
-    }
-
-    @Test
-    public void testGetPutFloat() throws Exception
-    {
-        long adr = Uns.allocate(128);
-        try
-        {
-            Uns.copyMemory(TestUtils.randomBytes(128), 0, adr, 0, 128);
-
-            for (int i = 0; i < 14; i++)
-            {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
-                float l = Uns.getFloat(adr, i);
-                assertEquals(buf.getFloat(0), Uns.getFloat(adr, i));
-                assertEquals(unsafe.getFloat(adr + i), Uns.getFloat(adr, i));
-
-                Uns.putFloat(adr, i, l);
-                assertEquals(buf.getFloat(0), l);
-                assertEquals(unsafe.getFloat(adr + i), l);
-            }
-        }
-        finally
-        {
-            Uns.free(adr);
-        }
-    }
-
-    @Test
-    public void testGetPutDouble() throws Exception
-    {
-        long adr = Uns.allocate(128);
-        try
-        {
-            Uns.copyMemory(TestUtils.randomBytes(128), 0, adr, 0, 128);
-
-            for (int i = 0; i < 14; i++)
-            {
-                ByteBuffer buf = Uns.directBufferFor(adr, i, 8, false);
-                double l = Uns.getDouble(adr, i);
-                assertEquals(buf.getDouble(0), Uns.getDouble(adr, i));
-                assertEquals(unsafe.getDouble(adr + i), Uns.getDouble(adr, i));
-
-                Uns.putDouble(adr, i, l);
-                assertEquals(buf.getDouble(0), l);
-                assertEquals(unsafe.getDouble(adr + i), l);
             }
         }
         finally

@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.concurrent.ConcurrentHashMap;
@@ -269,54 +268,6 @@ final class Uns
         return unsafe.getByte(null, address + offset);
     }
 
-    static void putBoolean(long address, long offset, boolean value)
-    {
-        validate(address, offset, 1L);
-        unsafe.putBoolean(null, address + offset, value);
-    }
-
-    static boolean getBoolean(long address, long offset)
-    {
-        validate(address, offset, 1L);
-        return unsafe.getBoolean(null, address + offset);
-    }
-
-    static void putChar(long address, long offset, char value)
-    {
-        validate(address, offset, 2L);
-        unsafe.putChar(null, address + offset, value);
-    }
-
-    static char getChar(long address, long offset)
-    {
-        validate(address, offset, 2L);
-        return unsafe.getChar(null, address + offset);
-    }
-
-    static void putFloat(long address, long offset, float value)
-    {
-        validate(address, offset, 4L);
-        unsafe.putFloat(null, address + offset, value);
-    }
-
-    static float getFloat(long address, long offset)
-    {
-        validate(address, offset, 4L);
-        return unsafe.getFloat(null, address + offset);
-    }
-
-    static void putDouble(long address, long offset, double value)
-    {
-        validate(address, offset, 8L);
-        unsafe.putDouble(null, address + offset, value);
-    }
-
-    static double getDouble(long address, long offset)
-    {
-        validate(address, offset, 8L);
-        return unsafe.getDouble(null, address + offset);
-    }
-
     static boolean decrement(long address, long offset)
     {
         validate(address, offset, 8L);
@@ -432,7 +383,6 @@ final class Uns
             unsafe.putLong(bb, DIRECT_BYTE_BUFFER_ADDRESS_OFFSET, address + offset);
             unsafe.putInt(bb, DIRECT_BYTE_BUFFER_CAPACITY_OFFSET, (int) len);
             unsafe.putInt(bb, DIRECT_BYTE_BUFFER_LIMIT_OFFSET, (int) len);
-            bb.order(ByteOrder.nativeOrder());
             return bb;
         }
         catch (Error e)
@@ -460,11 +410,6 @@ final class Uns
         return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA, 0, keyLen, false);
     }
 
-    static ByteBuffer keyBuffer(long hashEntryAdr)
-    {
-        return keyBuffer(hashEntryAdr, HashEntries.getKeyLen(hashEntryAdr));
-    }
-
     static ByteBuffer valueBufferR(long hashEntryAdr, long valueLen)
     {
         return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA + Util.roundUpTo8(HashEntries.getKeyLen(hashEntryAdr)), 0, valueLen, true);
@@ -478,10 +423,5 @@ final class Uns
     static ByteBuffer valueBuffer(long hashEntryAdr, long keyLen, long valueLen)
     {
         return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), 0, valueLen, false);
-    }
-
-    static ByteBuffer valueBuffer(long hashEntryAdr)
-    {
-        return valueBuffer(hashEntryAdr, HashEntries.getKeyLen(hashEntryAdr), HashEntries.getValueLen(hashEntryAdr));
     }
 }
