@@ -171,7 +171,7 @@ final class OffHeapMap
         return lruCompactions;
     }
 
-    long getEntry(KeyBuffer key, boolean reference)
+    long getEntry(KeyBuffer key, boolean reference, boolean updateLRU)
     {
         lock.lock();
         try
@@ -188,7 +188,8 @@ final class OffHeapMap
 
                 // return existing entry
 
-                touch(hashEntryAdr);
+                if (updateLRU)
+                    touch(hashEntryAdr);
 
                 if (reference)
                     HashEntries.reference(hashEntryAdr);
