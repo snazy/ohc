@@ -158,6 +158,11 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         throw new UnsupportedOperationException();
     }
 
+    public DirectValueAccess getDirect(K key, boolean updateLRU)
+    {
+        throw new UnsupportedOperationException();
+    }
+
     public V get(K key)
     {
         KeyBuffer keyBuffer = keySource(key);

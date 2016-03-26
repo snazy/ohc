@@ -73,6 +73,15 @@ public interface OHCache<K, V> extends Closeable
      */
     DirectValueAccess getDirect(K key);
 
+    /**
+     * Like {@link OHCache#getDirect(Object)}, but allows skipping the update of LRU stats when {@code updateLRU}
+     * is {@code false}.
+     *
+     * @return reference-counted byte buffer or {@code null} if key does not exist.
+     */
+    DirectValueAccess getDirect(K key, boolean updateLRU);
+
+
     // cache loader support
 
     Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader);

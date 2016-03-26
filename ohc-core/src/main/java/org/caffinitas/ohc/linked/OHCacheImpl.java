@@ -137,12 +137,17 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public DirectValueAccess getDirect(K key)
     {
+        return getDirect(key, true);
+    }
+
+    public DirectValueAccess getDirect(K key, boolean updateLRU)
+    {
         if (key == null)
             throw new NullPointerException();
 
         KeyBuffer keySource = keySource(key);
 
-        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true);
+        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true, updateLRU);
 
         if (hashEntryAdr == 0L)
             return null;
@@ -157,7 +162,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         KeyBuffer keySource = keySource(key);
 
-        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true);
+        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true, true);
 
         if (hashEntryAdr == 0L)
             return null;
@@ -179,7 +184,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
         KeyBuffer keySource = keySource(key);
 
-        return segment(keySource.hash()).getEntry(keySource, false) != 0L;
+        return segment(keySource.hash()).getEntry(keySource, false, true) != 0L;
     }
 
     public void put(K k, V v)
@@ -305,7 +310,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         final KeyBuffer keySource = keySource(key);
 
         final OffHeapMap segment = segment(keySource.hash());
-        long hashEntryAdr = segment.getEntry(keySource, true);
+        long hashEntryAdr = segment.getEntry(keySource, true, true);
 
         if (hashEntryAdr == 0L)
         {
@@ -481,7 +486,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                         return;
                 }
 
-                long hashEntryAdr = segment.getEntry(keySource, true);
+                long hashEntryAdr = segment.getEntry(keySource, true, true);
 
                 if (hashEntryAdr == 0L)
                 {
@@ -952,7 +957,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
     {
         KeyBuffer keySource = keySource(key);
 
-        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true);
+        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true, true);
 
         return hashEntryAdr != 0L && serializeEntry(channel, hashEntryAdr);
     }
