@@ -85,6 +85,13 @@ import org.caffinitas.ohc.linked.OHCacheImpl;
  *         very long and you've proven that it really improves performace</td>
  *         <td>{@code MURMUR3}</td>
  *     </tr>
+ *     <tr>
+ *         <td>{@code unlocked}</td>
+ *         <td>If set to {@code true}, implementations will not perform any locking. The calling code has to take
+ *         care of synchronized access. In order to create an instance for a thread-per-core implementation,
+ *         set {@code segmentCount=1}, too.</td>
+ *         <td>{@code false}</td>
+ *     </tr>
  * </table>
  * <p>
  *     You may also use system properties prefixed with {@code org.caffinitas.org.} to other defaults.
@@ -108,6 +115,7 @@ public class OHCacheBuilder<K, V>
     private ScheduledExecutorService executorService;
     private boolean throwOOME;
     private HashAlgorithm hashAlgorighm = HashAlgorithm.MURMUR3;
+    private boolean unlocked;
 
     private OHCacheBuilder()
     {
@@ -124,6 +132,7 @@ public class OHCacheBuilder<K, V>
         maxEntrySize = fromSystemProperties("maxEntrySize", maxEntrySize);
         throwOOME = fromSystemProperties("throwOOME", throwOOME);
         hashAlgorighm = HashAlgorithm.valueOf(fromSystemProperties("hashAlgorighm", hashAlgorighm.name()));
+        unlocked = fromSystemProperties("unlocked", unlocked);
         String t = fromSystemProperties("type", null);
         if (t != null)
             try
@@ -351,6 +360,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> throwOOME(boolean throwOOME)
     {
         this.throwOOME = throwOOME;
+        return this;
+    }
+
+    public boolean isUnlocked()
+    {
+        return unlocked;
+    }
+
+    public OHCacheBuilder<K, V> unlocked(boolean unlocked)
+    {
+        this.unlocked = unlocked;
         return this;
     }
 }

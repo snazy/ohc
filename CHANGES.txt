@@ -1,6 +1,7 @@
 0.4.3
 =====
 
+#9 allow unsynchronized access
 #19 iterator may keep entries referenced if iterator is closed before exhausted
 #17 Checking for java 8 fails
 
