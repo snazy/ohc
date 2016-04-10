@@ -46,7 +46,7 @@ final class Util
 
     // Note: keep ENTRY_OFF_HASH, ENTRY_OFF_KEY_LENGTH, ENTRY_OFF_VALUE_LENGTH in exact that order
     // and together and at the end of the header because
-    // org.caffinitas.ohc.SegmentedCacheImpl.(de)serializeEntry relies on it!
+    // org.caffinitas.ohc.linked.OHCacheImpl.(de)serializeEntry relies on it!
 
 // Hash bucket-table
 
