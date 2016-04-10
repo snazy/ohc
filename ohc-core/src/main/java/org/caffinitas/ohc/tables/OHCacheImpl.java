@@ -918,13 +918,24 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         private OffHeapMap lastSegment;
         private long lastHashEntryAdr;
 
-        public void close()
+        private void derefLast()
         {
             if (lastHashEntryAdr != 0L)
             {
                 HashEntries.dereference(lastHashEntryAdr);
                 lastHashEntryAdr = 0L;
                 lastSegment = null;
+            }
+        }
+
+        public void close()
+        {
+            derefLast();
+
+            while (listIndex < hashEntryAdrs.size())
+            {
+                long hashEntryAdr = hashEntryAdrs.get(listIndex++);
+                HashEntries.dereference(hashEntryAdr);
             }
         }
 
@@ -959,12 +970,12 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 throw new NoSuchElementException();
 
             lastSegment.removeEntry(lastHashEntryAdr);
-            close();
+            derefLast();
         }
 
         private R computeNext()
         {
-            close();
+            derefLast();
 
             while (true)
             {
@@ -1021,7 +1032,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             this.perMap = n / maps.length + 1;
         }
 
-        public void close()
+        private void derefLast()
         {
             if (lastHashEntryAdr != 0L)
             {
@@ -1030,11 +1041,23 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
         }
 
+        public void close()
+        {
+            derefLast();
+
+            while (hotPerMap != null && subIndex < hotPerMap.length)
+            {
+                long hashEntryAdr = hotPerMap[subIndex++];
+                if (hashEntryAdr != 0L)
+                    HashEntries.dereference(hashEntryAdr);
+            }
+        }
+
         abstract R buildResult(long hashEntryAdr);
 
         protected R computeNext()
         {
-            close();
+            derefLast();
 
             while (true)
             {
