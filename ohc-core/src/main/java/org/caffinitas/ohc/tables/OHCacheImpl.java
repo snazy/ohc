@@ -65,6 +65,8 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
+        LOGGER.warn("OHC's tables implementation is deprecated and will be removed. Consider switching to linked implementation (the default).");
+
         long capacity = builder.getCapacity();
         if (capacity <= 0L)
             throw new IllegalArgumentException("capacity");
