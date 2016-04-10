@@ -85,6 +85,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.caffinitas.ohc</groupId>
+            <artifactId>ohc-core-j8</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.openjdk.jmh</groupId>
             <artifactId>jmh-core</artifactId>
             <version>${jmh.version}</version>

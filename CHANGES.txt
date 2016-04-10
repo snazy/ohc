@@ -1,3 +1,13 @@
+0.4.3
+=====
+
+#17 Checking for java 8 fails
+
+0.4.2
+=====
+
+#18 Allow skipping LRU stats updates in getDirect()
+
 0.4.1
 =====
 
