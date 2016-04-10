@@ -34,6 +34,11 @@ final class LongArrayList
         return array[i];
     }
 
+    public void clear()
+    {
+        size = 0;
+    }
+
     public int size()
     {
         return size;

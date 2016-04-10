@@ -35,14 +35,16 @@ final class Util
     static final long ENTRY_OFF_REFCOUNT = 24;
     // offset of entry sentinel
     static final long ENTRY_OFF_SENTINEL = 28;
+    // slot in which the entry resides
+    static final long ENTRY_OFF_EXPIRE_AT = 32;
     // offset of serialized hash value
-    static final long ENTRY_OFF_HASH = 32;
+    static final long ENTRY_OFF_HASH = 40;
     // offset of serialized value length
-    static final long ENTRY_OFF_VALUE_LENGTH = 40;
+    static final long ENTRY_OFF_VALUE_LENGTH = 48;
     // offset of serialized hash key length
-    static final long ENTRY_OFF_KEY_LENGTH = 48;
+    static final long ENTRY_OFF_KEY_LENGTH = 56;
     // offset of data in first block
-    static final long ENTRY_OFF_DATA = 56;
+    static final long ENTRY_OFF_DATA = 64;
 
     // Note: keep ENTRY_OFF_HASH, ENTRY_OFF_KEY_LENGTH, ENTRY_OFF_VALUE_LENGTH in exact that order
     // and together and at the end of the header because

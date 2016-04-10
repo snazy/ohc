@@ -42,7 +42,7 @@ public class HashEntriesTest
         boolean ok = false;
         try
         {
-            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0, 0L);
 
             assertEquals(Uns.getLong(adr, Util.ENTRY_OFF_HASH), 0x98765432abcddeafL);
             assertEquals(Uns.getLong(adr, Util.ENTRY_OFF_KEY_LENGTH), 5L);
@@ -129,7 +129,7 @@ public class HashEntriesTest
         try
         {
             Uns.setMemory(adr, 0, MIN_ALLOC_LEN, (byte) 0);
-            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0, 0L);
 
             Uns.putLong(adr, Util.ENTRY_OFF_LRU_NEXT, 0x98765432abdffeedL);
             assertEquals(HashEntries.getLRUNext(adr), 0x98765432abdffeedL);
@@ -150,7 +150,7 @@ public class HashEntriesTest
         try
         {
             Uns.setMemory(adr, 0, MIN_ALLOC_LEN, (byte) 0);
-            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0, 0L);
 
             Uns.putLong(adr, Util.ENTRY_OFF_LRU_PREV, 0x98765432abdffeedL);
             assertEquals(HashEntries.getLRUPrev(adr), 0x98765432abdffeedL);
@@ -171,7 +171,7 @@ public class HashEntriesTest
         try
         {
             Uns.setMemory(adr, 0, MIN_ALLOC_LEN, (byte) 0);
-            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0, 0L);
 
             assertEquals(HashEntries.getHash(adr), 0x98765432abcddeafL);
 
@@ -190,7 +190,7 @@ public class HashEntriesTest
         try
         {
             Uns.setMemory(adr, 0, MIN_ALLOC_LEN, (byte) 0);
-            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0, 0L);
 
             Uns.putLong(adr, Util.ENTRY_OFF_NEXT, 0x98765432abdffeedL);
             assertEquals(HashEntries.getNext(adr), 0x98765432abdffeedL);
@@ -211,22 +211,22 @@ public class HashEntriesTest
         try
         {
 
-            HashEntries.init(0x98765432abcddeafL, 0L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 0L, 10L, adr, 0, 0L);
             assertEquals(HashEntries.getAllocLen(adr), Util.ENTRY_OFF_DATA + 10L);
 
-            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 5L, 10L, adr, 0, 0L);
             assertEquals(HashEntries.getAllocLen(adr), Util.ENTRY_OFF_DATA + 8L + 10L);
 
-            HashEntries.init(0x98765432abcddeafL, 8L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 8L, 10L, adr, 0, 0L);
             assertEquals(HashEntries.getAllocLen(adr), Util.ENTRY_OFF_DATA + 8L + 10L);
 
-            HashEntries.init(0x98765432abcddeafL, 9L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 9L, 10L, adr, 0, 0L);
             assertEquals(HashEntries.getAllocLen(adr), Util.ENTRY_OFF_DATA + 16L + 10L);
 
-            HashEntries.init(0x98765432abcddeafL, 15L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 15L, 10L, adr, 0, 0L);
             assertEquals(HashEntries.getAllocLen(adr), Util.ENTRY_OFF_DATA + 16L + 10L);
 
-            HashEntries.init(0x98765432abcddeafL, 16L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 16L, 10L, adr, 0, 0L);
             assertEquals(HashEntries.getAllocLen(adr), Util.ENTRY_OFF_DATA + 16L + 10L);
         }
         finally
@@ -242,7 +242,7 @@ public class HashEntriesTest
         boolean ok = false;
         try
         {
-            HashEntries.init(0x98765432abcddeafL, 0L, 10L, adr, 0);
+            HashEntries.init(0x98765432abcddeafL, 0L, 10L, adr, 0, 0L);
 
             HashEntries.reference(adr); // to 2
             HashEntries.reference(adr); // to 3
@@ -268,7 +268,7 @@ public class HashEntriesTest
         boolean ok = false;
         try
         {
-            HashEntries.init(0x98765432abcddeafL, 0L, 10L, adr, Util.SENTINEL_NOT_PRESENT);
+            HashEntries.init(0x98765432abcddeafL, 0L, 10L, adr, Util.SENTINEL_NOT_PRESENT, 0L);
 
             assertTrue(HashEntries.dereference(adr)); // to 0
             ok = true;

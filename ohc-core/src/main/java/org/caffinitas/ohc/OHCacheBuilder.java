@@ -92,6 +92,22 @@ import org.caffinitas.ohc.linked.OHCacheImpl;
  *         set {@code segmentCount=1}, too.</td>
  *         <td>{@code false}</td>
  *     </tr>
+ *     <tr>
+ *         <td>{@code defaultTTLmillis}</td>
+ *         <td>If set to a value {@code > 0}, implementations supporting TTLs will tag all entries with
+ *         the given TTL in <b>milliseconds</b>.</td>
+ *         <td>{@code 0}</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code timeoutsSlots}</td>
+ *         <td>The number of timeouts slots for each segment - compare with hashed wheel timer.</td>
+ *         <td>{@code 64}</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code timeoutsPrecision}</td>
+ *         <td>The amount of time in milliseconds for each timeouts-slot.</td>
+ *         <td>{@code 128}</td>
+ *     </tr>
  * </table>
  * <p>
  *     You may also use system properties prefixed with {@code org.caffinitas.org.} to other defaults.
@@ -116,6 +132,9 @@ public class OHCacheBuilder<K, V>
     private boolean throwOOME;
     private HashAlgorithm hashAlgorighm = HashAlgorithm.MURMUR3;
     private boolean unlocked;
+    private long defaultTTLmillis;
+    private int timeoutsSlots;
+    private int timeoutsPrecision;
 
     private OHCacheBuilder()
     {
@@ -133,6 +152,9 @@ public class OHCacheBuilder<K, V>
         throwOOME = fromSystemProperties("throwOOME", throwOOME);
         hashAlgorighm = HashAlgorithm.valueOf(fromSystemProperties("hashAlgorighm", hashAlgorighm.name()));
         unlocked = fromSystemProperties("unlocked", unlocked);
+        defaultTTLmillis = fromSystemProperties("defaultTTLmillis", defaultTTLmillis);
+        timeoutsSlots = fromSystemProperties("timeoutsSlots", timeoutsSlots);
+        timeoutsPrecision = fromSystemProperties("timeoutsPrecision", timeoutsPrecision);
         String t = fromSystemProperties("type", null);
         if (t != null)
             try
@@ -371,6 +393,39 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> unlocked(boolean unlocked)
     {
         this.unlocked = unlocked;
+        return this;
+    }
+
+    public long getDefaultTTLmillis()
+    {
+        return defaultTTLmillis;
+    }
+
+    public OHCacheBuilder<K, V> defaultTTLmillis(long defaultTTLmillis)
+    {
+        this.defaultTTLmillis = defaultTTLmillis;
+        return this;
+    }
+
+    public int getTimeoutsSlots()
+    {
+        return timeoutsSlots;
+    }
+
+    public OHCacheBuilder<K, V> timeoutsSlots(int timeoutsSlots)
+    {
+        this.timeoutsSlots = timeoutsSlots;
+        return this;
+    }
+
+    public int getTimeoutsPrecision()
+    {
+        return timeoutsPrecision;
+    }
+
+    public OHCacheBuilder<K, V> timeoutsPrecision(int timeoutsPrecision)
+    {
+        this.timeoutsPrecision = timeoutsPrecision;
         return this;
     }
 }

@@ -32,24 +32,39 @@ public interface OHCache<K, V> extends Closeable
 {
 
     /**
+     * Same as {@link #put(Object, Object, long)} but uses the configured default TTL, if any.
+     */
+    void put(K key, V value);
+
+    /**
      * Adds the key/value.
      * If the entry size of key/value exceeds the configured maximum entry length, any previously existing entry
      * for the key is removed.
      */
-    void put(K key, V value);
+    void put(K key, V value, long expireAt);
+
+    /**
+     * Same as {@link #addOrReplace(Object, Object, Object, long)} but uses the configured default TTL, if any.
+     */
+    boolean addOrReplace(K key, V old, V value);
 
     /**
      * Adds key/value if either the key is not present or the existing value matches parameter {@code old}.
      * If the entry size of key/value exceeds the configured maximum entry length, the old value is removed.
      */
-    boolean addOrReplace(K key, V old, V value);
+    boolean addOrReplace(K key, V old, V value, long expireAt);
+
+    /**
+     * Same as {@link #putIfAbsent(Object, Object, long)} but uses the configured default TTL, if any.
+     */
+    boolean putIfAbsent(K k, V v);
 
     /**
      * Adds the key/value if the key is not present.
      * If the entry size of key/value exceeds the configured maximum entry length, any previously existing entry
      * for the key is removed.
      */
-    boolean putIfAbsent(K k, V v);
+    boolean putIfAbsent(K key, V value, long expireAt);
 
     void putAll(Map<? extends K, ? extends V> m);
 
@@ -85,6 +100,8 @@ public interface OHCache<K, V> extends Closeable
     // cache loader support
 
     Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader);
+
+    Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader, long expireAt);
 
     V getWithLoader(K key, CacheLoader<K, V> loader) throws InterruptedException, ExecutionException;
 

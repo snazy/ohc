@@ -303,6 +303,13 @@ final class Uns
         unsafe.copyMemory(null, address + offset, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len);
     }
 
+    static void copyMemory(long src, long srcOffset, long dst, long dstOffset, long len)
+    {
+        validate(src, srcOffset, len);
+        validate(dst, dstOffset, len);
+        unsafe.copyMemory(null, src + srcOffset, null, dst + dstOffset, len);
+    }
+
     static void setMemory(long address, long offset, long len, byte val)
     {
         validate(address, offset, len);
