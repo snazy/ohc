@@ -24,6 +24,7 @@ public final class OHCacheStats
     private final long hitCount;
     private final long missCount;
     private final long evictionCount;
+    private final long expireCount;
     private final long[] segmentSizes;
     private final long capacity;
     private final long free;
@@ -36,7 +37,7 @@ public final class OHCacheStats
     private final long totalAllocated;
     private final long lruCompactions;
 
-    public OHCacheStats(long hitCount, long missCount, long evictionCount,
+    public OHCacheStats(long hitCount, long missCount, long evictionCount, long expireCount,
                         long[] segmentSizes, long size, long capacity, long free, long rehashCount,
                         long putAddCount, long putReplaceCount, long putFailCount, long removeCount,
                         long totalAllocated, long lruCompactions)
@@ -44,6 +45,7 @@ public final class OHCacheStats
         this.hitCount = hitCount;
         this.missCount = missCount;
         this.evictionCount = evictionCount;
+        this.expireCount = expireCount;
         this.segmentSizes = segmentSizes;
         this.size = size;
         this.capacity = capacity;
@@ -85,6 +87,11 @@ public final class OHCacheStats
     public long getEvictionCount()
     {
         return evictionCount;
+    }
+
+    public long getExpireCount()
+    {
+        return expireCount;
     }
 
     public long[] getSegmentSizes()

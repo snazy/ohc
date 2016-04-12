@@ -65,6 +65,11 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
     public OHCacheImpl(OHCacheBuilder<K, V> builder)
     {
+        LOGGER.warn("OHC's tables implementation is deprecated and will be removed. Consider switching to linked implementation (the default).");
+
+        if (builder.getDefaultTTLmillis() > 0)
+            throw new IllegalArgumentException("tables implementation does not support TTLs");
+
         long capacity = builder.getCapacity();
         if (capacity <= 0L)
             throw new IllegalArgumentException("capacity");
@@ -87,8 +92,9 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
             catch (RuntimeException e)
             {
-                while (i-- >= 0)
-                    maps[i].release();
+                for (;i >= 0; i--)
+                    if (maps[i] != null)
+                        maps[i].release();
                 throw e;
             }
         }
@@ -172,6 +178,21 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer keySource = keySource(key);
 
         return segment(keySource.hash()).getEntry(keySource, false, true) != 0L;
+    }
+
+    public void put(K key, V value, long expireAt)
+    {
+        throw new UnsupportedOperationException("tables implementation does not support entry expiration");
+    }
+
+    public boolean addOrReplace(K key, V old, V value, long expireAt)
+    {
+        throw new UnsupportedOperationException("tables implementation does not support entry expiration");
+    }
+
+    public boolean putIfAbsent(K key, V value, long expireAt)
+    {
+        throw new UnsupportedOperationException("tables implementation does not support entry expiration");
     }
 
     public void put(K k, V v)
@@ -291,6 +312,11 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         throw new UnsupportedOperationException();
     }
 
+    public Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader, long expireAt)
+    {
+        throw new UnsupportedOperationException();
+    }
+
     private OffHeapMap segment(long hash)
     {
         int seg = (int) ((hash & segmentMask) >>> segmentShift);
@@ -364,6 +390,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                                hitCount(),
                                missCount(),
                                evictedEntries(),
+                               0L,
                                perSegmentSizes(),
                                size(),
                                capacity(),
@@ -918,13 +945,24 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
         private OffHeapMap lastSegment;
         private long lastHashEntryAdr;
 
-        public void close()
+        private void derefLast()
         {
             if (lastHashEntryAdr != 0L)
             {
                 HashEntries.dereference(lastHashEntryAdr);
                 lastHashEntryAdr = 0L;
                 lastSegment = null;
+            }
+        }
+
+        public void close()
+        {
+            derefLast();
+
+            while (listIndex < hashEntryAdrs.size())
+            {
+                long hashEntryAdr = hashEntryAdrs.get(listIndex++);
+                HashEntries.dereference(hashEntryAdr);
             }
         }
 
@@ -959,12 +997,12 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                 throw new NoSuchElementException();
 
             lastSegment.removeEntry(lastHashEntryAdr);
-            close();
+            derefLast();
         }
 
         private R computeNext()
         {
-            close();
+            derefLast();
 
             while (true)
             {
@@ -1021,7 +1059,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             this.perMap = n / maps.length + 1;
         }
 
-        public void close()
+        private void derefLast()
         {
             if (lastHashEntryAdr != 0L)
             {
@@ -1030,11 +1068,23 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
             }
         }
 
+        public void close()
+        {
+            derefLast();
+
+            while (hotPerMap != null && subIndex < hotPerMap.length)
+            {
+                long hashEntryAdr = hotPerMap[subIndex++];
+                if (hashEntryAdr != 0L)
+                    HashEntries.dereference(hashEntryAdr);
+            }
+        }
+
         abstract R buildResult(long hashEntryAdr);
 
         protected R computeNext()
         {
-            close();
+            derefLast();
 
             while (true)
             {

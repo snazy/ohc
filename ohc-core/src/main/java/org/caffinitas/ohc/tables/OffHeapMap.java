@@ -49,7 +49,7 @@ final class OffHeapMap
 
     private long freeCapacity;
 
-    private final ReentrantLock lock = new ReentrantLock();
+    private final ReentrantLock lock;
 
     private final boolean throwOOME;
 
@@ -58,6 +58,8 @@ final class OffHeapMap
         this.freeCapacity = freeCapacity;
 
         this.throwOOME = builder.isThrowOOME();
+
+        this.lock = builder.isUnlocked() ? null : new ReentrantLock();
 
         int hts = builder.getHashTableSize();
         if (hts <= 0)
@@ -84,7 +86,7 @@ final class OffHeapMap
 
     void release()
     {
-        lock.lock();
+        lock();
         try
         {
             table.release();
@@ -92,7 +94,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
@@ -150,14 +152,14 @@ final class OffHeapMap
 
     void updateFreeCapacity(long diff)
     {
-        lock.lock();
+        lock();
         try
         {
             freeCapacity += diff;
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
@@ -173,7 +175,7 @@ final class OffHeapMap
 
     long getEntry(KeyBuffer key, boolean reference, boolean updateLRU)
     {
-        lock.lock();
+        lock();
         try
         {
             long ptr = table.bucketOffset(key.hash());
@@ -204,7 +206,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
@@ -212,7 +214,7 @@ final class OffHeapMap
     {
         long removeHashEntryAdr = 0L;
         LongArrayList derefList = null;
-        lock.lock();
+        lock();
         try
         {
             long hashEntryAdr;
@@ -294,7 +296,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
             if (derefList != null)
@@ -305,7 +307,7 @@ final class OffHeapMap
 
     void clear()
     {
-        lock.lock();
+        lock();
         try
         {
             size = 0L;
@@ -331,13 +333,13 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
     void removeEntry(long removeHashEntryAdr)
     {
-        lock.lock();
+        lock();
         try
         {
             long hash = HashEntries.getHash(removeHashEntryAdr);
@@ -361,7 +363,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
         }
@@ -370,7 +372,7 @@ final class OffHeapMap
     void removeEntry(KeyBuffer key)
     {
         long removeHashEntryAdr = 0L;
-        lock.lock();
+        lock();
         try
         {
             long hashEntryAdr;
@@ -393,7 +395,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
         }
@@ -461,7 +463,7 @@ final class OffHeapMap
 
     long[] hotN(int n)
     {
-        lock.lock();
+        lock();
         try
         {
             long[] r = new long[n];
@@ -473,7 +475,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
@@ -489,20 +491,20 @@ final class OffHeapMap
 
     void updateBucketHistogram(EstimatedHistogram hist)
     {
-        lock.lock();
+        lock();
         try
         {
             table.updateBucketHistogram(hist);
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
     void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
     {
-        lock.lock();
+        lock();
         try
         {
             for (; nSegments-- > 0 && mapSegmentIndex < table.size(); mapSegmentIndex++)
@@ -520,7 +522,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
@@ -838,5 +840,17 @@ final class OffHeapMap
     {
         if (table.addToLRU(hashEntryAdr))
             lruCompactions++;
+    }
+
+    private void lock()
+    {
+        if (lock != null)
+            lock.lock();
+    }
+
+    private void unlock()
+    {
+        if (lock != null)
+            lock.unlock();
     }
 }

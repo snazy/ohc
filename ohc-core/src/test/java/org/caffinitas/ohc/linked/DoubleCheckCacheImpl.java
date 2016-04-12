@@ -74,6 +74,21 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
         return rProd;
     }
 
+    public boolean putIfAbsent(K key, V value, long expireAt)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public boolean addOrReplace(K key, V old, V value, long expireAt)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public void put(K key, V value, long expireAt)
+    {
+        throw new UnsupportedOperationException();
+    }
+
     public void putAll(Map<? extends K, ? extends V> m)
     {
         prod.putAll(m);
@@ -150,6 +165,11 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
     }
 
     public Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader, long expireAt)
     {
         throw new UnsupportedOperationException();
     }

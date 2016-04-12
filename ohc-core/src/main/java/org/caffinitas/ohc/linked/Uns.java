@@ -157,7 +157,7 @@ final class Uns
                 {
                     // use new Java8 methods in sun.misc.Unsafe
                     Class<? extends UnsExt> cls = (Class<? extends UnsExt>) Class.forName(UnsExt7.class.getName().replace('7', '8'));
-                    e = cls.getDeclaredConstructor(Class.class).newInstance(unsafe);
+                    e = cls.getDeclaredConstructor(Unsafe.class).newInstance(unsafe);
                     LOGGER.info("OHC using Java8 Unsafe API");
                 }
                 catch (VirtualMachineError ex)
@@ -301,6 +301,13 @@ final class Uns
     {
         validate(address, offset, len);
         unsafe.copyMemory(null, address + offset, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len);
+    }
+
+    static void copyMemory(long src, long srcOffset, long dst, long dstOffset, long len)
+    {
+        validate(src, srcOffset, len);
+        validate(dst, dstOffset, len);
+        unsafe.copyMemory(null, src + srcOffset, null, dst + dstOffset, len);
     }
 
     static void setMemory(long address, long offset, long len, byte val)
