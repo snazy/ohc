@@ -43,18 +43,33 @@ final class OffHeapMap
 
     private long rehashes;
     private long evictedEntries;
+    private long expiredEntries;
 
     private long freeCapacity;
 
-    private final ReentrantLock lock = new ReentrantLock();
+    private final ReentrantLock lock;
 
     private final boolean throwOOME;
+
+    private final Timeouts timeouts;
+    private final Timeouts.TimeoutHandler timeoutsExpireHandler = new Timeouts.TimeoutHandler()
+    {
+        public void expired(long hashEntryAdr)
+        {
+            removeEntry(hashEntryAdr, false);
+        }
+    };
 
     OffHeapMap(OHCacheBuilder builder, long freeCapacity)
     {
         this.freeCapacity = freeCapacity;
 
         this.throwOOME = builder.isThrowOOME();
+
+        // 64 hash slots, each for 128ms
+        this.timeouts = new Timeouts(builder.getTimeoutsSlots(), builder.getTimeoutsPrecision());
+
+        this.lock = builder.isUnlocked() ? null : new ReentrantLock();
 
         int hts = builder.getHashTableSize();
         if (hts <= 0)
@@ -74,15 +89,17 @@ final class OffHeapMap
 
     void release()
     {
-        lock.lock();
+        lock();
         try
         {
             table.release();
             table = null;
+
+            timeouts.release();
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
@@ -139,14 +156,14 @@ final class OffHeapMap
 
     void updateFreeCapacity(long diff)
     {
-        lock.lock();
+        lock();
         try
         {
             freeCapacity += diff;
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
@@ -155,9 +172,19 @@ final class OffHeapMap
         return evictedEntries;
     }
 
+    long expiredEntries()
+    {
+        return expiredEntries;
+    }
+
+    int usedTimeouts()
+    {
+        return timeouts.used();
+    }
+
     long getEntry(KeyBuffer key, boolean reference, boolean updateLRU)
     {
-        lock.lock();
+        lock();
         try
         {
             for (long hashEntryAdr = table.getFirst(key.hash());
@@ -168,6 +195,15 @@ final class OffHeapMap
                     continue;
 
                 // return existing entry
+
+                long expireAt = HashEntries.getExpireAt(hashEntryAdr);
+                if (expireAt > 0L && expireAt <= System.currentTimeMillis())
+                {
+                    // entry is expired, remove it and return
+                    expiredEntries++;
+                    removeEntry(hashEntryAdr);
+                    break;
+                }
 
                 if (updateLRU)
                     touch(hashEntryAdr);
@@ -185,15 +221,16 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
-    boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long oldValueAddr, long oldValueOffset, long oldValueLen)
+    boolean putEntry(long newHashEntryAdr, long hash, long keyLen, long bytes, boolean ifAbsent, long expireAt,
+                     long oldValueAddr, long oldValueOffset, long oldValueLen)
     {
         long removeHashEntryAdr = 0L;
         LongArrayList derefList = null;
-        lock.lock();
+        lock();
         try
         {
             long oldHashEntryAdr = 0L;
@@ -206,20 +243,27 @@ final class OffHeapMap
                 if (notSameKey(newHashEntryAdr, hash, keyLen, hashEntryAdr))
                     continue;
 
-                // replace existing entry
-
-                if (ifAbsent)
-                    return false;
-
-                if (oldValueAddr != 0L)
+                long testExpireAt = HashEntries.getExpireAt(hashEntryAdr);
+                if (testExpireAt == 0L || testExpireAt > System.currentTimeMillis())
                 {
-                    // code for replace() operation
-                    long valueLen = HashEntries.getValueLen(hashEntryAdr);
-                    if (valueLen != oldValueLen || !HashEntries.compare(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), oldValueAddr, oldValueOffset, oldValueLen))
+                    // replace existing entry
+                    //
+                    // Only need to do this if the existing entry is not expired, otherwise
+                    // we can just remove the existing entry.
+
+                    if (ifAbsent)
                         return false;
+
+                    if (oldValueAddr != 0L)
+                    {
+                        // code for replace() operation
+                        long valueLen = HashEntries.getValueLen(hashEntryAdr);
+                        if (valueLen != oldValueLen || !HashEntries.compare(hashEntryAdr, Util.ENTRY_OFF_DATA + Util.roundUpTo8(keyLen), oldValueAddr, oldValueOffset, oldValueLen))
+                            return false;
+                    }
                 }
 
-                removeInternal(hashEntryAdr, prevEntryAdr);
+                removeInternal(hashEntryAdr, prevEntryAdr, true);
                 removeHashEntryAdr = hashEntryAdr;
 
                 oldHashEntryAdr = hashEntryAdr;
@@ -227,6 +271,8 @@ final class OffHeapMap
                 break;
             }
 
+            if (freeCapacity < bytes)
+                removeExpired();
             while (freeCapacity < bytes)
             {
                 long eldestHashAdr = removeEldest();
@@ -251,7 +297,7 @@ final class OffHeapMap
 
             freeCapacity -= bytes;
 
-            add(newHashEntryAdr, hash);
+            add(newHashEntryAdr, hash, expireAt);
 
             if (hashEntryAdr == 0L)
                 putAddCount++;
@@ -262,7 +308,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
             if (derefList != null)
@@ -271,13 +317,18 @@ final class OffHeapMap
         }
     }
 
+    private void removeExpired()
+    {
+        expiredEntries += timeouts.removeExpired(timeoutsExpireHandler);
+    }
+
     private long removeEldest()
     {
         long hashEntryAdr = lruTail;
         if (hashEntryAdr == 0L)
             return 0L;
 
-        removeInternal(hashEntryAdr, -1L);
+        removeInternal(hashEntryAdr, -1L, true);
 
         size--;
         evictedEntries++;
@@ -287,7 +338,7 @@ final class OffHeapMap
 
     void clear()
     {
-        lock.lock();
+        lock();
         try
         {
             lruHead = lruTail = 0L;
@@ -302,6 +353,10 @@ final class OffHeapMap
                 {
                     next = HashEntries.getNext(hashEntryAdr);
 
+                    long expireAt = HashEntries.getExpireAt(hashEntryAdr);
+                    if (expireAt > 0L)
+                        timeouts.remove(hashEntryAdr, expireAt);
+
                     freed += HashEntries.getAllocLen(hashEntryAdr);
                     HashEntries.dereference(hashEntryAdr);
                 }
@@ -311,13 +366,18 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
     void removeEntry(long removeHashEntryAdr)
     {
-        lock.lock();
+        removeEntry(removeHashEntryAdr, true);
+    }
+
+    private void removeEntry(long removeHashEntryAdr, boolean removeFromTimeouts)
+    {
+        lock();
         try
         {
             long hash = HashEntries.getHash(removeHashEntryAdr);
@@ -331,7 +391,7 @@ final class OffHeapMap
 
                 // remove existing entry
 
-                removeIt(prevEntryAdr, hashEntryAdr);
+                removeIt(prevEntryAdr, hashEntryAdr, removeFromTimeouts);
 
                 return;
             }
@@ -339,7 +399,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
         }
@@ -348,7 +408,7 @@ final class OffHeapMap
     void removeEntry(KeyBuffer key)
     {
         long removeHashEntryAdr = 0L;
-        lock.lock();
+        lock();
         try
         {
             long prevEntryAdr = 0L;
@@ -362,22 +422,22 @@ final class OffHeapMap
                 // remove existing entry
 
                 removeHashEntryAdr = hashEntryAdr;
-                removeIt(prevEntryAdr, hashEntryAdr);
+                removeIt(prevEntryAdr, hashEntryAdr, true);
 
                 return;
             }
         }
         finally
         {
-            lock.unlock();
+            unlock();
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
         }
     }
 
-    private void removeIt(long prevEntryAdr, long hashEntryAdr)
+    private void removeIt(long prevEntryAdr, long hashEntryAdr, boolean removeFromTimeouts)
     {
-        removeInternal(hashEntryAdr, prevEntryAdr);
+        removeInternal(hashEntryAdr, prevEntryAdr, removeFromTimeouts);
 
         size--;
         removeCount++;
@@ -436,7 +496,7 @@ final class OffHeapMap
 
     long[] hotN(int n)
     {
-        lock.lock();
+        lock();
         try
         {
             long[] r = new long[n];
@@ -452,7 +512,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
@@ -468,38 +528,48 @@ final class OffHeapMap
 
     void updateBucketHistogram(EstimatedHistogram hist)
     {
-        lock.lock();
+        lock();
         try
         {
             table.updateBucketHistogram(hist);
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
     void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
     {
-        lock.lock();
+        lock();
         try
         {
+            long t = System.currentTimeMillis();
             for (; nSegments-- > 0 && mapSegmentIndex < table.size(); mapSegmentIndex++)
                 for (long hashEntryAdr = table.getFirst(mapSegmentIndex);
                      hashEntryAdr != 0L;
                      hashEntryAdr = HashEntries.getNext(hashEntryAdr))
                 {
+                    long expireAt = HashEntries.getExpireAt(hashEntryAdr);
+                    if (expireAt > 0L && expireAt <= t)
+                    {
+                        // entry is expired, remove it and continue
+                        removeEntry(hashEntryAdr);
+                        expiredEntries++;
+                        continue;
+                    }
+
                     hashEntryAdrs.add(hashEntryAdr);
                     HashEntries.reference(hashEntryAdr);
                 }
         }
         finally
         {
-            lock.unlock();
+            unlock();
         }
     }
 
-    static final class Table
+    private static final class Table
     {
         final int mask;
         final long address;
@@ -563,6 +633,18 @@ final class OffHeapMap
         {
             long next = HashEntries.getNext(hashEntryAdr);
 
+            removeLinkInternal(hash, hashEntryAdr, prevEntryAdr, next);
+        }
+
+        void replaceLink(long hash, long hashEntryAdr, long prevEntryAdr, long newHashEntryAdr)
+        {
+            HashEntries.setNext(newHashEntryAdr, HashEntries.getNext(hashEntryAdr));
+
+            removeLinkInternal(hash, hashEntryAdr, prevEntryAdr, newHashEntryAdr);
+        }
+
+        private void removeLinkInternal(long hash, long hashEntryAdr, long prevEntryAdr, long next)
+        {
             long head = getFirst(hash);
             if (head == hashEntryAdr)
             {
@@ -581,31 +663,6 @@ final class OffHeapMap
                     }
                 }
                 HashEntries.setNext(prevEntryAdr, next);
-            }
-        }
-
-        void replaceLink(long hash, long hashEntryAdr, long prevEntryAdr, long newHashEntryAdr)
-        {
-            HashEntries.setNext(newHashEntryAdr, HashEntries.getNext(hashEntryAdr));
-
-            long head = getFirst(hash);
-            if (head == hashEntryAdr)
-            {
-                setFirst(hash, newHashEntryAdr);
-            }
-            else if (prevEntryAdr != 0L)
-            {
-                if (prevEntryAdr == -1L)
-                {
-                    for (long adr = head;
-                         adr != 0L;
-                         prevEntryAdr = adr, adr = HashEntries.getNext(adr))
-                    {
-                        if (adr == hashEntryAdr)
-                            break;
-                    }
-                }
-                HashEntries.setNext(prevEntryAdr, newHashEntryAdr);
             }
         }
 
@@ -633,11 +690,18 @@ final class OffHeapMap
         }
     }
 
-    private void removeInternal(long hashEntryAdr, long prevEntryAdr)
+    private void removeInternal(long hashEntryAdr, long prevEntryAdr, boolean removeFromTimeouts)
     {
         long hash = HashEntries.getHash(hashEntryAdr);
 
         table.removeLink(hash, hashEntryAdr, prevEntryAdr);
+
+        if (removeFromTimeouts)
+        {
+            long expireAt = HashEntries.getExpireAt(hashEntryAdr);
+            if (expireAt > 0L)
+                timeouts.remove(hashEntryAdr, expireAt);
+        }
 
         // LRU stuff
 
@@ -657,11 +721,11 @@ final class OffHeapMap
         freeCapacity += HashEntries.getAllocLen(hashEntryAdr);
     }
 
-    boolean replaceEntry(long hash, long oldHashEntryAdr, long newHashEntryAdr, long bytes)
+    boolean replaceEntry(long hash, long oldHashEntryAdr, long newHashEntryAdr, long bytes, long expireAt)
     {
         LongArrayList derefList = null;
 
-        lock.lock();
+        lock();
         try
         {
             long prevEntryAdr = 0L;
@@ -676,6 +740,11 @@ final class OffHeapMap
 
                 replaceInternal(oldHashEntryAdr, prevEntryAdr, newHashEntryAdr);
 
+                if (expireAt > 0L)
+                    timeouts.add(newHashEntryAdr, expireAt);
+
+                if (freeCapacity < bytes)
+                    removeExpired();
                 while (freeCapacity < bytes)
                 {
                     long eldestHashAdr = removeEldest();
@@ -695,7 +764,7 @@ final class OffHeapMap
         }
         finally
         {
-            lock.unlock();
+            unlock();
 
             if (derefList != null)
                 for (int i = 0; i < derefList.size(); i++)
@@ -730,7 +799,7 @@ final class OffHeapMap
         freeCapacity += HashEntries.getAllocLen(hashEntryAdr);
     }
 
-    private void add(long hashEntryAdr, long hash)
+    private void add(long hashEntryAdr, long hash, long expireAt)
     {
         table.addAsHead(hash, hashEntryAdr);
 
@@ -745,6 +814,9 @@ final class OffHeapMap
 
         if (lruTail == 0L)
             lruTail = hashEntryAdr;
+
+        if (expireAt > 0L)
+            timeouts.add(hashEntryAdr, expireAt);
     }
 
     private void touch(long hashEntryAdr)
@@ -776,6 +848,18 @@ final class OffHeapMap
         if (head != 0L)
             HashEntries.setLRUPrev(head, hashEntryAdr);
         lruHead = hashEntryAdr;
+    }
+
+    private void lock()
+    {
+        if (lock != null)
+            lock.lock();
+    }
+
+    private void unlock()
+    {
+        if (lock != null)
+            lock.unlock();
     }
 
     @Override

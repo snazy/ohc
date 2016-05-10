@@ -1,15 +1,17 @@
-0.4.3
+0.4.4
 =====
 
+#20 TTL support for entries
+#9 allow unsynchronized access
 #19 iterator may keep entries referenced if iterator is closed before exhausted
 #17 Checking for java 8 fails
 
-0.4.2
+0.4.3
 =====
 
 #18 Allow skipping LRU stats updates in getDirect()
 
-0.4.1
+0.4.2
 =====
 
 - use Java byte order instead of native byte order for keys and values

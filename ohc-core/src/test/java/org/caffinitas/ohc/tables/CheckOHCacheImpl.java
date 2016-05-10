@@ -126,6 +126,21 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         return segment.put(keyBuffer, data, true, null);
     }
 
+    public boolean putIfAbsent(K key, V value, long expireAt)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public boolean addOrReplace(K key, V old, V value, long expireAt)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public void put(K key, V value, long expireAt)
+    {
+        throw new UnsupportedOperationException();
+    }
+
     public void putAll(Map<? extends K, ? extends V> m)
     {
         for (Map.Entry<? extends K, ? extends V> entry : m.entrySet())
@@ -191,6 +206,11 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     }
 
     public Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    public Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader, long expireAt)
     {
         throw new UnsupportedOperationException();
     }
@@ -434,6 +454,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
                                hitCount(),
                                missCount(),
                                evictedEntries(),
+                               0L,
                                perSegmentSizes(),
                                size(),
                                capacity(),
