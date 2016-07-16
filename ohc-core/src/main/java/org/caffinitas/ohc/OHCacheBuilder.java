@@ -66,7 +66,7 @@ import org.caffinitas.ohc.linked.OHCacheImpl;
  *     <tr>
  *         <td>{@code maxEntrySize}</td>
  *         <td>Maximum size of a hash entry (including header, serialized key + serialized value)</td>
- *         <td>(not set, defaults to capacity)</td>
+ *         <td>(not set, defaults to capacity divided by number of segments)</td>
  *     </tr>
  *     <tr>
  *         <td>{@code bucketLength}</td>

@@ -172,6 +172,7 @@
                         <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
                     </systemProperties>
                     <reportsDirectory>${project.build.directory}/surefire-reports/normal</reportsDirectory>
+                    <argLine>@{surefire.jvmargs}</argLine>
                 </configuration>
             </plugin>
         </plugins>

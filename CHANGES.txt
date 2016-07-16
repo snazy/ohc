@@ -1,3 +1,8 @@
+0.4.5
+=====
+
+- fix java.version check for Java 9 EA builds
+
 0.4.4
 =====
 

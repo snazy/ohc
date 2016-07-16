@@ -148,9 +148,11 @@ final class Uns
                 throw new RuntimeException("Address size " + unsafe.addressSize() + " not supported yet (max 8 bytes)");
 
             String javaVersion = System.getProperty("java.version");
+            if (javaVersion.indexOf('-') != -1)
+                javaVersion = javaVersion.substring(0, javaVersion.indexOf('-'));
             StringTokenizer st = new StringTokenizer(javaVersion, ".");
             int major = Integer.parseInt(st.nextToken());
-            int minor = Integer.parseInt(st.nextToken());
+            int minor = st.hasMoreTokens() ? Integer.parseInt(st.nextToken()) : 0;
             UnsExt e;
             if (major > 1 || minor >= 8)
                 try

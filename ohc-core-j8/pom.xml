@@ -117,6 +117,7 @@
                     <testClassesDirectory>../ohc-core/target/test-classes</testClassesDirectory>
                     <testSourceDirectory>../ohc-core/src/test/java</testSourceDirectory>
                     <failIfNoTests>true</failIfNoTests>
+                    <argLine>@{surefire.jvmargs}</argLine>
                 </configuration>
             </plugin>
 
