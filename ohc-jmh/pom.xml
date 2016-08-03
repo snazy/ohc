@@ -72,7 +72,7 @@
     </issueManagement>
 
     <properties>
-        <jmh.version>1.12</jmh.version>
+        <jmh.version>1.13</jmh.version>
         <uberjar.name>benchmarks</uberjar.name>
     </properties>
 
