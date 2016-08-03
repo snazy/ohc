@@ -38,6 +38,14 @@ public class CacheLoaderTest
             return key.toString();
         }
     };
+    static final CacheLoader<Integer, String> loaderNull = new CacheLoader<Integer, String>()
+    {
+        public String load(Integer key) throws Exception
+        {
+            loaderCalled++;
+            return null;
+        }
+    };
     static final CacheLoader<Integer, String> loaderTempFail = new CacheLoader<Integer, String>()
     {
         public String load(Integer key) throws Exception
@@ -91,13 +99,38 @@ public class CacheLoaderTest
 
 
             try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
-                                                                .keySerializer(TestUtils.intSerializer)
-                                                                .valueSerializer(TestUtils.stringSerializer)
-                                                                .executorService(executorService)
-                                                                .build())
+                                                  .keySerializer(TestUtils.intSerializer)
+                                                  .valueSerializer(TestUtils.stringSerializer)
+                                                  .executorService(executorService)
+                                                  .build())
             {
                 Future<String> f1 = cache.getWithLoaderAsync(1, loader);
                 Assert.assertEquals("1", f1.get(100, TimeUnit.MILLISECONDS));
+            }
+        }
+        finally
+        {
+            executorService.shutdown();
+        }
+    }
+
+    @Test
+    public void testGetWithLoaderAsyncNull() throws IOException, InterruptedException, ExecutionException, TimeoutException
+    {
+        ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
+        try
+        {
+
+
+            try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                  .keySerializer(TestUtils.intSerializer)
+                                                  .valueSerializer(TestUtils.stringSerializer)
+                                                  .executorService(executorService)
+                                                  .build())
+            {
+                Future<String> f1 = cache.getWithLoaderAsync(1, loaderNull);
+                Assert.assertNull(f1.get(100, TimeUnit.MILLISECONDS));
+                Assert.assertFalse(cache.containsKey(1));
             }
         }
         finally
