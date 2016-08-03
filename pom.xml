@@ -94,7 +94,7 @@
         <version.org.testng>6.9.10</version.org.testng>
         <version.org.xerial.snappy>1.1.1.7</version.org.xerial.snappy>
 
-        <surefire.jvmargs/>
+        <surefire.jvmargs />
     </properties>
 
     <dependencyManagement>
