@@ -1,10 +1,18 @@
-OHC - A off-heap-cache
-======================
+OHC - An off-heap-cache
+=======================
 
 Status
 ------
 
-This library should be considered as **nearly** *production ready*.
+This library should be considered as stable.
+
+Features
+--------
+
+- asynchronous cache loader support
+- optional per entry or default TTL/expireAt
+- entry eviction and expiration without a separate thread
+- capable of maintaining huge amounts of cache memory
 
 Performance
 -----------
@@ -40,6 +48,8 @@ Use the class ``OHCacheBuilder`` to configure all necessary parameter like
 - load factor, defaults to .75
 - capacity for data over the whole cache
 - key and value serializers
+- default TTL
+- optional unlock mode
 
 Generally you should work with a large hash table. The larger the hash table, the shorter the linked-list in each
 hash partition - that means less linked-link walks and increased performance.
@@ -59,13 +69,15 @@ Quickstart::
 
 This quickstart uses the very least default configuration:
 
-- of 64MB capacity,
+- total cache capacity of 64MB or 16 * number-of-cpus, whichever is smaller
 - number of segments is 2 * number of cores
 - 8192 buckets per segment
 - load factor of .75
 - your custom key serializer
 - your custom value serializer
 - no maximum serialized cache entry size
+
+See javadoc of ``CacheBuilder`` for a complete list of options.
 
 Key and value serializers need to implement the ``CacheSerializer`` interface. This interface has three methods:
 

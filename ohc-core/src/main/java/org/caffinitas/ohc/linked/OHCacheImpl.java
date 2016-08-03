@@ -258,7 +258,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
 
             long hash = serializeForPut(k, v, keyLen, valueLen, hashEntryAdr);
 
-            if (expireAt == -1L)
+            if (expireAt == USE_DEFAULT_EXPIRE_AT)
                 expireAt = defaultExpireAt();
 
             // initialize hash entry
@@ -396,11 +396,13 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                             value = loader.load(key);
 
                             long entryExpireAt = expireAt;
-                            if (entryExpireAt > 0L && entryExpireAt <= System.currentTimeMillis())
+                            if (value == null || (entryExpireAt > 0L && entryExpireAt <= System.currentTimeMillis()))
                             {
+                                // If the value is null, it means the loaded could not
+                                // already expired
+
                                 segment.removeEntry(sentinelHashEntryAdr);
 
-                                // already expired
                                 return null;
                             }
 
@@ -415,7 +417,7 @@ public final class OHCacheImpl<K, V> implements OHCache<K, V>
                                 throw new RuntimeException("max entry size exceeded or malloc() failed");
 
                             long hash = serializeForPut(key, value, keyLen, valueLen, hashEntryAdr);
-                            if (entryExpireAt == -1L)
+                            if (entryExpireAt == USE_DEFAULT_EXPIRE_AT)
                                 entryExpireAt = defaultExpireAt();
 
                             // initialize hash entry

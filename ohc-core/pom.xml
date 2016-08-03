@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.4.4</version>
+        <version>0.4.5</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-core</artifactId>
-    <version>0.4.4</version>
+    <version>0.4.5</version>
 
     <name>OHC core</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
@@ -172,6 +172,7 @@
                         <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
                     </systemProperties>
                     <reportsDirectory>${project.build.directory}/surefire-reports/normal</reportsDirectory>
+                    <argLine>@{surefire.jvmargs}</argLine>
                 </configuration>
             </plugin>
         </plugins>

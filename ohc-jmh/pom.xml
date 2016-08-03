@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.4.4</version>
+        <version>0.4.5</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-jmh</artifactId>
-    <version>0.4.4</version>
+    <version>0.4.5</version>
 
     <name>OHC core - micro benchmarks</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
@@ -72,7 +72,7 @@
     </issueManagement>
 
     <properties>
-        <jmh.version>1.10</jmh.version>
+        <jmh.version>1.12</jmh.version>
         <uberjar.name>benchmarks</uberjar.name>
     </properties>
 
@@ -139,7 +139,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>2.0</version>
+                <version>2.4.3</version>
                 <executions>
                     <execution>
                         <id>uberjar</id>
