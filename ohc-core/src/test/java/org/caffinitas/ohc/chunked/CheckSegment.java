@@ -13,7 +13,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.tables;
+package org.caffinitas.ohc.chunked;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * On-heap test-only counterpart of {@link OffHeapMap} for {@link CheckOHCacheImpl}.
+ * On-heap test-only counterpart of {@link OffHeapChunkedMap} for {@link CheckOHCacheImpl}.
  */
 final class CheckSegment
 {
@@ -151,7 +151,7 @@ final class CheckSegment
     static long sizeOf(KeyBuffer key, byte[] value)
     {
         // calculate the same value as the original impl would do
-        return Util.ENTRY_OFF_DATA + Util.roundUpTo8(key.array().length) + value.length;
+        return Util.allocLen(key.size(), value.length, false);
     }
 
     void resetStatistics()
@@ -163,4 +163,5 @@ final class CheckSegment
         putReplaceCount = 0L;
         removeCount = 0L;
     }
+
 }

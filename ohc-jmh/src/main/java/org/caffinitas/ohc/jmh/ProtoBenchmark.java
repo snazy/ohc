@@ -16,6 +16,7 @@
 package org.caffinitas.ohc.jmh;
 
 import java.io.IOException;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 import org.caffinitas.ohc.HashAlgorithm;
@@ -35,7 +36,7 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-@BenchmarkMode({ Mode.AverageTime, Mode.Throughput })
+@BenchmarkMode({ /*Mode.AverageTime, */Mode.Throughput })
 @State(Scope.Benchmark)
 @Warmup(iterations = 2)
 @Measurement(iterations = 3)
@@ -46,7 +47,7 @@ public class ProtoBenchmark
 {
     private OHCache<Integer, byte[]> cache;
 
-    @Param({"2048"/*, "65536"*/})
+    @Param({ "256"/*, "2048", "65536"*/ })
     private int valueSize = 2048;
     @Param("1073741824")
     private long capacity = 1024 * 1024 * 1024;
@@ -56,21 +57,27 @@ public class ProtoBenchmark
     private int hashTableSize = -1;
     @Param("1000000")
     private int keys = 1000000;
-    @Param({"linked"/*, "tables"*/})
-    private String impl = "linked";
-    @Param({"MURMUR3"/*, "CRC32", "XX"*/})
+    @Param({ "MURMUR3"/*, "CRC32", "XX"*/ })
     private HashAlgorithm hashAlgorithm;
+    @Param({ "-1", "65536"/*, "131072"*/ })
+    private int chunkSize = -1;
+    @Param("-1")
+    private int fixedKeyLen = -1;
+    @Param("-1")
+    private int fixedValueLen = -1;
+    @Param("false")
+    private boolean unlocked = false;
 
     @State(Scope.Thread)
     public static class PutState
     {
-        public int key = 1;
+        public int key = ThreadLocalRandom.current().nextInt(1000);
     }
 
     @State(Scope.Thread)
     public static class GetState
     {
-        public int key = 1;
+        public int key = ThreadLocalRandom.current().nextInt(1000);
     }
 
     @Setup
@@ -80,9 +87,11 @@ public class ProtoBenchmark
                               .capacity(capacity)
                               .segmentCount(segmentCount)
                               .hashTableSize(hashTableSize)
-                              .type((Class<? extends OHCache>) Class.forName("org.caffinitas.ohc." + impl + ".OHCacheImpl"))
                               .keySerializer(Utils.intSerializer)
                               .valueSerializer(Utils.byteArraySerializer)
+                              .chunkSize(chunkSize)
+                              .fixedEntrySize(fixedKeyLen, fixedValueLen)
+                              .unlocked(unlocked)
                               .build();
 
         for (int i = 0; i < keys; i++)
@@ -96,12 +105,14 @@ public class ProtoBenchmark
     }
 
     @Benchmark
+    @Threads(value = 4)
     public void getNonExisting()
     {
         cache.get(0);
     }
 
     @Benchmark
+    @Threads(value = 4)
     public void containsNonExisting()
     {
         cache.containsKey(0);
@@ -117,6 +128,7 @@ public class ProtoBenchmark
     }
 
     @Benchmark
+    @Threads(value = 4)
     public void putMultiThreaded(PutState state)
     {
         cache.put(state.key++, new byte[valueSize]);
@@ -134,6 +146,7 @@ public class ProtoBenchmark
     }
 
     @Benchmark
+    @Threads(value = 4)
     public void getMultiThreaded(GetState state)
     {
         cache.get(state.key++);

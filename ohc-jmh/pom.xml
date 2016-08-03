@@ -206,6 +206,7 @@
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath />
+                                        <argument>${surefire.jvmargs}</argument>
                                         <argument>org.openjdk.jmh.Main</argument>
                                         <argument>.*</argument>
                                     </arguments>

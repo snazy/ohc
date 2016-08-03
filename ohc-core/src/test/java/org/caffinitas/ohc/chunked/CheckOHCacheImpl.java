@@ -13,7 +13,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.tables;
+package org.caffinitas.ohc.chunked;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -31,16 +31,16 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
-import org.caffinitas.ohc.DirectValueAccess;
 import org.caffinitas.ohc.CloseableIterator;
+import org.caffinitas.ohc.DirectValueAccess;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.OHCacheStats;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 /**
- * This is a {@link org.caffinitas.ohc.OHCache} implementation used to validate functionality of
- * {@link OHCacheImpl} - this implementation is <b>not</b> for production use!
+ * This is a {@link OHCache} implementation used to validate functionality of
+ * {@link OHCacheChunkedImpl} - this implementation is <b>not</b> for production use!
  */
 final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 {
@@ -55,21 +55,23 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     private final float loadFactor;
     private final AtomicLong freeCapacity;
     private long putFailCount;
+    private final Hasher hasher;
 
     CheckOHCacheImpl(OHCacheBuilder<K, V> builder)
     {
         capacity = builder.getCapacity();
         loadFactor = builder.getLoadFactor();
         freeCapacity = new AtomicLong(capacity);
+        hasher = Hasher.create(builder.getHashAlgorighm());
 
         int segments = builder.getSegmentCount();
         int bitNum = Util.bitNum(segments) - 1;
         this.segmentShift = 64 - bitNum;
         this.segmentMask = ((long) segments - 1) << segmentShift;
 
-        maps = new org.caffinitas.ohc.tables.CheckSegment[segments];
+        maps = new CheckSegment[segments];
         for (int i = 0; i < maps.length; i++)
-            maps[i] = new org.caffinitas.ohc.tables.CheckSegment(builder.getHashTableSize(), builder.getLoadFactor(), freeCapacity);
+            maps[i] = new CheckSegment(builder.getHashTableSize(), builder.getLoadFactor(), freeCapacity);
 
         keySerializer = builder.getKeySerializer();
         valueSerializer = builder.getValueSerializer();
@@ -82,7 +84,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         KeyBuffer keyBuffer = keySource(key);
         byte[] data = value(value);
 
-        if (maxEntrySize > 0L && org.caffinitas.ohc.tables.CheckSegment.sizeOf(keyBuffer, data) > maxEntrySize)
+        if (maxEntrySize > 0L && CheckSegment.sizeOf(keyBuffer, data) > maxEntrySize)
         {
             remove(key);
             putFailCount++;
@@ -221,7 +223,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected K construct(KeyBuffer next)
             {
-                return keySerializer.deserialize(ByteBuffer.wrap(next.array()));
+                return keySerializer.deserialize(next.buffer());
             }
         };
     }
@@ -232,7 +234,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected ByteBuffer construct(KeyBuffer next)
             {
-                return ByteBuffer.wrap(next.array());
+                return next.buffer();
             }
         };
     }
@@ -243,7 +245,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected K construct(KeyBuffer next)
             {
-                return keySerializer.deserialize(ByteBuffer.wrap(next.array()));
+                return keySerializer.deserialize(next.buffer());
             }
         };
     }
@@ -254,7 +256,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             protected ByteBuffer construct(KeyBuffer next)
             {
-                return ByteBuffer.wrap(next.array());
+                return next.buffer();
             }
         };
     }
@@ -545,10 +547,10 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     {
         int size = keySerializer.serializedSize(o);
 
-        ByteBuffer key = ByteBuffer.allocate(size);
-        keySerializer.serialize(o, key);
-        assert(key.position() == key.capacity()) && (key.capacity() == size);
-        return new KeyBuffer(key.array()).finish();
+        ByteBuffer keyBuffer = ByteBuffer.allocate(size);
+        keySerializer.serialize(o, keyBuffer);
+        assert(keyBuffer.position() == keyBuffer.capacity()) && (keyBuffer.capacity() == size);
+        return new KeyBuffer(keyBuffer).finish(hasher);
     }
 
     private byte[] value(V value)

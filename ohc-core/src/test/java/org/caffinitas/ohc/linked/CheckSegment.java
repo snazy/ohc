@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * On-heap test-only counterpart of {@link org.caffinitas.ohc.linked.OffHeapMap} for {@link CheckOHCacheImpl}.
+ * On-heap test-only counterpart of {@link OffHeapLinkedMap} for {@link CheckOHCacheImpl}.
  */
 final class CheckSegment
 {

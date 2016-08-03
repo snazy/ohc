@@ -2,6 +2,8 @@
 =====
 
 #27 replace ReentrantLock with CAS
+#26 add chunked implementation
+#13 remove tables implementation
 
 0.4.5
 =====

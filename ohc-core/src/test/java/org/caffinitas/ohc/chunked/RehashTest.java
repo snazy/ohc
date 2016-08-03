@@ -13,7 +13,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.tables;
+package org.caffinitas.ohc.chunked;
 
 import java.io.IOException;
 
@@ -42,6 +42,33 @@ public class RehashTest
                                                             .hashTableSize(64)
                                                             .segmentCount(4)
                                                             .capacity(512 * 1024 * 1024)
+                                                            .chunkSize(65536)
+                                                            .build())
+        {
+            for (int i = 0; i < 100000; i++)
+                cache.put(i, Integer.toOctalString(i));
+
+            assertTrue(cache.stats().getRehashCount() > 0);
+
+            for (int i = 0; i < 100000; i++)
+            {
+                String v = cache.get(i);
+                assertEquals(v, Integer.toOctalString(i));
+            }
+        }
+    }
+
+    @Test
+    public void testRehashFixed() throws IOException
+    {
+        try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
+                                                            .keySerializer(TestUtils.fixedKeySerializer)
+                                                            .valueSerializer(TestUtils.fixedValueSerializer)
+                                                            .hashTableSize(64)
+                                                            .segmentCount(4)
+                                                            .capacity(512 * 1024 * 1024)
+                                                            .chunkSize(65536)
+                                                            .fixedEntrySize(TestUtils.FIXED_KEY_LEN, TestUtils.FIXED_VALUE_LEN)
                                                             .build())
         {
             for (int i = 0; i < 100000; i++)

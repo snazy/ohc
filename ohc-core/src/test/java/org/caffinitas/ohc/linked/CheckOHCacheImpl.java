@@ -40,7 +40,7 @@ import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 /**
  * This is a {@link org.caffinitas.ohc.OHCache} implementation used to validate functionality of
- * {@link org.caffinitas.ohc.linked.OHCacheImpl} - this implementation is <b>not</b> for production use!
+ * {@link OHCacheLinkedImpl} - this implementation is <b>not</b> for production use!
  */
 final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 {

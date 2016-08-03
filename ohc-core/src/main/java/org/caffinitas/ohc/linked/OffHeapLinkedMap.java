@@ -22,7 +22,7 @@ import java.util.concurrent.locks.LockSupport;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
-final class OffHeapMap
+final class OffHeapLinkedMap
 {
     // maximum hash table size
     private static final int MAX_TABLE_SIZE = 1 << 30;
@@ -52,8 +52,8 @@ final class OffHeapMap
     // using a CAS operation on the primitive instance field.
     private final boolean unlocked;
     private volatile long lock;
-    private static final AtomicLongFieldUpdater<OffHeapMap> lockFieldUpdater =
-    AtomicLongFieldUpdater.newUpdater(OffHeapMap.class, "lock");
+    private static final AtomicLongFieldUpdater<OffHeapLinkedMap> lockFieldUpdater =
+    AtomicLongFieldUpdater.newUpdater(OffHeapLinkedMap.class, "lock");
 
     private final boolean throwOOME;
 
@@ -66,7 +66,7 @@ final class OffHeapMap
         }
     };
 
-    OffHeapMap(OHCacheBuilder builder, long freeCapacity)
+    OffHeapLinkedMap(OHCacheBuilder builder, long freeCapacity)
     {
         this.freeCapacity = freeCapacity;
 

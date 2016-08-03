@@ -1,21 +1,17 @@
 OHC - An off-heap-cache
 =======================
 
-Status
-------
-
-This library should be considered as stable.
-
 Features
---------
+========
 
 - asynchronous cache loader support
 - optional per entry or default TTL/expireAt
 - entry eviction and expiration without a separate thread
 - capable of maintaining huge amounts of cache memory
+- suitable for tiny/small entries with low overhead using the chunked implementation
 
 Performance
------------
+===========
 
 OHC shall provide a good performance on both commodity hardware and big systems using non-uniform-memory-architectures.
 
@@ -23,23 +19,81 @@ No performance test results available yet - you may try the ohc-benchmark tool. 
 A very basic impression on the speed is in the _Benchmarking_ section.
 
 Requirements
-------------
+============
 
 Java7 VM that support 64bit and has ``sun.misc.Unsafe`` (Oracle JVMs on x64 Intel CPUs).
 
-An extension jar that makes use of new ``sun.misc.Unsafe`` methods in Java 8 exists.
+OHC is targeted for Linux and OSX. It *should* work on Windows and other Unix OSs.
 
 Architecture
-------------
+============
 
-OHC uses multiple segments. Each segment contains its own independent off-heap hash map. Synchronization occurs
-on critical sections that access a off-heap hash map. Necessary serialization and deserialization is performed
-outside of these critical sections.
-Eviction is performed using LRU strategy when adding entries.
-Rehashing is performed in each individual off-heap map when necessary.
+OHC provides two implementations for different cache entry characteristics:
+- The _linked_ implementation allocates off-heap memory for each entry individually and works best for medium and big entries.
+- The _chunked_ implementation allocates off-heap memory for each hash segment as a whole and is intended for small entries.
+
+Linked implementation
+---------------------
+
+The number of segments is configured via ``org.caffinitas.ohc.OHCacheBuilder``, defaults to ``# of cpus * 2`` and must
+be a power of 2. Entries are distribtued over the segments using the most significant bits of the 64 bit hash code.
+Accesses on each segment are synchronized.
+
+Each hash-map entry is allocated individually. Entries are free'd (deallocated), when they are no longer referenced by
+the off-heap map itself or any external reference like ``org.caffinitas.ohc.DirectValueAccess`` or a
+``org.caffinitas.ohc.CacheSerializer``.
+
+The design of this implementation reduces the locked time of a segment to a very short time. Put/replace operations
+allocate memory first, call the ``org.caffinitas.ohc.CacheSerializer`` to serialize the key and value and then put the
+fully prepared entry into the segment.
+
+Eviction is performed using an LRU algorithm. A linked list through all cached elements per segment is used to keep
+track of the eldest entries.
+
+Since this implementation performs alloc/free operations for each individual entry, take care of memory fragmentation.
+We recommend using jemalloc to keep fragmentation low. On Unix operating systems, preload jemalloc. OSX usually does
+not require jemalloc for performance reasons.
+
+The extension jar ``ohc-core-j8`` is not recommmended for the linked implementation to use of new ``sun.misc.Unsafe``
+methods in Java 8 exists.
+
+Chunked implementation
+----------------------
+
+Chunked memory allocation off-heap implementation.
+
+Purpose of this implementation is to reduce the overhead for relatively small cache entries compared to the linked
+implementation since the memory for the whole segment is pre-allocated. This implementation is suitable for small
+entries with fast (de)serialization implementations of ``org.caffinitas.ohc.CacheSerializer``.
+
+Segmentation is the same as in the linked implementation. The number of segments is configured via
+``org.caffinitas.ohc.OHCacheBuilder``, defaults to ``# of cpus * 2`` and must be a power of 2. Entries are distribtued
+over the segments using the most significant bits of the 64 bit hash code. Accesses on each segment are synchronized.
+
+Each segment is divided into multiple chunks. Each segment is responsible for a portion of the total capacity
+``(capacity / segmentCount)``. This amount of memory is allocated once up-front during initialization and logically
+divided into a configurable number of chunks. The size of each chunk is configured using the ``chunkSize`` option in
+``org.caffinitas.ohc.OHCacheBuilder``.
+
+Like the linked implementation, hash entries are serialized into a temporary buffer first, before the actual put
+into a segment occurs (segement operations are synchronized).
+
+New entries are placed into the current write chunk. When that chunk is full, the next empty chunk will become the new
+write chunk. When all chunks are full, the least recently used chunk, including all the entries it contains, is evicted.
+
+Specifying the ``fixedKeyLength`` and ``fixedValueLength`` builder properties reduces the memory footprint by
+8 bytes per entry.
+
+Serialization, direct access and get-with-loader functions are not supported in this implementation.
+
+NOTE: The CRC hash algorithm requires JRE 8 or newer.
+
+The extension jar ``ohc-core-j8`` is not required for the chunked implementation.
+
+To enable the chunked implementation, specify the ``chunkSize`` in ``org.caffinitas.ohc.OHCacheBuilder``.
 
 Configuration
--------------
+=============
 
 Use the class ``OHCacheBuilder`` to configure all necessary parameter like
 
@@ -61,7 +115,7 @@ OHC allocates off-heap memory directly bypassing Java's off-heap memory limitati
 memory allocated by OHC is not counted towards ``-XX:maxDirectMemorySize``.
 
 Usage
------
+=====
 
 Quickstart::
 
@@ -88,8 +142,16 @@ Key and value serializers need to implement the ``CacheSerializer`` interface. T
 - ``void serialize(Object obj, DataOutput out)`` to serialize the given object to the data output
 - ``T deserialize(DataInput in)`` to deserialize an object from the data input
 
+Java 9
+------
+
+Java 9 support is still *experimental*!
+
+OHC has been tested with some early access releases of Java 9 and the unit and JMH tests pass. However,
+it requires access to ``sun.misc.Unsafe`` via the JVM option ``-XaddExports:java.base/sun.nio.ch=ALL-UNNAMED``.
+
 Building from source
---------------------
+====================
 
 Clone the git repo to your local machine. Either use the stable master branch or a release tag.
 
@@ -101,11 +163,12 @@ Just execute
 ``mvn clean install``
 
 Benchmarking
-------------
+============
 
 You need to build OHC from source because the big benchmark artifacts are not uploaded to Maven Central.
 
-Execute ``java -jar ohc-benchmark/target/ohc-benchmark-0.3-SNAPSHOT.jar -h`` to get some help information.
+Execute ``java -jar ohc-benchmark/target/ohc-benchmark-0.5.0-SNAPSHOT.jar -h`` (when building from source)
+to get some help information.
 
 Generally the benchmark tool starts a bunch of threads and performs _get_ and _put_ operations concurrently
 using configurable key distributions for _get_ and _put_ operations. Value size distribution also needs to be configured.
@@ -120,11 +183,16 @@ Available command line options::
  -rkd <arg>    hot key use distribution - default: uniform(1..10000)
  -sc <arg>     number of segments (number of individual off-heap-maps)
  -t <arg>      threads for execution
- -type <arg>   implementation type - default: linked - option: tables
  -vs <arg>     value sizes - default: fixed(512)
  -wkd <arg>    hot key use distribution - default: uniform(1..10000)
  -wu <arg>     warm up - <work-secs>,<sleep-secs>
  -z <arg>      hash table size
+ -cs <arg>     chunk size - if specified it will use the "chunked" implementation
+ -fks <arg>    fixed key size in bytes
+ -fvs <arg>    fixed value size in bytes
+ -mes <arg>    max entry size in bytes
+ -unl          do not use locking - only appropiate for single-threaded mode
+ -hm <arg>     hash algorithm to use - MURMUR3, XX, CRC32
  -bh           show bucket historgram in stats
  -kl <arg>     enable bucket histogram. Default: false
 
@@ -144,7 +212,7 @@ Distributions for read keys, write keys and value sizes can be configured using 
 
 Quick example with a read/write ratio of ``.9``, approx 1.5GB max capacity, 16 threads that runs for 30 seconds::
 
- java -jar ohc-benchmark/target/ohc-benchmark-0.3-SNAPSHOT.jar \
+ java -jar ohc-benchmark/target/ohc-benchmark-0.5.0-SNAPSHOT.jar \
    -rkd 'gaussian(1..20000000,2)' \
    -wkd 'gaussian(1..20000000,2)' \
    -vs 'gaussian(1024..32768,2)' \
@@ -161,7 +229,7 @@ On a 2.6GHz Core i7 system (OSX) the following numbers are typical running the a
 - # of puts per second:  270000
 
 Why off-heap memory
--------------------
+===================
 
 When using a very huge number of objects in a very large heap, Virtual machines will suffer from increased GC
 pressure since it basically has to inspect each and every object whether it can be collected and has to access all
@@ -181,17 +249,31 @@ But off heap memory is great when you have to deal with a huge amount of several
 that dos not put any pressure on the Java garbage collector. Let the Java GC do its job for the application where
 this library does its job for the cached data.
 
-History
--------
+Why *not* use ByteBuffer.allocateDirect()?
+==========================================
 
-OHC was developed in 2014/15 for `Apache Cassandra <http://cassandra.apache.org/>`_ 3.0 to be used as the `new
-row-cache backend <https://issues.apache.org/jira/browse/CASSANDRA-7438>`_.
+TL;DR allocating off-heap memory directly and bypassing ``ByteBuffer.allocateDirect`` is very gentle to the
+GC and we have explicit control over memory allocation and, more importantly, free. The stock implementation
+in Java frees off-heap memory during a garbage collection - also: if no more off-heap memory is available, it
+likely triggers a Full-GC, which is problematic if multiple threads run into that situation concurrently since
+it means lots of Full-GCs sequentially. Further, the stock implementation uses a global, synchronized linked
+list to track off-heap memory allocations.
+
+This is why OHC allocates off-heap memory directly and recommends to preload jemalloc on Linux systems to
+improve memory managment performance.
+
+History
+=======
+
+OHC was developed in 2014/15 for `Apache Cassandra <http://cassandra.apache.org/>`_ 2.2 and 3.0 to be used as the
+`new row-cache backend <https://issues.apache.org/jira/browse/CASSANDRA-7438>`_.
+
 Since there were no suitable fully off-heap cache implementations available, it has been decided to
 build a completely new one - and that's OHC. But it turned out that OHC alone might also be usable for
 other projects - that's why OHC is a separate library.
 
 Contributors
-------------
+============
 
 A big 'thank you' has to go to `Benedict Elliott Smith <https://twitter.com/_belliottsmith>`_ and
 `Ariel Weisberg <https://twitter.com/ArielWeisberg>`_ from DataStax for their very useful input to OHC!
@@ -199,7 +281,7 @@ A big 'thank you' has to go to `Benedict Elliott Smith <https://twitter.com/_bel
 Developer: `Robert Stupp <https://twitter.com/snazy>`_
 
 License
--------
+=======
 
 Copyright (C) 2014 Robert Stupp, Koeln, Germany, robert-stupp.de
 

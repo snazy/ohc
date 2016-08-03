@@ -13,7 +13,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.tables;
+package org.caffinitas.ohc.chunked;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -28,8 +28,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.caffinitas.ohc.CacheLoader;
-import org.caffinitas.ohc.DirectValueAccess;
 import org.caffinitas.ohc.CloseableIterator;
+import org.caffinitas.ohc.DirectValueAccess;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.OHCacheStats;
@@ -37,8 +37,8 @@ import org.caffinitas.ohc.histo.EstimatedHistogram;
 import org.testng.Assert;
 
 /**
- * Test code that contains an instance of the production and check {@link org.caffinitas.ohc.OHCache}
- * implementations {@link OHCacheImpl} and
+ * Test code that contains an instance of the production and check {@link OHCache}
+ * implementations {@link OHCacheChunkedImpl} and
  * {@link CheckOHCacheImpl}.
  */
 public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
@@ -123,21 +123,6 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
         throw new UnsupportedOperationException();
     }
 
-    public DirectValueAccess putDirect(K key, long valueLen)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    public DirectValueAccess addOrReplaceDirect(K k, DirectValueAccess old, long valueLen)
-    {
-        throw new UnsupportedOperationException();
-    }
-
-    public DirectValueAccess putIfAbsentDirect(K k, long valueLen)
-    {
-        throw new UnsupportedOperationException();
-    }
-
     public V get(K key)
     {
         V rProd = prod.get(key);
@@ -177,36 +162,36 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
     public CloseableIterator<K> hotKeyIterator(int n)
     {
         return new CheckIterator<>(
-                                  prod.hotKeyIterator(n),
-                                  check.hotKeyIterator(n),
-                                  true
+                                   prod.hotKeyIterator(n),
+                                   check.hotKeyIterator(n),
+                                   true
         );
     }
 
     public CloseableIterator<K> keyIterator()
     {
         return new CheckIterator<>(
-                                  prod.keyIterator(),
-                                  check.keyIterator(),
-                                  true
+                                   prod.keyIterator(),
+                                   check.keyIterator(),
+                                   true
         );
     }
 
     public CloseableIterator<ByteBuffer> hotKeyBufferIterator(int n)
     {
         return new CheckIterator<>(
-                                  prod.hotKeyBufferIterator(n),
-                                  check.hotKeyBufferIterator(n),
-                                  false
+                                   prod.hotKeyBufferIterator(n),
+                                   check.hotKeyBufferIterator(n),
+                                   false
         );
     }
 
     public CloseableIterator<ByteBuffer> keyBufferIterator()
     {
         return new CheckIterator<>(
-                                  prod.keyBufferIterator(),
-                                  check.keyBufferIterator(),
-                                  false
+                                   prod.keyBufferIterator(),
+                                   check.keyBufferIterator(),
+                                   false
         );
     }
 
