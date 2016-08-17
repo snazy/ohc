@@ -57,6 +57,9 @@ hash partition - that means less linked-link walks and increased performance.
 The total amount of required off heap memory is the *total capacity* plus *hash table*. Each hash bucket (currently)
 requires 8 bytes - so the formula is ``capacity + segment_count * hash_table_size * 8``.
 
+OHC allocates off-heap memory directly bypassing Java's off-heap memory limitation. This means, that all
+memory allocated by OHC is not counted towards ``-XX:maxDirectMemorySize``.
+
 Usage
 -----
 
