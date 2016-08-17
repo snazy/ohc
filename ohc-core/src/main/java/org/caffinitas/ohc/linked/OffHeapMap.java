@@ -16,7 +16,8 @@
 package org.caffinitas.ohc.linked;
 
 import java.util.List;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
+import java.util.concurrent.locks.LockSupport;
 
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
@@ -47,7 +48,12 @@ final class OffHeapMap
 
     private long freeCapacity;
 
-    private final ReentrantLock lock;
+    // Replacement for Unsafe.monitorEnter/monitorExit. Uses the thread-ID to indicate a lock
+    // using a CAS operation on the primitive instance field.
+    private final boolean unlocked;
+    private volatile long lock;
+    private static final AtomicLongFieldUpdater<OffHeapMap> lockFieldUpdater =
+    AtomicLongFieldUpdater.newUpdater(OffHeapMap.class, "lock");
 
     private final boolean throwOOME;
 
@@ -69,7 +75,7 @@ final class OffHeapMap
         // 64 hash slots, each for 128ms
         this.timeouts = new Timeouts(builder.getTimeoutsSlots(), builder.getTimeoutsPrecision());
 
-        this.lock = builder.isUnlocked() ? null : new ReentrantLock();
+        this.unlocked = builder.isUnlocked();
 
         int hts = builder.getHashTableSize();
         if (hts <= 0)
@@ -89,7 +95,7 @@ final class OffHeapMap
 
     void release()
     {
-        lock();
+        boolean wasFirst = lock();
         try
         {
             table.release();
@@ -99,7 +105,7 @@ final class OffHeapMap
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
         }
     }
 
@@ -156,14 +162,14 @@ final class OffHeapMap
 
     void updateFreeCapacity(long diff)
     {
-        lock();
+        boolean wasFirst = lock();
         try
         {
             freeCapacity += diff;
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
         }
     }
 
@@ -184,7 +190,7 @@ final class OffHeapMap
 
     long getEntry(KeyBuffer key, boolean reference, boolean updateLRU)
     {
-        lock();
+        boolean wasFirst = lock();
         try
         {
             for (long hashEntryAdr = table.getFirst(key.hash());
@@ -221,7 +227,7 @@ final class OffHeapMap
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
         }
     }
 
@@ -230,7 +236,7 @@ final class OffHeapMap
     {
         long removeHashEntryAdr = 0L;
         LongArrayList derefList = null;
-        lock();
+        boolean wasFirst = lock();
         try
         {
             long oldHashEntryAdr = 0L;
@@ -308,7 +314,7 @@ final class OffHeapMap
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
             if (derefList != null)
@@ -338,7 +344,7 @@ final class OffHeapMap
 
     void clear()
     {
-        lock();
+        boolean wasFirst = lock();
         try
         {
             lruHead = lruTail = 0L;
@@ -366,7 +372,7 @@ final class OffHeapMap
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
         }
     }
 
@@ -377,7 +383,7 @@ final class OffHeapMap
 
     private void removeEntry(long removeHashEntryAdr, boolean removeFromTimeouts)
     {
-        lock();
+        boolean wasFirst = lock();
         try
         {
             long hash = HashEntries.getHash(removeHashEntryAdr);
@@ -399,7 +405,7 @@ final class OffHeapMap
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
         }
@@ -408,7 +414,7 @@ final class OffHeapMap
     void removeEntry(KeyBuffer key)
     {
         long removeHashEntryAdr = 0L;
-        lock();
+        boolean wasFirst = lock();
         try
         {
             long prevEntryAdr = 0L;
@@ -429,7 +435,7 @@ final class OffHeapMap
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
             if (removeHashEntryAdr != 0L)
                 HashEntries.dereference(removeHashEntryAdr);
         }
@@ -496,7 +502,7 @@ final class OffHeapMap
 
     long[] hotN(int n)
     {
-        lock();
+        boolean wasFirst = lock();
         try
         {
             long[] r = new long[n];
@@ -512,7 +518,7 @@ final class OffHeapMap
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
         }
     }
 
@@ -528,20 +534,20 @@ final class OffHeapMap
 
     void updateBucketHistogram(EstimatedHistogram hist)
     {
-        lock();
+        boolean wasFirst = lock();
         try
         {
             table.updateBucketHistogram(hist);
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
         }
     }
 
     void getEntryAddresses(int mapSegmentIndex, int nSegments, List<Long> hashEntryAdrs)
     {
-        lock();
+        boolean wasFirst = lock();
         try
         {
             long t = System.currentTimeMillis();
@@ -565,7 +571,7 @@ final class OffHeapMap
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
         }
     }
 
@@ -725,7 +731,7 @@ final class OffHeapMap
     {
         LongArrayList derefList = null;
 
-        lock();
+        boolean wasFirst = lock();
         try
         {
             long prevEntryAdr = 0L;
@@ -764,7 +770,7 @@ final class OffHeapMap
         }
         finally
         {
-            unlock();
+            unlock(wasFirst); 
 
             if (derefList != null)
                 for (int i = 0; i < derefList.size(); i++)
@@ -850,16 +856,34 @@ final class OffHeapMap
         lruHead = hashEntryAdr;
     }
 
-    private void lock()
+    private boolean lock()
     {
-        if (lock != null)
-            lock.lock();
+        if (unlocked)
+            return false;
+
+        long t = Thread.currentThread().getId();
+
+        if (t == lockFieldUpdater.get(this))
+            return false;
+        while (true)
+        {
+            if (lockFieldUpdater.compareAndSet(this, 0L, t))
+                return true;
+
+            // "sleep" for 100ns - operations performed while the lock's being held
+            // may include "expensive" operations (secondary indexes for example).
+            LockSupport.parkNanos(100L);
+        }
     }
 
-    private void unlock()
+    private void unlock(boolean wasFirst)
     {
-        if (lock != null)
-            lock.unlock();
+        if (unlocked || !wasFirst)
+            return;
+
+        long t = Thread.currentThread().getId();
+        boolean r = lockFieldUpdater.compareAndSet(this, t, 0L);
+        assert r;
     }
 
     @Override
