@@ -870,9 +870,10 @@ final class OffHeapMap
             if (lockFieldUpdater.compareAndSet(this, 0L, t))
                 return true;
 
-            // "sleep" for 100ns - operations performed while the lock's being held
-            // may include "expensive" operations (secondary indexes for example).
-            LockSupport.parkNanos(100L);
+            // yield control to other thread.
+            // Note: we cannot use LockSupport.parkNanos() as that does not
+            // provide nanosecond resolution on Windows.
+            Thread.yield();
         }
     }
 
