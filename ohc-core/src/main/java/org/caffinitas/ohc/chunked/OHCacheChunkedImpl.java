@@ -22,12 +22,12 @@ import java.nio.channels.WritableByteChannel;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.google.common.collect.AbstractIterator;
 import com.google.common.primitives.Ints;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -346,6 +346,12 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
         int sz = isFixedSize() ? fixedKeySize : keySerializer.serializedSize(o);
         ByteBuffer keyBuffer = ByteBuffer.allocate(sz);
         keySerializer.serialize(o, keyBuffer);
+        keyBuffer.flip();
+        return keySource(keyBuffer);
+    }
+
+    private KeyBuffer keySource(ByteBuffer keyBuffer)
+    {
         return new KeyBuffer(keyBuffer).finish(hasher);
     }
 
@@ -636,7 +642,7 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
     // - snapshot content of chunk into a separate buffer
     // - iterate over that buffer
 
-    private final class SegmentIterator extends AbstractIterator<ByteBuffer> implements CloseableIterator<ByteBuffer>
+    private final class SegmentIterator implements CloseableIterator<ByteBuffer>
     {
         private final int keysPerChunk;
 
@@ -645,6 +651,10 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
         private Iterator<ByteBuffer> chunkIterator;
 
         private final ByteBuffer snaphotBuffer;
+
+        private boolean eod;
+        private ByteBuffer next;
+        private ByteBuffer current;
 
         SegmentIterator(int nKeys)
         {
@@ -657,7 +667,54 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
             // noop
         }
 
-        protected ByteBuffer computeNext()
+        public boolean hasNext()
+        {
+            if (eod)
+                return false;
+
+            if (next == null)
+                next = computeNext();
+
+            return next != null;
+        }
+
+        public ByteBuffer next()
+        {
+            if (eod)
+                throw new NoSuchElementException();
+
+            ByteBuffer r;
+            if (next == null)
+            {
+                r = computeNext();
+            }
+            else
+            {
+                r = next;
+                next = null;
+            }
+
+            if (!eod && r != null)
+            {
+                current = r;
+                return r.duplicate();
+            }
+
+            throw new NoSuchElementException();
+        }
+
+        public void remove()
+        {
+            ByteBuffer c = current;
+            if (eod || c == null)
+                throw new NoSuchElementException();
+            current = null;
+
+            // segment containing 'current' is at index 'seg - 1' since computeNext() increments 'seg'
+            maps[seg - 1].removeEntry(keySource(c));
+        }
+
+        private ByteBuffer computeNext()
         {
             while (true)
             {
@@ -665,7 +722,11 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
                     return chunkIterator.next();
 
                 if (seg == segments())
-                    return endOfData();
+                {
+                    eod = true;
+                    current = null;
+                    return null;
+                }
                 chunkIterator = maps[seg++].snapshotIterator(keysPerChunk, snaphotBuffer);
             }
         }

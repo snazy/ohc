@@ -167,7 +167,7 @@ Benchmarking
 
 You need to build OHC from source because the big benchmark artifacts are not uploaded to Maven Central.
 
-Execute ``java -jar ohc-benchmark/target/ohc-benchmark-0.5.0-SNAPSHOT.jar -h`` (when building from source)
+Execute ``java -jar ohc-benchmark/target/ohc-benchmark-0.5.1-SNAPSHOT.jar -h`` (when building from source)
 to get some help information.
 
 Generally the benchmark tool starts a bunch of threads and performs _get_ and _put_ operations concurrently
@@ -212,14 +212,8 @@ Distributions for read keys, write keys and value sizes can be configured using 
 
 Quick example with a read/write ratio of ``.9``, approx 1.5GB max capacity, 16 threads that runs for 30 seconds::
 
- java -jar ohc-benchmark/target/ohc-benchmark-0.5.0-SNAPSHOT.jar \
-   -rkd 'gaussian(1..20000000,2)' \
-   -wkd 'gaussian(1..20000000,2)' \
-   -vs 'gaussian(1024..32768,2)' \
-   -r .9 \
-   -cap 1600000000 \
-   -d 30 \
-   -t 16
+ java -jar ohc-benchmark/target/ohc-benchmark-0.5.1-SNAPSHOT.jar
+
 
 (Note that the version in the jar file name might differ.)
 

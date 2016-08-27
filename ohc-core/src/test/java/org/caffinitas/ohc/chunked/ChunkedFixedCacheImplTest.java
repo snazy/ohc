@@ -411,7 +411,15 @@ public class ChunkedFixedCacheImplTest
             for (int i = 0; i < 5; i++)
             {
                 iter.next();
+                iter.remove();
             }
+
+            Assert.assertEquals(cache.size(), 0);
+            Assert.assertNull(cache.get(1));
+            Assert.assertNull(cache.get(2));
+            Assert.assertNull(cache.get(3));
+            Assert.assertNull(cache.get(4));
+            Assert.assertNull(cache.get(5));
         }
     }
 
@@ -457,8 +465,13 @@ public class ChunkedFixedCacheImplTest
                 while (iter.hasNext())
                 {
                     iter.next();
+                    iter.remove();
                 }
             }
+
+            Assert.assertFalse(cache.keyBufferIterator().hasNext());
+
+            Assert.assertEquals(cache.stats().getSize(), 0);
         }
     }
 

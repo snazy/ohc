@@ -463,7 +463,15 @@ public class ChunkedCacheImplTest
             for (int i = 0; i < 5; i++)
             {
                 iter.next();
+                iter.remove();
             }
+
+            Assert.assertEquals(cache.size(), 0);
+            Assert.assertNull(cache.get(1));
+            Assert.assertNull(cache.get(2));
+            Assert.assertNull(cache.get(3));
+            Assert.assertNull(cache.get(4));
+            Assert.assertNull(cache.get(5));
         }
     }
 
@@ -504,13 +512,40 @@ public class ChunkedCacheImplTest
             for (int i = 0; i < 100; i++)
                 cache.put(i, Integer.toOctalString(i));
 
+            List<ByteBuffer> got = new ArrayList<>();
+            int serSize = TestUtils.intSerializer.serializedSize(0);
+            int cnt = 0;
             try (CloseableIterator<ByteBuffer> iter = cache.keyBufferIterator())
             {
                 while (iter.hasNext())
                 {
-                    iter.next();
+                    ByteBuffer bb = ByteBuffer.allocate(serSize);
+                    bb.put(iter.next());
+                    bb.flip();
+                    got.add(bb);
+                    iter.remove();
+                    cnt ++;
                 }
             }
+            Assert.assertEquals(cnt, 100);
+            Assert.assertEquals(got.size(), 100);
+            for (int i = 0; i < 100; i++)
+            {
+                ByteBuffer bb = ByteBuffer.allocate(serSize);
+                TestUtils.intSerializer.serialize(i, bb);
+                bb.flip();
+                Assert.assertTrue(got.indexOf(bb) != -1);
+            }
+
+            for (CloseableIterator<ByteBuffer> iter = cache.keyBufferIterator();iter.hasNext();)
+                System.out.println(iter.next());
+
+            for (CloseableIterator<Integer> iter = cache.keyIterator();iter.hasNext();)
+                System.out.println(iter.next());
+
+            Assert.assertFalse(cache.keyBufferIterator().hasNext());
+
+            Assert.assertEquals(cache.stats().getSize(), 0);
         }
     }
 

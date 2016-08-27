@@ -550,6 +550,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         ByteBuffer keyBuffer = ByteBuffer.allocate(size);
         keySerializer.serialize(o, keyBuffer);
         assert(keyBuffer.position() == keyBuffer.capacity()) && (keyBuffer.capacity() == size);
+        keyBuffer.flip();
         return new KeyBuffer(keyBuffer).finish(hasher);
     }
 

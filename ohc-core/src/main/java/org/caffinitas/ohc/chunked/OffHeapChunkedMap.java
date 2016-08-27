@@ -681,17 +681,18 @@ final class OffHeapChunkedMap
 
                 snaphotBuffer.clear();
                 int keyLen;
-                int valueLen;
                 int reservedLen;
+                boolean removed;
                 if (isFixedSize())
                 {
                     keyLen = fixedKeySize;
-                    valueLen = reservedLen = fixedValueSize;
+                    reservedLen = fixedValueSize;
+                    removed = snaphotBuffer.getInt(pos + Util.ENTRY_OFF_REMOVED) == -1;
                 }
                 else
                 {
                     keyLen = snaphotBuffer.getInt(pos + Util.ENTRY_OFF_KEY_LENGTH);
-                    valueLen = snaphotBuffer.getInt(pos + Util.ENTRY_OFF_VALUE_LENGTH);
+                    removed = snaphotBuffer.getInt(pos + Util.ENTRY_OFF_VALUE_LENGTH) == -1;
                     reservedLen = snaphotBuffer.getInt(pos + Util.ENTRY_OFF_RESERVED_LENGTH);
                 }
 
@@ -699,10 +700,11 @@ final class OffHeapChunkedMap
 
                 pos += Util.allocLen(keyLen, reservedLen, isFixedSize());
 
+                n++;
+
                 // skip removed entries
-                if (valueLen != -1)
+                if (!removed)
                 {
-                    n++;
 
                     snaphotBuffer.position(keyOff);
                     snaphotBuffer.limit(keyOff + keyLen);
@@ -839,19 +841,19 @@ final class OffHeapChunkedMap
     private boolean compareKey(int hashEntryOffset, KeyBuffer key)
     {
         int blkOff = Util.entryOffData(isFixedSize());
-        int p = 0;
         ByteBuffer buf = key.buffer();
-        int serKeyLen = key.size();
-        for (; p <= serKeyLen - 8; p += 8, blkOff += 8)
+        int p = buf.position();
+        int endIdx = buf.limit();
+        for (; p <= endIdx - 8; p += 8, blkOff += 8)
             if (memory.getLong(hashEntryOffset + blkOff) != buf.getLong(p))
                 return false;
-        for (; p <= serKeyLen - 4; p += 4, blkOff += 4)
+        for (; p <= endIdx - 4; p += 4, blkOff += 4)
             if (memory.getInt(hashEntryOffset + blkOff) != buf.getInt(p))
                 return false;
-        for (; p <= serKeyLen - 2; p += 2, blkOff += 2)
+        for (; p <= endIdx - 2; p += 2, blkOff += 2)
             if (memory.getShort(hashEntryOffset + blkOff) != buf.getShort(p))
                 return false;
-        for (; p < serKeyLen; p++, blkOff++)
+        for (; p < endIdx; p++, blkOff++)
             if (memory.get(hashEntryOffset + blkOff) != buf.get(p))
                 return false;
 
