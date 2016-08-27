@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.5.2-SNAPSHOT</version>
+        <version>0.5.1</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-jmh</artifactId>
-    <version>0.5.2-SNAPSHOT</version>
+    <version>0.5.1</version>
 
     <name>OHC core - micro benchmarks</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
