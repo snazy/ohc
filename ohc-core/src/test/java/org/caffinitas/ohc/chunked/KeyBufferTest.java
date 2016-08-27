@@ -13,13 +13,14 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.tables;
+package org.caffinitas.ohc.chunked;
 
 import java.nio.ByteBuffer;
 
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 
+import org.caffinitas.ohc.HashAlgorithm;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
@@ -41,7 +42,7 @@ public class KeyBufferTest
         buf.put((byte)(42 & 0xff));
         buf.put(ref);
         buf.put((byte)(0xf0 & 0xff));
-        KeyBuffer out = new KeyBuffer(buf.array()).finish();
+        KeyBuffer out = new KeyBuffer(buf).finish(org.caffinitas.ohc.chunked.Hasher.create(HashAlgorithm.MURMUR3));
 
         Hasher hasher = Hashing.murmur3_128().newHasher();
         hasher.putByte((byte) 42);
@@ -51,7 +52,7 @@ public class KeyBufferTest
         assertEquals(out.hash(), hasher.hash().asLong());
     }
 
-    @Test
+    @Test(dependsOnMethods = "testHashFinish")
     public void testHashFinish16() throws Exception
     {
         byte[] ref = TestUtils.randomBytes(14);
@@ -59,7 +60,7 @@ public class KeyBufferTest
         buf.put((byte)(42 & 0xff));
         buf.put(ref);
         buf.put((byte)(0xf0 & 0xff));
-        KeyBuffer out = new KeyBuffer(buf.array()).finish();
+        KeyBuffer out = new KeyBuffer(buf).finish(org.caffinitas.ohc.chunked.Hasher.create(HashAlgorithm.MURMUR3));
 
         Hasher hasher = Hashing.murmur3_128().newHasher();
         hasher.putByte((byte) 42);
@@ -67,5 +68,25 @@ public class KeyBufferTest
         hasher.putByte((byte) 0xf0);
 
         assertEquals(out.hash(), hasher.hash().asLong());
+    }
+
+    @Test(dependsOnMethods = "testHashFinish16")
+    public void testHashRandom() throws Exception
+    {
+        for (int i = 1; i < 4100; i++)
+        {
+            for (int j = 0; j < 10; j++)
+            {
+                byte[] ref = TestUtils.randomBytes(i);
+                ByteBuffer buf = ByteBuffer.allocate(i);
+                buf.put(ref);
+                KeyBuffer out = new KeyBuffer(buf).finish(org.caffinitas.ohc.chunked.Hasher.create(HashAlgorithm.MURMUR3));
+
+                Hasher hasher = Hashing.murmur3_128().newHasher();
+                hasher.putBytes(ref);
+
+                assertEquals(out.hash(), hasher.hash().asLong());
+            }
+        }
     }
 }

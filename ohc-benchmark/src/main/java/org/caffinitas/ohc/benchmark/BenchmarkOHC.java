@@ -38,6 +38,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
+import org.caffinitas.ohc.HashAlgorithm;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.benchmark.distribution.DistributionFactory;
@@ -60,7 +61,12 @@ public final class BenchmarkOHC
     public static final String WRITE_KEY_DIST = "wkd";
     public static final String VALUE_SIZE_DIST = "vs";
     public static final String BUCKET_HISTOGRAM = "bh";
-    public static final String TYPE = "type";
+    public static final String CHUNK_SIZE = "cs";
+    public static final String FIXED_KEY_SIZE = "fks";
+    public static final String FIXED_VALUE_SIZE = "fvs";
+    public static final String MAX_ENTRY_SIZE = "mes";
+    public static final String UNLOCKED = "ul";
+    public static final String HASH_MODE = "hm";
     public static final String CSV = "csv";
 
     public static final String DEFAULT_VALUE_SIZE_DIST = "fixed(512)";
@@ -92,12 +98,16 @@ public final class BenchmarkOHC
             int segmentCount = Integer.parseInt(cmd.getOptionValue(SEGMENT_COUNT, "0"));
             float loadFactor = Float.parseFloat(cmd.getOptionValue(LOAD_FACTOR, "0"));
             int keyLen = Integer.parseInt(cmd.getOptionValue(KEY_LEN, "0"));
+            int chunkSize = Integer.parseInt(cmd.getOptionValue(CHUNK_SIZE, "-1"));
+            int fixedKeySize = Integer.parseInt(cmd.getOptionValue(FIXED_KEY_SIZE, "-1"));
+            int fixedValueSize = Integer.parseInt(cmd.getOptionValue(FIXED_VALUE_SIZE, "-1"));
+            int maxEntrySize = Integer.parseInt(cmd.getOptionValue(MAX_ENTRY_SIZE, "-1"));
+            boolean unlocked = Boolean.parseBoolean(cmd.getOptionValue(UNLOCKED, "false"));
+            HashAlgorithm hashMode = HashAlgorithm.valueOf(cmd.getOptionValue(HASH_MODE, "MURMUR3"));
 
             boolean bucketHistogram = Boolean.parseBoolean(cmd.getOptionValue(BUCKET_HISTOGRAM, "false"));
 
             double readWriteRatio = Double.parseDouble(cmd.getOptionValue(READ_WRITE_RATIO, ".5"));
-
-            String type = cmd.getOptionValue(TYPE, "linked");
 
             Driver[] drivers = new Driver[threads];
             Random rnd = new Random();
@@ -114,20 +124,35 @@ public final class BenchmarkOHC
             }
 
             printMessage("Initializing OHC cache...");
-            Shared.cache = OHCacheBuilder.<Long, byte[]>newBuilder()
-                                         .type((Class<? extends OHCache>) Class.forName("org.caffinitas.ohc." + type + ".OHCacheImpl"))
-                                         .keySerializer(keyLen <= 0 ? BenchmarkUtils.longSerializer : new BenchmarkUtils.KeySerializer(keyLen))
-                                         .valueSerializer(BenchmarkUtils.serializer)
-                                         .hashTableSize(hashTableSize)
-                                         .loadFactor(loadFactor)
-                                         .segmentCount(segmentCount)
-                                         .capacity(capacity)
-                                         .build();
+            OHCacheBuilder<Long, byte[]> builder = OHCacheBuilder.<Long, byte[]>newBuilder()
+                                                   .keySerializer(keyLen <= 0 ? BenchmarkUtils.longSerializer : new BenchmarkUtils.KeySerializer(keyLen))
+                                                   .valueSerializer(BenchmarkUtils.serializer)
+                                                   .capacity(capacity);
+            if (cmd.hasOption(LOAD_FACTOR))
+                builder.loadFactor(loadFactor);
+            if (cmd.hasOption(SEGMENT_COUNT))
+                builder.segmentCount(segmentCount);
+            if (cmd.hasOption(HASH_TABLE_SIZE))
+                builder.hashTableSize(hashTableSize);
+            if (cmd.hasOption(CHUNK_SIZE))
+                builder.chunkSize(chunkSize);
+            if (cmd.hasOption(MAX_ENTRY_SIZE))
+                builder.maxEntrySize(maxEntrySize);
+            if (cmd.hasOption(UNLOCKED))
+                builder.unlocked(unlocked);
+            if (cmd.hasOption(HASH_MODE))
+                builder.hashMode(hashMode);
+            if (cmd.hasOption(FIXED_KEY_SIZE))
+                builder.fixedEntrySize(fixedKeySize, fixedValueSize);
 
-            printMessage("Cache configuration: hash-table-size: %d%n" +
+            Shared.cache = builder.build();
+
+            printMessage("Cache configuration: instance       : %s%n" +
+                         "                     hash-table-size: %d%n" +
                          "                     load-factor    : %.3f%n" +
                          "                     segments       : %d%n" +
                          "                     capacity       : %d%n",
+                         Shared.cache,
                          Shared.cache.hashTableSizes()[0],
                          Shared.cache.loadFactor(),
                          Shared.cache.segments(),
@@ -329,9 +354,16 @@ public final class BenchmarkOHC
         options.addOption(READ_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);
         options.addOption(WRITE_KEY_DIST, true, "hot key use distribution - default: " + DEFAULT_KEY_DIST);
 
-        options.addOption(BUCKET_HISTOGRAM, true, "enable bucket histogram. Default: false");
+        options.addOption(CHUNK_SIZE, true, "chunk size");
 
-        options.addOption(TYPE, true, "implementation type - default: linked - option: tables");
+        options.addOption(FIXED_KEY_SIZE, true, "fixed key size");
+        options.addOption(FIXED_VALUE_SIZE, true, "fixed value size");
+        options.addOption(MAX_ENTRY_SIZE, true, "max entry size");
+
+        options.addOption(UNLOCKED, true, "unlocked - do ONLY use ONE thread");
+        options.addOption(HASH_MODE, true, "hash mode to use - either MURMUR3 or CRC");
+
+        options.addOption(BUCKET_HISTOGRAM, true, "enable bucket histogram. Default: false");
 
         options.addOption(CSV, true, "CSV stats output file");
 

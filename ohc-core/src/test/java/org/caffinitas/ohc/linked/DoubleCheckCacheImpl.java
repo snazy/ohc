@@ -38,7 +38,7 @@ import org.testng.Assert;
 
 /**
  * Test code that contains an instance of the production and check {@link org.caffinitas.ohc.OHCache}
- * implementations {@link org.caffinitas.ohc.linked.OHCacheImpl} and
+ * implementations {@link OHCacheLinkedImpl} and
  * {@link CheckOHCacheImpl}.
  */
 public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>

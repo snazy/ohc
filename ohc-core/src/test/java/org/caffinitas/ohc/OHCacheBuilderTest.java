@@ -1,13 +1,10 @@
 package org.caffinitas.ohc;
 
-import java.io.DataInput;
-import java.io.DataOutput;
 import java.util.HashSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.nio.ByteBuffer;
 
-import org.caffinitas.ohc.linked.OHCacheImpl;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
@@ -39,16 +36,16 @@ public class OHCacheBuilderTest
     }
 
     @Test
-    public void testBucketLength() throws Exception
+    public void testChunkSize() throws Exception
     {
         OHCacheBuilder<String, String> builder = OHCacheBuilder.newBuilder();
-        Assert.assertEquals(builder.getBucketLength(), 8L);
-        builder.bucketLength(12345);
-        Assert.assertEquals(builder.getBucketLength(), 12345);
+        Assert.assertEquals(builder.getChunkSize(), 0);
+        builder.chunkSize(12345);
+        Assert.assertEquals(builder.getChunkSize(), 12345);
 
-        System.setProperty("org.caffinitas.ohc.bucketLength", "98765");
+        System.setProperty("org.caffinitas.ohc.chunkSize", "98765");
         builder = OHCacheBuilder.newBuilder();
-        Assert.assertEquals(builder.getBucketLength(), 98765);
+        Assert.assertEquals(builder.getChunkSize(), 98765);
     }
 
     @Test
@@ -133,16 +130,6 @@ public class OHCacheBuilderTest
         builder.executorService(es);
         es.shutdown();
         Assert.assertSame(builder.getExecutorService(), es);
-    }
-
-    @Test
-    public void testType() throws Exception
-    {
-        OHCacheBuilder<String, String> builder = OHCacheBuilder.newBuilder();
-        Assert.assertSame(builder.getType(), OHCacheImpl.class);
-
-        builder.type(org.caffinitas.ohc.tables.OHCacheImpl.class);
-        Assert.assertSame(builder.getType(), org.caffinitas.ohc.tables.OHCacheImpl.class);
     }
 
     @Test
