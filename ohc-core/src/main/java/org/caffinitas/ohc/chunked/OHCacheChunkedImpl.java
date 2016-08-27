@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.google.common.collect.AbstractIterator;
+import com.google.common.primitives.Ints;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,7 +72,7 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
         int segments = builder.getSegmentCount();
         if (segments <= 0)
             segments = Runtime.getRuntime().availableProcessors() * 2;
-        segments = (int) Util.roundUpToPowerOf2(segments, 1 << 30);
+        segments = Ints.checkedCast(Util.roundUpToPowerOf2(segments, 1 << 30));
 
         this.chunkSize = builder.getChunkSize();
         if (chunkSize < 0 || chunkSize > capacity / segments / 2)

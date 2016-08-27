@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.concurrent.locks.LockSupport;
 
+import com.google.common.primitives.Ints;
+
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
@@ -82,7 +84,8 @@ final class OffHeapLinkedMap
             hts = 8192;
         if (hts < 256)
             hts = 256;
-        table = Table.create((int) Util.roundUpToPowerOf2(hts, MAX_TABLE_SIZE), throwOOME);
+        int msz = Ints.checkedCast(Util.roundUpToPowerOf2(hts, MAX_TABLE_SIZE));
+        table = Table.create(msz, throwOOME);
         if (table == null)
             throw new RuntimeException("unable to allocate off-heap memory for segment");
 
@@ -583,7 +586,7 @@ final class OffHeapLinkedMap
 
         static Table create(int hashTableSize, boolean throwOOME)
         {
-            int msz = (int) Util.BUCKET_ENTRY_LEN * hashTableSize;
+            int msz = Ints.checkedCast(Util.BUCKET_ENTRY_LEN * hashTableSize);
             long address = Uns.allocate(msz, throwOOME);
             return address != 0L ? new Table(address, hashTableSize) : null;
         }

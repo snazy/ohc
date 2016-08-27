@@ -18,9 +18,9 @@ package org.caffinitas.ohc.chunked;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
-import java.util.concurrent.locks.LockSupport;
 
 import com.google.common.collect.AbstractIterator;
+import com.google.common.primitives.Ints;
 
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -77,7 +77,7 @@ final class OffHeapChunkedMap
 
     private final ByteBuffer memory;
 
-    OffHeapChunkedMap(OHCacheBuilder builder, long freeCapacity, int chunkSize)
+    OffHeapChunkedMap(OHCacheBuilder builder, long freeCapacity, long chunkSize)
     {
         this.throwOOME = builder.isThrowOOME();
 
@@ -94,12 +94,12 @@ final class OffHeapChunkedMap
         this.fixedKeySize = builder.getFixedKeySize();
         this.fixedValueSize = builder.getFixedValueSize();
 
-        this.chunkDataSize = chunkSize;
-        this.chunkFullSize = chunkSize + Util.CHUNK_OFF_DATA;
+        this.chunkDataSize = Ints.checkedCast(chunkSize);
+        this.chunkFullSize = Ints.checkedCast(chunkSize + Util.CHUNK_OFF_DATA);
         this.chunkCount = (int) (freeCapacity / chunkSize);
-        this.capacity = chunkCount * chunkSize;
+        this.capacity = Ints.checkedCast(chunkCount * chunkSize);
         this.freeCapacity = this.capacity;
-        int allocSize = chunkCount * chunkFullSize;
+        int allocSize = Ints.checkedCast((long)chunkCount * (long)chunkFullSize);
         memory = Uns.allocate(allocSize, throwOOME);
 
         for (int i = 0; i < chunkCount; i++)
@@ -112,7 +112,8 @@ final class OffHeapChunkedMap
             hts = 8192;
         if (hts < 256)
             hts = 256;
-        table = createTable((int) Util.roundUpToPowerOf2(hts, TWO_POWER_30), throwOOME);
+        int msz = Ints.checkedCast(Util.roundUpToPowerOf2(hts, TWO_POWER_30));
+        table = createTable(msz, throwOOME);
         if (table == null)
             throw new RuntimeException("unable to allocate off-heap memory for segment");
 

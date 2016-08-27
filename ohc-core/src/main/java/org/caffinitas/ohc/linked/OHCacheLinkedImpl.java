@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import com.google.common.collect.AbstractIterator;
+import com.google.common.primitives.Ints;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.SettableFuture;
 
@@ -92,7 +93,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         int segments = builder.getSegmentCount();
         if (segments <= 0)
             segments = Runtime.getRuntime().availableProcessors() * 2;
-        segments = (int) Util.roundUpToPowerOf2(segments, 1 << 30);
+        segments = Ints.checkedCast(Util.roundUpToPowerOf2(segments, 1 << 30));
         maps = new OffHeapLinkedMap[segments];
         for (int i = 0; i < segments; i++)
         {
@@ -226,8 +227,8 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         if (k == null || v == null)
             throw new NullPointerException();
 
-        long keyLen = keySerializer.serializedSize(k);
-        long valueLen = valueSerializer.serializedSize(v);
+        int keyLen = keySerializer.serializedSize(k);
+        int valueLen = valueSerializer.serializedSize(v);
 
         if (keyLen <= 0)
             throw new IllegalArgumentException("Illegal key length " + keyLen);
@@ -290,7 +291,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         return ttl > 0L ? System.currentTimeMillis() + ttl : 0L;
     }
 
-    private long serializeForPut(K k, V v, long keyLen, long valueLen, long hashEntryAdr)
+    private long serializeForPut(K k, V v, int keyLen, long valueLen, long hashEntryAdr)
     {
         try
         {
@@ -303,7 +304,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             freeAndThrow(e, hashEntryAdr);
         }
 
-        return hasher.hash(hashEntryAdr, Util.ENTRY_OFF_DATA, (int) keyLen);
+        return hasher.hash(hashEntryAdr, Util.ENTRY_OFF_DATA, keyLen);
     }
 
     private static void freeAndThrow(Throwable e, long hashEntryAdr)
@@ -357,7 +358,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         {
             // this call is _likely_ the initial requestor for that key since there's no entry for the key
 
-            final long keyLen = keySerializer.serializedSize(key);
+            final int keyLen = keySerializer.serializedSize(key);
             if (keyLen <= 0)
                 throw new IllegalArgumentException("Illegal key length " + keyLen);
 
@@ -382,7 +383,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                 freeAndThrow(e, hashEntryAdr);
             }
 
-            final long hash = hasher.hash(hashEntryAdr, Util.ENTRY_OFF_DATA, (int) keyLen);
+            final long hash = hasher.hash(hashEntryAdr, Util.ENTRY_OFF_DATA, keyLen);
 
             // initialize hash entry
             HashEntries.init(hash, keyLen, 0L, hashEntryAdr, Util.SENTINEL_LOADING, 0L);
@@ -1013,7 +1014,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                 {
                     tmp.clear();
                     if (kvLen < tmp.capacity())
-                        tmp.limit((int) kvLen);
+                        tmp.limit(Ints.checkedCast(kvLen));
                     if (!Util.readFully(channel, tmp))
                         return false;
                     kvLen -= tmp.limit();

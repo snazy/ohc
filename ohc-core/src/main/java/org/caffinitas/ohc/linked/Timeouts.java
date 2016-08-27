@@ -15,6 +15,8 @@
  */
 package org.caffinitas.ohc.linked;
 
+import com.google.common.primitives.Ints;
+
 /**
  * Manages cache entry time-to-live in off-heap memory.
  * <p>
@@ -51,7 +53,7 @@ final class Timeouts
         if (precision < 1)
             throw new IllegalArgumentException("precision <= 0");
 
-        this.slotCount = (int) Util.roundUpToPowerOf2(Math.min(slots, 16), 1 << 30);
+        this.slotCount = Ints.checkedCast(Util.roundUpToPowerOf2(Math.min(slots, 16), 1 << 30));
 
         int slotShift = 64 - Util.bitNum(slotCount) - 1;
         this.slotBitmask = ((long) slotCount - 1) << slotShift;

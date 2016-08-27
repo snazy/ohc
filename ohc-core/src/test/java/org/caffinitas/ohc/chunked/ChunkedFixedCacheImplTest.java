@@ -66,14 +66,18 @@ public class ChunkedFixedCacheImplTest
         return cache(capacity, hashTableSize, -1, -1);
     }
 
+    static OHCacheBuilder<Integer, String> baseBuilder()
+    {
+        return OHCacheBuilder.<Integer, String>newBuilder()
+                             .keySerializer(TestUtils.fixedKeySerializer)
+                             .valueSerializer(TestUtils.fixedValueSerializer)
+                             .chunkSize(65536);
+    }
+
     static OHCache<Integer, String> cache(long capacity, int hashTableSize, int segments, long maxEntrySize)
     {
-        OHCacheBuilder<Integer, String> builder = OHCacheBuilder.<Integer, String>newBuilder()
-                                                                .keySerializer(TestUtils.fixedKeySerializer)
-                                                                .valueSerializer(TestUtils.fixedValueSerializer)
-                                                                .chunkSize(65536)
-                                                                .fixedEntrySize(TestUtils.FIXED_KEY_LEN, TestUtils.FIXED_VALUE_LEN)
-                                                                .capacity(capacity * TestUtils.ONE_MB);
+        OHCacheBuilder<Integer, String> builder = baseBuilder().fixedEntrySize(TestUtils.FIXED_KEY_LEN, TestUtils.FIXED_VALUE_LEN)
+                                                               .capacity(capacity * TestUtils.ONE_MB);
         if (hashTableSize > 0)
             builder.hashTableSize(hashTableSize);
         if (segments > 0)
