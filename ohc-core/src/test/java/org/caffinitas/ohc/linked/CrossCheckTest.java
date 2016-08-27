@@ -497,7 +497,7 @@ public class CrossCheckTest
 
             Assert.assertEquals(cache.freeCapacity(), capacity);
 
-            Assert.assertEquals(0, cache.size());
+            Assert.assertEquals(cache.size(), 0);
             Assert.assertNull(cache.get(1));
             Assert.assertNull(cache.get(2));
             Assert.assertNull(cache.get(3));

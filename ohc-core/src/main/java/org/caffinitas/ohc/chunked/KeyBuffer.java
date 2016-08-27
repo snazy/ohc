@@ -22,13 +22,9 @@ final class KeyBuffer
     private final ByteBuffer bytes;
     private long hash;
 
-    /**
-     * The passed in ByteBuffer is usually derived via SerializationBufferProvider
-     */
     KeyBuffer(ByteBuffer bytes)
     {
         this.bytes = bytes;
-        bytes.flip();
     }
 
     ByteBuffer buffer()
@@ -38,7 +34,7 @@ final class KeyBuffer
 
     int size()
     {
-        return bytes.limit();
+        return bytes.limit() - bytes.position();
     }
 
     long hash()
