@@ -214,6 +214,12 @@ final class Uns
         }
     }
 
+    // NOTE: for unit tests only
+    static long directBufferAddress(ByteBuffer directByteBuffer)
+    {
+        return unsafe.getLong(directByteBuffer, DIRECT_BYTE_BUFFER_ADDRESS_OFFSET);
+    }
+
     static ByteBuffer directBufferFor(long address, long len)
     {
         if (len > Integer.MAX_VALUE || len < 0L)

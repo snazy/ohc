@@ -188,6 +188,7 @@
         </plugins>
     </reporting>
 
+    <!-- same profiles as in ohc-core-j8 -->
     <profiles>
         <profile>
             <id>unsafe</id>
@@ -230,7 +231,7 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <executions>
                             <execution>
-                                <id>unsafe</id>
+                                <id>xxhash</id>
                                 <goals>
                                     <goal>test</goal>
                                 </goals>
@@ -240,7 +241,7 @@
                                         <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
                                         <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
                                     </systemProperties>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/unsafe</reportsDirectory>
+                                    <reportsDirectory>${project.build.directory}/surefire-reports/xxhash</reportsDirectory>
                                 </configuration>
                             </execution>
                         </executions>
@@ -260,7 +261,7 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <executions>
                             <execution>
-                                <id>unsafe</id>
+                                <id>crc32</id>
                                 <goals>
                                     <goal>test</goal>
                                 </goals>
@@ -270,7 +271,36 @@
                                         <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
                                         <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
                                     </systemProperties>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/unsafe</reportsDirectory>
+                                    <reportsDirectory>${project.build.directory}/surefire-reports/crc32</reportsDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>prod-like</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>unsafe</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <systemProperties>
+                                        <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
+                                        <org.caffinitas.ohc.debugOffHeapAccess>false</org.caffinitas.ohc.debugOffHeapAccess>
+                                    </systemProperties>
+                                    <reportsDirectory>${project.build.directory}/surefire-reports/prod-like</reportsDirectory>
                                 </configuration>
                             </execution>
                         </executions>
