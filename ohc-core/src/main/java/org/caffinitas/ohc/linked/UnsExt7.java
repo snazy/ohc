@@ -48,7 +48,7 @@ final class UnsExt7 extends UnsExt
     long crc32(long address, long offset, long len)
     {
         CRC32 crc = new CRC32();
-        for (; len-- > 0; len--, offset++)
+        for (; len-- > 0; offset++)
             crc.update(Uns.getByte(address, offset));
         long h = crc.getValue();
         h |= h << 32;
