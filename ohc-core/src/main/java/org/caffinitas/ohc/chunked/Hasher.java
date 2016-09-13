@@ -67,9 +67,7 @@ abstract class Hasher
     {
         long hash(ByteBuffer buffer)
         {
-            CRC32 crc = new CRC32();
-            crc.update(buffer);
-            return crc.getValue();
+            return Uns.crc32(buffer);
         }
     }
 
