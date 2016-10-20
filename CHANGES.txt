@@ -2,6 +2,7 @@
 =====
 
 #33 crc32 algorithm does not work on Java7
+- update to guava 18.0
 
 0.5.1
 =====
