@@ -1,8 +1,10 @@
 0.5.2
 =====
 
-#33 crc32 algorithm does not work on Java7
+- unit test fixes for systems with few CPUs
+- unit test fix regarding charset
 - update to guava 18.0
+#33 crc32 algorithm does not work on Java7
 
 0.5.1
 =====

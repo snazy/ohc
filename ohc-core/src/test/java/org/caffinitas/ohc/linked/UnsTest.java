@@ -390,17 +390,18 @@ public class UnsTest
         {
             for (int i = 0; i < 120; i++)
             {
+                String loop = "at loop #" + i;
                 long v = Uns.getLong(adr, i);
                 Uns.increment(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 1);
+                assertEquals(Uns.getLong(adr, i), v + 1, loop);
                 Uns.increment(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 2);
+                assertEquals(Uns.getLong(adr, i), v + 2, loop);
                 Uns.increment(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 3);
+                assertEquals(Uns.getLong(adr, i), v + 3, loop);
                 Uns.decrement(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 2);
+                assertEquals(Uns.getLong(adr, i), v + 2, loop);
                 Uns.decrement(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 1);
+                assertEquals(Uns.getLong(adr, i), v + 1, loop);
             }
 
             Uns.putLong(adr, 8, 1);

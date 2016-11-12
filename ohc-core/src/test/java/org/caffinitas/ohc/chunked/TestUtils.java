@@ -16,6 +16,7 @@
 package org.caffinitas.ohc.chunked;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.Random;
 
 import com.google.common.base.Charsets;
@@ -115,7 +116,7 @@ final class TestUtils
     {
         public void serialize(String s, ByteBuffer buf)
         {
-            byte[] bytes = s.getBytes();
+            byte[] bytes = s.getBytes(Charsets.UTF_8);
             buf.putShort((short) bytes.length);
             if (bytes.length > FIXED_VALUE_LEN - 2)
                 throw new IllegalArgumentException("String too long");
@@ -128,7 +129,7 @@ final class TestUtils
         {
             byte[] b = new byte[buf.getShort()];
             buf.get(b);
-            return new String(b);
+            return new String(b, Charsets.UTF_8);
         }
 
         public int serializedSize(String s)

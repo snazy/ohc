@@ -71,7 +71,7 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
 
         int segments = builder.getSegmentCount();
         if (segments <= 0)
-            segments = Runtime.getRuntime().availableProcessors() * 2;
+            segments = Math.min(16, Runtime.getRuntime().availableProcessors() * 2);
         segments = Ints.checkedCast(Util.roundUpToPowerOf2(segments, 1 << 30));
 
         this.chunkSize = builder.getChunkSize();

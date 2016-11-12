@@ -67,6 +67,7 @@ public class ChunkedCacheImplTest
     static OHCache<Integer, String> cache(long capacity, int hashTableSize, int segments, long maxEntrySize)
     {
         OHCacheBuilder<Integer, String> builder = OHCacheBuilder.<Integer, String>newBuilder()
+                                                                .segmentCount(16)
                                                                 .keySerializer(TestUtils.intSerializer)
                                                                 .valueSerializer(TestUtils.stringSerializer)
                                                                 .chunkSize(65536)
@@ -414,7 +415,7 @@ public class ChunkedCacheImplTest
                     iProd.next();
                     count++;
                 }
-                assertTrue(count >= 10);
+                assertTrue(count >= 10, "count is " + count + " but should be >= 10");
             }
         }
     }
@@ -570,7 +571,7 @@ public class ChunkedCacheImplTest
                     count++;
                 }
 
-                assertTrue(count >= 10);
+                assertTrue(count >= 10, "count is " + count + " but should be >= 10");
             }
         }
     }
