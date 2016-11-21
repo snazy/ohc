@@ -49,6 +49,7 @@ import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.OHCacheStats;
 import org.caffinitas.ohc.PermanentLoadException;
 import org.caffinitas.ohc.TemporaryLoadException;
+import org.caffinitas.ohc.Ticker;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
@@ -76,6 +77,8 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
     private final boolean throwOOME;
     private final Hasher hasher;
 
+    private final Ticker ticker;
+
     public OHCacheLinkedImpl(OHCacheBuilder<K, V> builder)
     {
         long capacity = builder.getCapacity();
@@ -83,6 +86,8 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             throw new IllegalArgumentException("capacity:" + capacity);
 
         this.capacity = capacity;
+
+        this.ticker = builder.getTicker();
 
         this.defaultTTL = builder.getDefaultTTLmillis();
 
@@ -288,7 +293,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
     private long defaultExpireAt()
     {
         long ttl = defaultTTL;
-        return ttl > 0L ? System.currentTimeMillis() + ttl : 0L;
+        return ttl > 0L ? ticker.currentTimeMillis() + ttl : 0L;
     }
 
     private long serializeForPut(K k, V v, int keyLen, long valueLen, long hashEntryAdr)
@@ -406,7 +411,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                             value = loader.load(key);
 
                             long entryExpireAt = expireAt;
-                            if (value == null || (entryExpireAt > 0L && entryExpireAt <= System.currentTimeMillis()))
+                            if (value == null || (entryExpireAt > 0L && entryExpireAt <= ticker.currentTimeMillis()))
                             {
                                 // If the value is null, it means the loaded could not
                                 // already expired

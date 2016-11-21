@@ -17,11 +17,11 @@ package org.caffinitas.ohc.linked;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
-import java.util.concurrent.locks.LockSupport;
 
 import com.google.common.primitives.Ints;
 
 import org.caffinitas.ohc.OHCacheBuilder;
+import org.caffinitas.ohc.Ticker;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 final class OffHeapLinkedMap
@@ -59,6 +59,8 @@ final class OffHeapLinkedMap
 
     private final boolean throwOOME;
 
+    private final Ticker ticker;
+
     private final Timeouts timeouts;
     private final Timeouts.TimeoutHandler timeoutsExpireHandler = new Timeouts.TimeoutHandler()
     {
@@ -74,8 +76,10 @@ final class OffHeapLinkedMap
 
         this.throwOOME = builder.isThrowOOME();
 
+        this.ticker = builder.getTicker();
+
         // 64 hash slots, each for 128ms
-        this.timeouts = new Timeouts(builder.getTimeoutsSlots(), builder.getTimeoutsPrecision());
+        this.timeouts = new Timeouts(ticker, builder.getTimeoutsSlots(), builder.getTimeoutsPrecision());
 
         this.unlocked = builder.isUnlocked();
 
@@ -206,7 +210,7 @@ final class OffHeapLinkedMap
                 // return existing entry
 
                 long expireAt = HashEntries.getExpireAt(hashEntryAdr);
-                if (expireAt > 0L && expireAt <= System.currentTimeMillis())
+                if (expireAt > 0L && expireAt <= ticker.currentTimeMillis())
                 {
                     // entry is expired, remove it and return
                     expiredEntries++;
@@ -253,7 +257,7 @@ final class OffHeapLinkedMap
                     continue;
 
                 long testExpireAt = HashEntries.getExpireAt(hashEntryAdr);
-                if (testExpireAt == 0L || testExpireAt > System.currentTimeMillis())
+                if (testExpireAt == 0L || testExpireAt > ticker.currentTimeMillis())
                 {
                     // replace existing entry
                     //
@@ -553,7 +557,7 @@ final class OffHeapLinkedMap
         boolean wasFirst = lock();
         try
         {
-            long t = System.currentTimeMillis();
+            long t = ticker.currentTimeMillis();
             for (; nSegments-- > 0 && mapSegmentIndex < table.size(); mapSegmentIndex++)
                 for (long hashEntryAdr = table.getFirst(mapSegmentIndex);
                      hashEntryAdr != 0L;

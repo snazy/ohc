@@ -116,6 +116,11 @@ import org.caffinitas.ohc.linked.OHCacheLinkedImpl;
  *         <td>The amount of time in milliseconds for each timeouts-slot.</td>
  *         <td>{@code 128}</td>
  *     </tr>
+ *     <tr>
+ *         <td>{@code ticker}</td>
+ *         <td>Indirection for current time - used for unit tests.</td>
+ *         <td>Default ticker using {@code System.nanoTime()} and {@code System.currentTimeMillis()}</td>
+ *     </tr>
  * </table>
  * <p>
  *     You may also use system properties prefixed with {@code org.caffinitas.org.} to other defaults.
@@ -144,6 +149,7 @@ public class OHCacheBuilder<K, V>
     private long defaultTTLmillis;
     private int timeoutsSlots;
     private int timeoutsPrecision;
+    private Ticker ticker = Ticker.DEFAULT;
 
     private OHCacheBuilder()
     {
@@ -436,6 +442,17 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> timeoutsPrecision(int timeoutsPrecision)
     {
         this.timeoutsPrecision = timeoutsPrecision;
+        return this;
+    }
+
+    public Ticker getTicker()
+    {
+        return ticker;
+    }
+
+    public OHCacheBuilder<K, V> ticker(Ticker ticker)
+    {
+        this.ticker = ticker;
         return this;
     }
 }
