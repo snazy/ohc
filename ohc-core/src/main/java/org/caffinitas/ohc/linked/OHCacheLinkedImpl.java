@@ -232,13 +232,8 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         if (k == null || v == null)
             throw new NullPointerException();
 
-        int keyLen = keySerializer.serializedSize(k);
-        int valueLen = valueSerializer.serializedSize(v);
-
-        if (keyLen <= 0)
-            throw new IllegalArgumentException("Illegal key length " + keyLen);
-        if (valueLen <= 0)
-            throw new IllegalArgumentException("Illegal value length " + valueLen);
+        int keyLen = keySize(k);
+        int valueLen = valueSize(v);
 
         long bytes = Util.allocLen(keyLen, valueLen);
 
@@ -249,9 +244,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         {
             if (old != null)
             {
-                oldValueLen = valueSerializer.serializedSize(old);
-                if (oldValueLen <= 0)
-                    throw new IllegalArgumentException("Illegal value length " + oldValueLen);
+                oldValueLen = valueSize(old);
                 oldValueAdr = Uns.allocate(oldValueLen, throwOOME);
                 if (oldValueAdr == 0L)
                     throw new RuntimeException("Unable to allocate " + oldValueLen + " bytes in off-heap");
@@ -288,6 +281,22 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         {
             Uns.free(oldValueAdr);
         }
+    }
+
+    private int keySize(K k)
+    {
+        int sz = keySerializer.serializedSize(k);
+        if (sz <= 0)
+            throw new IllegalArgumentException("Illegal key length " + sz);
+        return sz;
+    }
+
+    private int valueSize(V v)
+    {
+        int sz = valueSerializer.serializedSize(v);
+        if (sz <= 0)
+            throw new IllegalArgumentException("Illegal value length " + sz);
+        return sz;
     }
 
     private long defaultExpireAt()
@@ -363,9 +372,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         {
             // this call is _likely_ the initial requestor for that key since there's no entry for the key
 
-            final int keyLen = keySerializer.serializedSize(key);
-            if (keyLen <= 0)
-                throw new IllegalArgumentException("Illegal key length " + keyLen);
+            final int keyLen = keySize(key);
 
             long bytes = Util.allocLen(keyLen, 0L);
 
@@ -423,9 +430,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
 
                             // not already expired
 
-                            long valueLen = valueSerializer.serializedSize(value);
-                            if (valueLen <= 0)
-                                throw new IllegalArgumentException("Illegal value length " + valueLen);
+                            long valueLen = valueSize(value);
 
                             long bytes = Util.allocLen(keyLen, valueLen);
 
@@ -633,9 +638,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
 
     private KeyBuffer keySource(K o)
     {
-        int size = keySerializer.serializedSize(o);
-        if (size <= 0)
-            throw new IllegalArgumentException("Illegal key length " + size);
+        int size = keySize(o);
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(size);
         keySerializer.serialize(o, keyBuffer);

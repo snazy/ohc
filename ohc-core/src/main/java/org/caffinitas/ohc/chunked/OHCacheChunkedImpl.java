@@ -262,7 +262,7 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
         int sz = Util.entryOffData(isFixedSize()) +
                  (isFixedSize()
                  ? fixedKeySize + fixedValueSize + (old != null ? fixedValueSize : 0)
-                 : keySerializer.serializedSize(k) + valueSerializer.serializedSize(v) + (old != null ? valueSerializer.serializedSize(old) : 0));
+                 : keySize(k) + valueSize(v) + (old != null ? valueSize(old) : 0));
 
         ByteBuffer hashEntry = ByteBuffer.allocate(sz);
 
@@ -298,6 +298,22 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
         initEntry(hash, keyLen, valueLen, hashEntry);
 
         return segment(hash).putEntry(hashEntry, hash, keyLen, entryBytes, ifAbsent, oldValueLen);
+    }
+
+    private int valueSize(V v)
+    {
+        int sz = valueSerializer.serializedSize(v);
+        if (sz <= 0)
+            throw new IllegalArgumentException("Illegal value length " + sz);
+        return sz;
+    }
+
+    private int keySize(K k)
+    {
+        int sz = keySerializer.serializedSize(k);
+        if (sz <= 0)
+            throw new IllegalArgumentException("Illegal key length " + sz);
+        return sz;
     }
 
     private boolean isFixedSize()
@@ -343,7 +359,7 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
 
     private KeyBuffer keySource(K o)
     {
-        int sz = isFixedSize() ? fixedKeySize : keySerializer.serializedSize(o);
+        int sz = isFixedSize() ? fixedKeySize : keySize(o);
         ByteBuffer keyBuffer = ByteBuffer.allocate(sz);
         keySerializer.serialize(o, keyBuffer);
         keyBuffer.flip();
