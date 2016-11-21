@@ -20,13 +20,13 @@ package org.caffinitas.ohc.linked;
  */
 final class HashEntries
 {
-    static void init(long hash, long keyLen, long valueLen, long hashEntryAdr, int sentinel, long expireAt)
+    static void init(long hash, int keyLen, int valueLen, long hashEntryAdr, int sentinel, long expireAt)
     {
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_EXPIRE_AT, expireAt);
         Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_HASH, hash);
         setNext(hashEntryAdr, 0L);
-        Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, keyLen);
-        Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_VALUE_LENGTH, valueLen);
+        Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, keyLen);
+        Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_VALUE_LENGTH, valueLen);
         Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_REFCOUNT, 1);
         Uns.putInt(hashEntryAdr, Util.ENTRY_OFF_SENTINEL, sentinel);
     }
@@ -142,14 +142,14 @@ final class HashEntries
             Uns.putLong(hashEntryAdr, Util.ENTRY_OFF_NEXT, nextAdr);
     }
 
-    static long getKeyLen(long hashEntryAdr)
+    static int getKeyLen(long hashEntryAdr)
     {
-        return Uns.getLong(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH);
+        return Uns.getInt(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH);
     }
 
-    static long getValueLen(long hashEntryAdr)
+    static int getValueLen(long hashEntryAdr)
     {
-        return Uns.getLong(hashEntryAdr, Util.ENTRY_OFF_VALUE_LENGTH);
+        return Uns.getInt(hashEntryAdr, Util.ENTRY_OFF_VALUE_LENGTH);
     }
 
     static long getExpireAt(long hashEntryAdr)

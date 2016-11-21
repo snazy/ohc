@@ -56,6 +56,8 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(OHCacheLinkedImpl.class);
 
+    private static final int CURRENT_FILE_VERSION = 2;
+
     private final CacheSerializer<K> keySerializer;
     private final CacheSerializer<V> valueSerializer;
 
@@ -398,7 +400,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             final long hash = hasher.hash(hashEntryAdr, Util.ENTRY_OFF_DATA, keyLen);
 
             // initialize hash entry
-            HashEntries.init(hash, keyLen, 0L, hashEntryAdr, Util.SENTINEL_LOADING, 0L);
+            HashEntries.init(hash, keyLen, 0, hashEntryAdr, Util.SENTINEL_LOADING, 0L);
 
             if (segment.putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L, 0L, 0L))
             {
@@ -430,7 +432,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
 
                             // not already expired
 
-                            long valueLen = valueSize(value);
+                            int valueLen = valueSize(value);
 
                             long bytes = Util.allocLen(keyLen, valueLen);
 
@@ -889,7 +891,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                 throw new IOException("File contains entries - expected keys");
             if (magic != Util.HEADER_KEYS)
                 throw new IOException("Illegal file header");
-            if (header.getInt() != 1)
+            if (header.getInt() != CURRENT_FILE_VERSION)
                 throw new IOException("Illegal file version");
         }
         finally
@@ -902,7 +904,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             private K next;
             private boolean eod;
 
-            private final byte[] keyLenBuf = new byte[8];
+            private final byte[] keyLenBuf = new byte[Util.SERIALIZED_KEY_LEN_SIZE];
             private final ByteBuffer bb = ByteBuffer.wrap(keyLenBuf);
 
             private long bufAdr;
@@ -940,7 +942,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                         return;
                     }
 
-                    long keyLen = Uns.getLongFromByteArray(keyLenBuf, 0);
+                    int keyLen = Uns.getIntFromByteArray(keyLenBuf, 0);
                     long totalLen = Util.ENTRY_OFF_DATA + keyLen;
 
                     if (bufLen < totalLen)
@@ -957,7 +959,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                         eod = true;
                         throw new EOFException();
                     }
-                    HashEntries.init(0L, keyLen, 0L, bufAdr, Util.SENTINEL_NOT_PRESENT, defaultExpireAt());
+                    HashEntries.init(0L, keyLen, 0, bufAdr, Util.SENTINEL_NOT_PRESENT, defaultExpireAt());
                     next = keySerializer.deserialize(Uns.directBufferFor( bufAdr + Util.ENTRY_OFF_DATA, 0, keyLen, true));
                 }
                 catch (IOException e)
@@ -994,16 +996,16 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
     public boolean deserializeEntry(ReadableByteChannel channel) throws IOException
     {
         // read hash, keyLen, valueLen
-        byte[] hashKeyValueLen = new byte[3 * 8];
+        byte[] hashKeyValueLen = new byte[Util.SERIALIZED_ENTRY_SIZE];
         ByteBuffer bb = ByteBuffer.wrap(hashKeyValueLen);
         if (!Util.readFully(channel, bb))
             return false;
 
         long expireAt = 0L;
 
-        long hash = Uns.getLongFromByteArray(hashKeyValueLen, 0);
-        long valueLen = Uns.getLongFromByteArray(hashKeyValueLen, 8);
-        long keyLen = Uns.getLongFromByteArray(hashKeyValueLen, 16);
+        long hash = Uns.getLongFromByteArray(hashKeyValueLen,   (int) (Util.ENTRY_OFF_HASH - Util.ENTRY_OFF_HASH));
+        int valueLen = Uns.getIntFromByteArray(hashKeyValueLen, (int) (Util.ENTRY_OFF_VALUE_LENGTH - Util.ENTRY_OFF_HASH));
+        int keyLen = Uns.getIntFromByteArray(hashKeyValueLen,   (int) (Util.ENTRY_OFF_KEY_LENGTH - Util.ENTRY_OFF_HASH));
 
         long kvLen = Util.roundUpTo8(keyLen) + valueLen;
         long totalLen = kvLen + Util.ENTRY_OFF_DATA;
@@ -1068,7 +1070,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                 throw new IOException("File contains keys - expected entries");
             if (magic != Util.HEADER_ENTRIES)
                 throw new IOException("Illegal file header");
-            if (header.getInt() != 1)
+            if (header.getInt() != CURRENT_FILE_VERSION)
                 throw new IOException("Illegal file version");
         }
         finally
@@ -1104,7 +1106,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         {
             ByteBuffer headerBuffer = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             headerBuffer.putInt(entries ? Util.HEADER_ENTRIES : Util.HEADER_KEYS);
-            headerBuffer.putInt(1);
+            headerBuffer.putInt(CURRENT_FILE_VERSION);
             headerBuffer.flip();
             Util.writeFully(channel, headerBuffer);
         }
@@ -1157,10 +1159,10 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
     {
         try
         {
-            long keyLen = HashEntries.getKeyLen(hashEntryAdr);
-            long valueLen = HashEntries.getValueLen(hashEntryAdr);
+            int keyLen = HashEntries.getKeyLen(hashEntryAdr);
+            int valueLen = HashEntries.getValueLen(hashEntryAdr);
 
-            long totalLen = 3 * 8L + Util.roundUpTo8(keyLen) + valueLen;
+            long totalLen = Util.SERIALIZED_ENTRY_SIZE + Util.roundUpTo8(keyLen) + valueLen;
 
             // write hash, keyLen, valueLen + key + value
             Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_HASH, totalLen, true));
@@ -1179,9 +1181,9 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         {
             long keyLen = HashEntries.getKeyLen(hashEntryAdr);
 
-            long totalLen = 8L + keyLen;
+            long totalLen = Util.SERIALIZED_KEY_LEN_SIZE + keyLen;
 
-            // write hash, keyLen, valueLen + key + value
+            // write keyLen + key
             Util.writeFully(channel, Uns.directBufferFor(hashEntryAdr, Util.ENTRY_OFF_KEY_LENGTH, totalLen, true));
 
             return true;
