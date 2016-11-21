@@ -1,6 +1,11 @@
 0.5.2
 =====
 
+*** BREAKING CHANGE ***
+If entry TTLs are used, it is required to configure the cache with OHCacheBuilder.timeouts(true)
+
+
+- add new builder cache flag 'timeouts'
 - add Ticker interface
 - unit test fixes for systems with few CPUs
 - unit test fix regarding charset

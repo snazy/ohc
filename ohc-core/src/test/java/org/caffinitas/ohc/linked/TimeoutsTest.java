@@ -26,7 +26,6 @@ import java.util.concurrent.TimeUnit;
 import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
-import org.caffinitas.ohc.PermanentLoadException;
 import org.caffinitas.ohc.TestTicker;
 import org.testng.annotations.Test;
 
@@ -135,6 +134,7 @@ public class TimeoutsTest
                                               .keySerializer(TestUtils.intSerializer)
                                               .valueSerializer(TestUtils.stringSerializer)
                                               .ticker(ticker)
+                                              .timeouts(true)
                                               .build())
         {
             cache.put(1, "one", ticker.currentTimeMillis() - 1);
@@ -163,6 +163,7 @@ public class TimeoutsTest
                                               .capacity(1024 * 1024)
                                               .segmentCount(1)
                                               .ticker(ticker)
+                                              .timeouts(true)
                                               .build())
         {
             long expireAt = ticker.currentTimeMillis() + 250;
@@ -214,6 +215,7 @@ public class TimeoutsTest
                                               .keySerializer(TestUtils.intSerializer)
                                               .valueSerializer(TestUtils.stringSerializer)
                                               .executorService(executorService)
+                                              .timeouts(true)
                                               .build())
         {
             // expires before loader starts

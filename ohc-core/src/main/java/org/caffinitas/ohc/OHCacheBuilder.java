@@ -147,6 +147,7 @@ public class OHCacheBuilder<K, V>
     private HashAlgorithm hashAlgorighm = HashAlgorithm.MURMUR3;
     private boolean unlocked;
     private long defaultTTLmillis;
+    private boolean timeouts;
     private int timeoutsSlots;
     private int timeoutsPrecision;
     private Ticker ticker = Ticker.DEFAULT;
@@ -168,6 +169,7 @@ public class OHCacheBuilder<K, V>
         hashAlgorighm = HashAlgorithm.valueOf(fromSystemProperties("hashAlgorighm", hashAlgorighm.name()));
         unlocked = fromSystemProperties("unlocked", unlocked);
         defaultTTLmillis = fromSystemProperties("defaultTTLmillis", defaultTTLmillis);
+        timeouts = fromSystemProperties("timeouts", timeouts);
         timeoutsSlots = fromSystemProperties("timeoutsSlots", timeoutsSlots);
         timeoutsPrecision = fromSystemProperties("timeoutsPrecision", timeoutsPrecision);
     }
@@ -423,6 +425,17 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
+    public boolean isTimeouts()
+    {
+        return timeouts;
+    }
+
+    public OHCacheBuilder<K, V> timeouts(boolean timeouts)
+    {
+        this.timeouts = timeouts;
+        return this;
+    }
+
     public int getTimeoutsSlots()
     {
         return timeoutsSlots;
@@ -430,6 +443,8 @@ public class OHCacheBuilder<K, V>
 
     public OHCacheBuilder<K, V> timeoutsSlots(int timeoutsSlots)
     {
+        if (timeoutsSlots > 0)
+            this.timeouts = true;
         this.timeoutsSlots = timeoutsSlots;
         return this;
     }
@@ -441,6 +456,8 @@ public class OHCacheBuilder<K, V>
 
     public OHCacheBuilder<K, V> timeoutsPrecision(int timeoutsPrecision)
     {
+        if (timeoutsPrecision > 0)
+            this.timeouts = true;
         this.timeoutsPrecision = timeoutsPrecision;
         return this;
     }
