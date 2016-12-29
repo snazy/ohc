@@ -17,7 +17,6 @@ package org.caffinitas.ohc.linked;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
-import java.util.concurrent.locks.LockSupport;
 
 import com.google.common.primitives.Ints;
 
