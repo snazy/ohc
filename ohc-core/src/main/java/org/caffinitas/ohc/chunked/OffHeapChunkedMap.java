@@ -342,7 +342,7 @@ final class OffHeapChunkedMap
 
                     // record statistics
                     evictedEntries += entries;
-                    size += entries;
+                    size -= entries;
                     freeCapacity += bytesInChunk(eldestChunk);
                     initWriteChunk(eldestChunk);
                 }
