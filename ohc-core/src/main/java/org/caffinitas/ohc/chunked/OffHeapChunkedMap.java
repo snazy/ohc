@@ -337,12 +337,13 @@ final class OffHeapChunkedMap
                         {
                             // removed elements have a value length of -1
                             removeInternal(off, -1);
+                            size --;
                         }
                     }
 
                     // record statistics
                     evictedEntries += entries;
-                    size += entries;
+//                    size -= entries;
                     freeCapacity += bytesInChunk(eldestChunk);
                     initWriteChunk(eldestChunk);
                 }
