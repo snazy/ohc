@@ -334,6 +334,7 @@ final class OffHeapChunkedMap
                     }
 
                     int entries = entriesInChunk(eldestChunk);
+                    int removed = 0;
                     for (int nextOff, i = 0, off = chunkOffset(eldestChunk) + Util.CHUNK_OFF_DATA;
                          i < entries; i++, off = nextOff)
                     {
@@ -342,12 +343,13 @@ final class OffHeapChunkedMap
                         {
                             // removed elements have a value length of -1
                             removeInternal(off, -1);
+                            removed ++;
                         }
                     }
 
                     // record statistics
                     evictedEntries += entries;
-                    size += entries;
+                    size -= removed;
                     freeCapacity += bytesInChunk(eldestChunk);
                     initWriteChunk(eldestChunk);
                 }

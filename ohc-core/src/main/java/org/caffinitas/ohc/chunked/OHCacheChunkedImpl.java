@@ -101,8 +101,9 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
             }
             catch (RuntimeException e)
             {
-                while (i-- >= 0)
-                    maps[i].release();
+                for (;i >= 0; i--)
+                    if (maps[i] != null)
+                        maps[i].release();
                 throw e;
             }
         }

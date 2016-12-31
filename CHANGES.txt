@@ -15,6 +15,8 @@ If entry TTLs are used, it is required to configure the cache with OHCacheBuilde
 0.5.1
 =====
 
+#45 chunked implementation: fix descruction of off-heap-maps on initialization failure
+#44 chunked implementation: fix wrong size calculation on eviction
 #32 chunked implementation: allow remove() on returned iterators & do not return removed entries
 
 0.5.0
