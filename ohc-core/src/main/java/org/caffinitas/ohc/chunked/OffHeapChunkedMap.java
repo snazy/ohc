@@ -426,7 +426,7 @@ final class OffHeapChunkedMap
         resetChunk(newWriteChunk);
     }
 
-    void removeEntry(KeyBuffer key)
+    boolean removeEntry(KeyBuffer key)
     {
         boolean wasFirst = lock(); 
         try
@@ -450,8 +450,10 @@ final class OffHeapChunkedMap
                 size--;
                 removeCount++;
 
-                return;
+                return true;
             }
+
+            return false;
         }
         finally
         {

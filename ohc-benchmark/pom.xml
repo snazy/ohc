@@ -119,8 +119,9 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>2.5</version>
+                <version>${version.org.apache.maven.plugins.maven-jar-plugin}</version>
                 <configuration>
                     <archive>
                         <manifest>
@@ -136,7 +137,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
-                <version>2.9</version>
+                <version>${version.org.apache.maven.plugins.maven-dependency-plugin}</version>
                 <executions>
                     <execution>
                         <id>copy</id>
@@ -151,8 +152,9 @@
                 </executions>
             </plugin>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>2.4</version>
+                <version>${version.org.apache.maven.plugins.maven-assembly-plugin}</version>
                 <configuration>
                     <descriptors>
                         <descriptor>src/assembly/assembly.xml</descriptor>
@@ -178,7 +180,9 @@
             <build>
                 <plugins>
                     <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-assembly-plugin</artifactId>
+                        <version>${version.org.apache.maven.plugins.maven-assembly-plugin}</version>
                         <executions>
                             <execution>
                                 <id>make-assembly</id>

@@ -106,15 +106,17 @@ final class CheckSegment
         return true;
     }
 
-    synchronized void remove(KeyBuffer keyBuffer)
+    synchronized boolean remove(KeyBuffer keyBuffer)
     {
         byte[] old = map.remove(keyBuffer);
         if (old != null)
         {
-            lru.remove(keyBuffer);
+            boolean r = lru.remove(keyBuffer);
             removeCount++;
             freeCapacity.addAndGet(sizeOf(keyBuffer, old));
+            return r;
         }
+        return false;
     }
 
     synchronized long size()

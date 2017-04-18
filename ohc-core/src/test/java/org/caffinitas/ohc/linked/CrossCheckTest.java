@@ -28,13 +28,19 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.caffinitas.ohc.CloseableIterator;
+import org.caffinitas.ohc.Eviction;
+import org.caffinitas.ohc.HashAlgorithm;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.OHCacheStats;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
+
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
 
 // This unit test uses the production cache implementation and an independent OHCache implementation used to
 // cross-check the production implementation.
@@ -46,47 +52,88 @@ public class CrossCheckTest
         Uns.clearUnsDebugForTest();
     }
 
-    static DoubleCheckCacheImpl<Integer, String> cache()
+    static DoubleCheckCacheImpl<Integer, String> cache(Eviction eviction, HashAlgorithm hashAlgorithm)
     {
-        return cache(256);
+        return cache(eviction, hashAlgorithm, 256);
     }
 
-    static DoubleCheckCacheImpl<Integer, String> cache(long capacity)
+    static DoubleCheckCacheImpl<Integer, String> cache(Eviction eviction, HashAlgorithm hashAlgorithm, long capacity)
     {
-        return cache(capacity, -1);
+        return cache(eviction, hashAlgorithm, capacity, -1);
     }
 
-    static DoubleCheckCacheImpl<Integer, String> cache(long capacity, int hashTableSize)
+    static DoubleCheckCacheImpl<Integer, String> cache(Eviction eviction, HashAlgorithm hashAlgorithm, long capacity, int hashTableSize)
     {
-        return cache(capacity, hashTableSize, -1, -1);
+        return cache(eviction, hashAlgorithm, capacity, hashTableSize, -1, -1);
     }
 
-    static DoubleCheckCacheImpl<Integer, String> cache(long capacity, int hashTableSize, int segments, long maxEntrySize)
+    static DoubleCheckCacheImpl<Integer, String> cache(Eviction eviction, HashAlgorithm hashAlgorithm, long capacity, int hashTableSize, int segments, long maxEntrySize)
     {
         OHCacheBuilder<Integer, String> builder = OHCacheBuilder.<Integer, String>newBuilder()
                                                                 .keySerializer(TestUtils.intSerializer)
                                                                 .valueSerializer(TestUtils.stringSerializer)
+                                                                .eviction(eviction)
+                                                                .hashMode(hashAlgorithm)
                                                                 .capacity(capacity * TestUtils.ONE_MB);
         if (hashTableSize > 0)
             builder.hashTableSize(hashTableSize);
         if (segments > 0)
             builder.segmentCount(segments);
+        else
+            // use 16 segments by default to prevent differing test behaviour on varying test hardware
+            builder.segmentCount(16);
         if (maxEntrySize > 0)
             builder.maxEntrySize(maxEntrySize);
 
         return new DoubleCheckCacheImpl<>(builder);
     }
 
-    @Test
-    public void testBasics() throws IOException, InterruptedException
+    @DataProvider(name = "types")
+    public Object[][] cacheEviction()
     {
-        try (OHCache<Integer, String> cache = cache())
+        return new Object[][]{
+        { Eviction.LRU, HashAlgorithm.MURMUR3 },
+        { Eviction.LRU, HashAlgorithm.CRC32 },
+        { Eviction.LRU, HashAlgorithm.XX },
+        { Eviction.W_TINY_LFU, HashAlgorithm.MURMUR3 },
+        { Eviction.W_TINY_LFU, HashAlgorithm.CRC32 },
+        { Eviction.W_TINY_LFU, HashAlgorithm.XX },
+        { Eviction.NONE, HashAlgorithm.MURMUR3 },
+        { Eviction.NONE, HashAlgorithm.CRC32 },
+        { Eviction.NONE, HashAlgorithm.XX }
+        };
+    }
+
+    @DataProvider(name = "lru")
+    public Object[][] cacheLru()
+    {
+        return new Object[][]{
+        { Eviction.LRU, HashAlgorithm.MURMUR3 },
+        { Eviction.LRU, HashAlgorithm.CRC32 },
+        { Eviction.LRU, HashAlgorithm.XX }
+        };
+    }
+
+    @DataProvider(name = "none")
+    public Object[][] cacheNone()
+    {
+        return new Object[][]{
+        { Eviction.NONE, HashAlgorithm.MURMUR3 },
+        { Eviction.NONE, HashAlgorithm.CRC32 },
+        { Eviction.NONE, HashAlgorithm.XX }
+        };
+    }
+
+    @Test(dataProvider = "types")
+    public void testBasics(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException, InterruptedException
+    {
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             Assert.assertEquals(cache.freeCapacity(), cache.capacity());
 
             cache.put(11, "hello world \u00e4\u00f6\u00fc\u00df");
 
-            Assert.assertTrue(cache.freeCapacity() < cache.capacity());
+            assertTrue(cache.freeCapacity() < cache.capacity());
 
             String v = cache.get(11);
             Assert.assertEquals(v, "hello world \u00e4\u00f6\u00fc\u00df");
@@ -104,10 +151,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test(dependsOnMethods = "testBasics")
-    public void testManyValues() throws IOException, InterruptedException
+    @Test(dataProvider = "types", dependsOnMethods = "testBasics")
+    public void testManyValues(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException, InterruptedException
     {
-        try (OHCache<Integer, String> cache = cache(64, -1))
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm, 64, -1))
         {
             Assert.assertEquals(cache.freeCapacity(), cache.capacity());
 
@@ -127,11 +174,11 @@ public class CrossCheckTest
             for (int i = 0; i < TestUtils.manyCount; i++)
             {
                 Assert.assertEquals(cache.get(i), Integer.toHexString(i), "for i="+i);
-                Assert.assertTrue(cache.containsKey(i), "for i="+i);
+                assertTrue(cache.containsKey(i), "for i="+i);
                 cache.put(i, Integer.toOctalString(i));
                 Assert.assertEquals(cache.get(i), Integer.toOctalString(i), "for i="+i);
                 Assert.assertEquals(cache.size(), TestUtils.manyCount, "for i="+i);
-                Assert.assertTrue(cache.containsKey(i), "for i="+i);
+                assertTrue(cache.containsKey(i), "for i="+i);
             }
 
             stats = cache.stats();
@@ -148,7 +195,7 @@ public class CrossCheckTest
             for (int i = 0; i < TestUtils.manyCount; i++)
             {
                 Assert.assertEquals(cache.get(i), Integer.toOctalString(i), "for i=" + i);
-                Assert.assertTrue(cache.containsKey(i), "for i=" + i);
+                assertTrue(cache.containsKey(i), "for i=" + i);
                 cache.remove(i);
                 Assert.assertNull(cache.get(i), "for i=" + i);
                 Assert.assertFalse(cache.containsKey(i), "for i=" + i);
@@ -163,10 +210,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test(dependsOnMethods = "testBasics")
-    public void testHotN() throws IOException, InterruptedException
+    @Test(dataProvider = "types", dependsOnMethods = "testBasics")
+    public void testHotN(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException, InterruptedException
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             TestUtils.fill5(cache);
 
@@ -177,15 +224,12 @@ public class CrossCheckTest
         }
     }
 
-    @Test(dependsOnMethods = "testManyValues")
-    public void testCleanUp() throws IOException, InterruptedException
+    @Test(dataProvider = "lru", dependsOnMethods = "testManyValues")
+    public void testCleanUpLRU(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException, InterruptedException
     {
-        char[] chars = new char[900];
-        for (int i = 0; i < chars.length; i++)
-            chars[i] = (char) ('A' + i % 26);
-        String v = new String(chars);
+        String v = longString();
 
-        try (OHCache<Integer, String> cache = cache(4, -1, 1, -1))
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm, 4, -1, 1, -1))
         {
             int i;
             for (i = 0; cache.freeCapacity() > 950; i++)
@@ -204,19 +248,24 @@ public class CrossCheckTest
             for (int j = 0; j < 10000; j++, i++)
                 cache.put(i, v);
 
-            Assert.assertTrue(cache.stats().getEvictionCount() >= 10000L, "cleanup did not run");
+            assertTrue(cache.stats().getEvictionCount() >= 10000L, "cleanup did not run");
         }
     }
 
-    @Test(dependsOnMethods = "testManyValues")
-    public void testLRU() throws IOException, InterruptedException
+    private String longString()
     {
         char[] chars = new char[900];
         for (int i = 0; i < chars.length; i++)
             chars[i] = (char) ('A' + i % 26);
-        String v = new String(chars);
+        return new String(chars);
+    }
 
-        try (OHCache<Integer, String> cache = cache(4, -1, 1, -1))
+    @Test(dataProvider = "lru", dependsOnMethods = "testManyValues")
+    public void testLRU(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException, InterruptedException
+    {
+        String v = longString();
+
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm, 4, -1, 1, -1))
         {
             int i;
             for (i = 0; cache.freeCapacity() > 950; i++)
@@ -242,15 +291,15 @@ public class CrossCheckTest
         }
     }
 
-    @Test(dependsOnMethods = "testBasics")
-    public void testPutTooLarge() throws IOException, InterruptedException
+    @Test(dataProvider = "types", dependsOnMethods = "testBasics")
+    public void testPutTooLarge(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException, InterruptedException
     {
         char[] c940 = new char[8192];
         for (int i = 0; i < c940.length; i++)
             c940[i] = (char) ('A' + i % 26);
         String v = new String(c940);
 
-        try (OHCache<Integer, String> cache = cache(1, -1, -1, 8192))
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm, 1, -1, -1, 8192))
         {
             cache.put(88, v);
 
@@ -262,41 +311,41 @@ public class CrossCheckTest
 
     // per-method tests
 
-    @Test
-    public void testAddOrReplace() throws Exception
+    @Test(dataProvider = "types", dependsOnMethods = "testBasics")
+    public void testAddOrReplace(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             for (int i = 0; i < TestUtils.manyCount; i++)
-                Assert.assertTrue(cache.addOrReplace(i, "", Integer.toHexString(i)));
+                assertTrue(cache.addOrReplace(i, "", Integer.toHexString(i)));
 
-            Assert.assertTrue(cache.addOrReplace(42, Integer.toHexString(42), "foo"));
+            assertTrue(cache.addOrReplace(42, Integer.toHexString(42), "foo"));
             Assert.assertEquals(cache.get(42), "foo");
-            Assert.assertTrue(cache.addOrReplace(42, "foo", "bar"));
+            assertTrue(cache.addOrReplace(42, "foo", "bar"));
             Assert.assertEquals(cache.get(42), "bar");
             Assert.assertFalse(cache.addOrReplace(42, "foo", "bar"));
             Assert.assertEquals(cache.get(42), "bar");
         }
     }
 
-    @Test
-    public void testPutIfAbsent() throws Exception
+    @Test(dataProvider = "types")
+    public void testPutIfAbsent(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             for (int i = 0; i < TestUtils.manyCount; i++)
-                Assert.assertTrue(cache.putIfAbsent(i, Integer.toHexString(i)));
+                assertTrue(cache.putIfAbsent(i, Integer.toHexString(i)));
 
-            Assert.assertTrue(cache.putIfAbsent(-42, "foo"));
+            assertTrue(cache.putIfAbsent(-42, "foo"));
             Assert.assertEquals(cache.get(-42), "foo");
             Assert.assertFalse(cache.putIfAbsent(-42, "foo"));
         }
     }
 
-    @Test
-    public void testPutAll() throws Exception
+    @Test(dataProvider = "types")
+    public void testPutAll(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             Map<Integer, String> map = new HashMap<>();
             map.put(1, "one");
@@ -310,10 +359,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testRemove() throws Exception
+    @Test(dataProvider = "types")
+    public void testRemove(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             TestUtils.fillMany(cache);
 
@@ -328,10 +377,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testRemoveAll() throws Exception
+    @Test(dataProvider = "types")
+    public void testRemoveAll(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             for (int i = 0; i < 100; i++)
                 cache.put(i, Integer.toOctalString(i));
@@ -339,22 +388,22 @@ public class CrossCheckTest
                 Assert.assertEquals(cache.get(i), Integer.toOctalString(i));
 
             long lastFree = cache.freeCapacity();
-            Assert.assertTrue(lastFree < cache.capacity());
-            Assert.assertTrue(cache.size() > 0);
+            assertTrue(lastFree < cache.capacity());
+            assertTrue(cache.size() > 0);
 
             List<Integer> coll = new ArrayList<>();
             for (int i = 0; i < 10; i++)
                 coll.add(i);
             cache.removeAll(coll);
 
-            Assert.assertTrue(cache.freeCapacity() > lastFree);
+            assertTrue(cache.freeCapacity() > lastFree);
             Assert.assertEquals(cache.size(), 90);
 
             for (int i = 10; i < 50; i++)
                 coll.add(i);
             cache.removeAll(coll);
 
-            Assert.assertTrue(cache.freeCapacity() > lastFree);
+            assertTrue(cache.freeCapacity() > lastFree);
             Assert.assertEquals(cache.size(), 50);
 
             for (int i = 50; i < 100; i++)
@@ -366,18 +415,18 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testClear() throws Exception
+    @Test(dataProvider = "types")
+    public void testClear(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             for (int i = 0; i < 100; i++)
                 cache.put(i, Integer.toOctalString(i));
             for (int i = 0; i < 100; i++)
                 Assert.assertEquals(cache.get(i), Integer.toOctalString(i));
 
-            Assert.assertTrue(cache.freeCapacity() < cache.capacity());
-            Assert.assertTrue(cache.size() > 0);
+            assertTrue(cache.freeCapacity() < cache.capacity());
+            assertTrue(cache.size() > 0);
 
             cache.clear();
 
@@ -386,10 +435,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testGet_Put() throws Exception
+    @Test(dataProvider = "types")
+    public void testGet_Put(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             cache.put(42, "foo");
             Assert.assertEquals(cache.get(42), "foo");
@@ -405,21 +454,21 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testContainsKey() throws Exception
+    @Test(dataProvider = "types")
+    public void testContainsKey(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             cache.put(42, "foo");
-            Assert.assertTrue(cache.containsKey(42));
+            assertTrue(cache.containsKey(42));
             Assert.assertFalse(cache.containsKey(11));
         }
     }
 
-    @Test
-    public void testHotKeyIterator() throws Exception
+    @Test(dataProvider = "types")
+    public void testHotKeyIterator(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (DoubleCheckCacheImpl<Integer, String> cache = cache())
+        try (DoubleCheckCacheImpl<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             Assert.assertFalse(cache.hotKeyIterator(10).hasNext());
 
@@ -434,7 +483,7 @@ public class CrossCheckTest
                 {
                     while (iProd.hasNext())
                     {
-                        Assert.assertTrue(iCheck.hasNext());
+                        assertTrue(iCheck.hasNext());
 
                         Integer kProd = iProd.next();
                         Integer kCheck = iCheck.next();
@@ -448,10 +497,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test(dependsOnMethods = "testBasics")
-    public void testKeyIterator1() throws IOException, InterruptedException
+    @Test(dataProvider = "types", dependsOnMethods = "testBasics")
+    public void testKeyIterator1(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException, InterruptedException
     {
-        try (OHCache<Integer, String> cache = cache(32))
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm, 32))
         {
             long capacity = cache.capacity();
             Assert.assertEquals(cache.freeCapacity(), capacity);
@@ -462,17 +511,17 @@ public class CrossCheckTest
             Iterator<Integer> iter = cache.keyIterator();
             for (int i = 0; i < 5; i++)
             {
-                Assert.assertTrue(iter.hasNext());
+                assertTrue(iter.hasNext());
                 returned.add(iter.next());
             }
             Assert.assertFalse(iter.hasNext());
             Assert.assertEquals(returned.size(), 5);
 
-            Assert.assertTrue(returned.contains(1));
-            Assert.assertTrue(returned.contains(2));
-            Assert.assertTrue(returned.contains(3));
-            Assert.assertTrue(returned.contains(4));
-            Assert.assertTrue(returned.contains(5));
+            assertTrue(returned.contains(1));
+            assertTrue(returned.contains(2));
+            assertTrue(returned.contains(3));
+            assertTrue(returned.contains(4));
+            assertTrue(returned.contains(5));
 
             returned.clear();
 
@@ -482,11 +531,11 @@ public class CrossCheckTest
             Assert.assertFalse(iter.hasNext());
             Assert.assertEquals(returned.size(), 5);
 
-            Assert.assertTrue(returned.contains(1));
-            Assert.assertTrue(returned.contains(2));
-            Assert.assertTrue(returned.contains(3));
-            Assert.assertTrue(returned.contains(4));
-            Assert.assertTrue(returned.contains(5));
+            assertTrue(returned.contains(1));
+            assertTrue(returned.contains(2));
+            assertTrue(returned.contains(3));
+            assertTrue(returned.contains(4));
+            assertTrue(returned.contains(5));
 
             iter = cache.keyIterator();
             for (int i = 0; i < 5; i++)
@@ -506,10 +555,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testKeyIterator2() throws Exception
+    @Test(dataProvider = "types")
+    public void testKeyIterator2(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             Assert.assertFalse(cache.keyIterator().hasNext());
 
@@ -524,12 +573,12 @@ public class CrossCheckTest
                 while (iter.hasNext())
                 {
                     Integer k = iter.next();
-                    Assert.assertTrue(keys.add(k));
+                    assertTrue(keys.add(k));
                 }
             }
             Assert.assertEquals(keys.size(), 100);
             for (int i = 0; i < 100; i++)
-                Assert.assertTrue(keys.contains(i));
+                assertTrue(keys.contains(i));
 
             cache.clear();
 
@@ -559,10 +608,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testHotKeyBufferIterator() throws Exception
+    @Test(dataProvider = "types")
+    public void testHotKeyBufferIterator(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (DoubleCheckCacheImpl<Integer, String> cache = cache())
+        try (DoubleCheckCacheImpl<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             Assert.assertFalse(cache.hotKeyIterator(10).hasNext());
 
@@ -577,7 +626,7 @@ public class CrossCheckTest
                 {
                     while (iProd.hasNext())
                     {
-                        Assert.assertTrue(iCheck.hasNext());
+                        assertTrue(iCheck.hasNext());
 
                         ByteBuffer kProd = iProd.next();
                         ByteBuffer kCheck = iCheck.next();
@@ -591,10 +640,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testKeyBufferIterator() throws Exception
+    @Test(dataProvider = "types")
+    public void testKeyBufferIterator(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             Assert.assertFalse(cache.keyBufferIterator().hasNext());
 
@@ -612,12 +661,12 @@ public class CrossCheckTest
                     ByteBuffer k2 = ByteBuffer.allocate(k.remaining());
                     k2.put(k);
                     Integer key = TestUtils.intSerializer.deserialize(ByteBuffer.wrap(k2.array()));
-                    Assert.assertTrue(keys.add(key));
+                    assertTrue(keys.add(key));
                 }
             }
             Assert.assertEquals(keys.size(), 100);
             for (int i = 0; i < 100; i++)
-                Assert.assertTrue(keys.contains(i));
+                assertTrue(keys.contains(i));
 
             cache.clear();
 
@@ -647,10 +696,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testGetBucketHistogram() throws Exception
+    @Test(dataProvider = "types")
+    public void testGetBucketHistogram(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (DoubleCheckCacheImpl<Integer, String> cache = cache())
+        try (DoubleCheckCacheImpl<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             Assert.assertFalse(cache.keyIterator().hasNext());
 
@@ -681,31 +730,31 @@ public class CrossCheckTest
         return r;
     }
 
-    @Test
-    public void testFreeCapacity() throws Exception
+    @Test(dataProvider = "types")
+    public void testFreeCapacity(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             long cap = cache.capacity();
 
             cache.put(42, "foo");
             long free1 = cache.freeCapacity();
-            Assert.assertTrue(cap > free1);
+            assertTrue(cap > free1);
 
             cache.put(11, "bar baz");
             long free2 = cache.freeCapacity();
-            Assert.assertTrue(free1 > free2);
-            Assert.assertTrue(cap > free2);
+            assertTrue(free1 > free2);
+            assertTrue(cap > free2);
 
             cache.put(11, "bar baz dog mud forest");
             long free3 = cache.freeCapacity();
-            Assert.assertTrue(free2 > free3);
-            Assert.assertTrue(cap > free3);
+            assertTrue(free2 > free3);
+            assertTrue(cap > free3);
 
             cache.remove(11);
             long free4 = cache.freeCapacity();
             Assert.assertEquals(free1, free4);
-            Assert.assertTrue(cap > free4);
+            assertTrue(cap > free4);
 
             cache.remove(42);
             long free5 = cache.freeCapacity();
@@ -713,10 +762,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testSetCapacity() throws Exception
+    @Test(dataProvider = "types")
+    public void testSetCapacity(Eviction eviction, HashAlgorithm hashAlgorithm) throws Exception
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             long cap = cache.capacity();
 
@@ -734,7 +783,7 @@ public class CrossCheckTest
 
             cache.setCapacity(0L);
             Assert.assertEquals(cache.capacity(), 0L);
-            Assert.assertTrue(cache.freeCapacity() < 0L);
+            assertTrue(cache.freeCapacity() < 0L);
 
             Assert.assertEquals(cache.size(), 1);
             cache.put(42, "bar");
@@ -743,10 +792,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testResetStatistics() throws IOException
+    @Test(dataProvider = "types")
+    public void testResetStatistics(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException
     {
-        try (OHCache<Integer, String> cache = cache())
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm))
         {
             for (int i = 0; i < 100; i++)
                 cache.put(i, Integer.toString(i));
@@ -781,10 +830,10 @@ public class CrossCheckTest
         }
     }
 
-    @Test
-    public void testTooBigEntryOnPut() throws IOException
+    @Test(dataProvider = "types")
+    public void testTooBigEntryOnPut(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException
     {
-        try (OHCache<Integer, String> cache = cache(8, -1, -1, Util.roundUpTo8(TestUtils.intSerializer.serializedSize(1)) + Util.ENTRY_OFF_DATA + 5))
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm, 8, -1, -1, Util.roundUpTo8(TestUtils.intSerializer.serializedSize(1)) + Util.ENTRY_OFF_DATA + 5))
         {
             cache.put(1, new String(new byte[100]));
             Assert.assertEquals(cache.size(), 0);
@@ -805,4 +854,24 @@ public class CrossCheckTest
         }
     }
 
+    @Test(dataProvider = "none")
+    public void testEvictionNone(Eviction eviction, HashAlgorithm hashAlgorithm) throws IOException
+    {
+        try (OHCache<Integer, String> cache = cache(eviction, hashAlgorithm, 1, -1, 1, -1))
+        {
+            String v = longString();
+            int i = 0;
+
+            for (; cache.freeCapacity() >= 1000; i++)
+                assertTrue(cache.put(i++, v));
+
+            assertFalse(cache.put(i++, v));
+
+            cache.remove(0);
+
+            assertTrue(cache.put(i++, v));
+
+            assertFalse(cache.put(i++, v));
+        }
+    }
 }

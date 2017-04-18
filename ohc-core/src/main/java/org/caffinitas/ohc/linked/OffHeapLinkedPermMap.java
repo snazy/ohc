@@ -13,31 +13,19 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.alloc;
+package org.caffinitas.ohc.linked;
 
-import com.sun.jna.Native;
+import org.caffinitas.ohc.OHCacheBuilder;
 
-public final class JNANativeAllocator implements IAllocator
+final class OffHeapLinkedPermMap extends OffHeapLinkedLRUMap
 {
-    public long allocate(long size)
+    OffHeapLinkedPermMap(OHCacheBuilder builder, long freeCapacity)
     {
-        try
-        {
-            return Native.malloc(size);
-        }
-        catch (OutOfMemoryError oom)
-        {
-            return 0L;
-        }
+        super(builder, freeCapacity);
     }
 
-    public void free(long peer)
+    LongArrayList ensureFreeSpaceForNewEntry(long bytes)
     {
-        Native.free(peer);
-    }
-
-    public long getTotalAllocated()
-    {
-        return -1L;
+        return null;
     }
 }

@@ -87,6 +87,30 @@ The extension jar ``ohc-core-j8`` is not required for the chunked implementation
 
 To enable the chunked implementation, specify the ``chunkSize`` in ``org.caffinitas.ohc.OHCacheBuilder``.
 
+Note: the chunked implementation should still be considered experimental.
+
+Eviction algorithms
+===================
+
+OHC supports three eviction algorithms:
+
+- *LRU*: The oldest (least recently used) entries are evicted to make room for new entries.
+- *Window Tiny-LFU*:
+  Entries with lower usage frequency are evicted to make room for new entries.
+  The goal of this eviction algorithm is to prevent heavily used entries from being evicted.
+  Note that the maximum size of entries is limited to the size of the eden generation, which is currently
+  fixed at 20% of the segment size (i.e. overall capacity / number of segments).
+  Each OHC cache segment is divided into an eden and a main "generation". New entries start in the eden generation
+  to give these time to build up their usage frequencies. When the eden generation becomes full, entries in the
+  eden generation have to pass the admission filter, which checks the frequencies of the entries in the eden
+  generation against the frequencies of the oldest (least recently used) entries in the main generation.
+  See `this article <http://highscalability.com/blog/2016/1/25/design-of-a-modern-cache.html>`_ for a more thorough
+  description.
+  (Only supported in the _linked_ implementation, not supported by the chunked implementation)
+- *None*: OHC performs no eviction on its own. It is up to the caller to check the return values and monitor
+  free capacity.
+  (Only supported in the _linked_ implementation, not supported by the chunked implementation)
+
 Configuration
 =============
 
@@ -98,7 +122,7 @@ Use the class ``OHCacheBuilder`` to configure all necessary parameter like
 - capacity for data over the whole cache
 - key and value serializers
 - default TTL
-- optional unlock mode
+- optional unlocked mode
 
 Generally you should work with a large hash table. The larger the hash table, the shorter the linked-list in each
 hash partition - that means less linked-link walks and increased performance.
@@ -287,6 +311,9 @@ Contributors
 
 A big 'thank you' has to go to `Benedict Elliott Smith <https://twitter.com/_belliottsmith>`_ and
 `Ariel Weisberg <https://twitter.com/ArielWeisberg>`_ from DataStax for their very useful input to OHC!
+
+`Ben Manes <https://twitter.com/benmanes>`_, the author of `Caffeine <https://github.com/ben-manes/caffeine/>`_,
+the highly configurable on-heap cache using W-Tiny LFU.
 
 Developer: `Robert Stupp <https://twitter.com/snazy>`_
 

@@ -65,56 +65,27 @@ public class HashEntriesTest
     public void testCompareKey() throws Exception
     {
         long adr = Uns.allocate(MIN_ALLOC_LEN);
+        KeyBuffer key = new KeyBuffer(11);
         try
         {
-            ByteBuffer keyBuffer = ByteBuffer.allocate(11);
+            HashEntries.init(0L, 11, 0, adr, Util.SENTINEL_NOT_PRESENT, 0L);
+
+            ByteBuffer keyBuffer = key.byteBuffer();
             keyBuffer.putInt(0x98765432);
             keyBuffer.putInt(0xabcdabba);
             keyBuffer.put((byte)(0x44 & 0xff));
             keyBuffer.put((byte)(0x55 & 0xff));
             keyBuffer.put((byte)(0x88 & 0xff));
-            KeyBuffer key = new KeyBuffer(keyBuffer.array()).finish(Hasher.create(HashAlgorithm.MURMUR3));
+            key.finish(Hasher.create(HashAlgorithm.MURMUR3));
 
             Uns.setMemory(adr, Util.ENTRY_OFF_DATA, 11, (byte) 0);
 
-            assertFalse(HashEntries.compareKey(adr, key, 11));
+            assertFalse(key.sameKey(adr));
 
-            Uns.copyMemory(key.array(), 0, adr, Util.ENTRY_OFF_DATA, 11);
+            Uns.copyMemory(key.buffer, 0, adr, Util.ENTRY_OFF_DATA, 11);
+            HashEntries.init(key.hash(), 11, 0, adr, Util.SENTINEL_NOT_PRESENT, 0L);
 
-            assertTrue(HashEntries.compareKey(adr, key, 11));
-        }
-        finally
-        {
-            Uns.free(adr);
-        }
-    }
-
-    @Test
-    public void testCompare() throws Exception
-    {
-        long adr = Uns.allocate(MIN_ALLOC_LEN);
-        try
-        {
-            long adr2 = Uns.allocate(MIN_ALLOC_LEN);
-            try
-            {
-
-                Uns.setMemory(adr, 5, 11, (byte) 0);
-                Uns.setMemory(adr2, 5, 11, (byte) 1);
-
-                assertFalse(HashEntries.compare(adr, 5, adr2, 5, 11));
-
-                assertTrue(HashEntries.compare(adr, 5, adr, 5, 11));
-                assertTrue(HashEntries.compare(adr2, 5, adr2, 5, 11));
-
-                Uns.setMemory(adr, 5, 11, (byte) 1);
-
-                assertTrue(HashEntries.compare(adr, 5, adr2, 5, 11));
-            }
-            finally
-            {
-                Uns.free(adr2);
-            }
+            assertTrue(key.sameKey(adr));
         }
         finally
         {

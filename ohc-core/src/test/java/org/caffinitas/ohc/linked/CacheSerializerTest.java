@@ -18,10 +18,12 @@ package org.caffinitas.ohc.linked;
 import java.io.IOException;
 
 import org.caffinitas.ohc.CloseableIterator;
+import org.caffinitas.ohc.Eviction;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 public class CacheSerializerTest
@@ -32,13 +34,20 @@ public class CacheSerializerTest
         Uns.clearUnsDebugForTest();
     }
 
-    @Test
-    public void testFailingKeySerializer() throws IOException, InterruptedException
+    @DataProvider(name = "types")
+    public Object[][] cacheEviction()
+    {
+        return new Object[][]{ { Eviction.LRU }, { Eviction.W_TINY_LFU }, { Eviction.NONE} };
+    }
+
+    @Test(dataProvider = "types")
+    public void testFailingKeySerializer(Eviction eviction) throws IOException, InterruptedException
     {
         try (OHCache<Integer, String> cache = OHCacheBuilder.<Integer, String>newBuilder()
                                                             .keySerializer(TestUtils.intSerializerFailSerialize)
                                                             .valueSerializer(TestUtils.stringSerializer)
                                                             .capacity(512L * 1024 * 1024)
+                                                            .eviction(eviction)
                                                             .build())
         {
             try

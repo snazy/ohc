@@ -21,9 +21,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.channels.WritableByteChannel;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.Callable;
@@ -106,7 +104,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         {
             try
             {
-                maps[i] = new OffHeapLinkedMap(builder, capacity / segments);
+                maps[i] = makeMap(builder, capacity / segments);
             }
             catch (RuntimeException e)
             {
@@ -143,6 +141,21 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             LOGGER.debug("OHC linked instance with {} segments and capacity of {} created.", segments, capacity);
     }
 
+    private OffHeapLinkedMap makeMap(OHCacheBuilder<K, V> builder, long perMapCapacity)
+    {
+        switch (builder.getEviction())
+        {
+            case LRU:
+                return new OffHeapLinkedLRUMap(builder, perMapCapacity);
+            case W_TINY_LFU:
+                return new OffHeapLinkedWTinyLFUMap(builder, perMapCapacity);
+            case NONE:
+                return new OffHeapLinkedPermMap(builder, perMapCapacity);
+            default:
+                throw new IllegalArgumentException("Unsupported eviction: " + builder.getEviction());
+        }
+    }
+
     //
     // map stuff
     //
@@ -158,7 +171,6 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             throw new NullPointerException();
 
         KeyBuffer keySource = keySource(key);
-
         long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true, updateLRU);
 
         if (hashEntryAdr == 0L)
@@ -172,15 +184,16 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         if (key == null)
             throw new NullPointerException();
 
+        long hashEntryAdr = 0L;
+
         KeyBuffer keySource = keySource(key);
-
-        long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true, true);
-
-        if (hashEntryAdr == 0L)
-            return null;
-
         try
         {
+            hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true, true);
+
+            if (hashEntryAdr == 0L)
+                return null;
+
             return valueSerializer.deserialize(Uns.valueBufferR(hashEntryAdr));
         }
         finally
@@ -195,18 +208,17 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             throw new NullPointerException();
 
         KeyBuffer keySource = keySource(key);
-
         return segment(keySource.hash()).getEntry(keySource, false, true) != 0L;
     }
 
-    public void put(K k, V v)
+    public boolean put(K k, V v)
     {
-        putInternal(k, v, false, null, defaultExpireAt());
+        return putInternal(k, v, false, null, defaultExpireAt());
     }
 
-    public void put(K k, V v, long expireAt)
+    public boolean put(K k, V v, long expireAt)
     {
-        putInternal(k, v, false, null, expireAt);
+        return putInternal(k, v, false, null, expireAt);
     }
 
     public boolean addOrReplace(K key, V old, V value)
@@ -273,7 +285,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT, expireAt);
 
             if (segment(hash).putEntry(hashEntryAdr, hash, keyLen, bytes, ifAbsent, expireAt,
-                                       oldValueAdr, 0L, oldValueLen))
+                                       oldValueAdr, oldValueLen))
                 return true;
 
             Uns.free(hashEntryAdr);
@@ -333,14 +345,13 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         throw new RuntimeException(e);
     }
 
-    public void remove(K k)
+    public boolean remove(K k)
     {
         if (k == null)
             throw new NullPointerException();
 
-        KeyBuffer key = keySource(k);
-
-        segment(key.hash()).removeEntry(key);
+        KeyBuffer keySource = keySource(k);
+        return segment(keySource.hash()).removeEntry(keySource);
     }
 
     public V getWithLoader(K key, CacheLoader<K, V> loader) throws InterruptedException, ExecutionException
@@ -366,7 +377,6 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             throw new IllegalStateException("OHCache has no executor service - configure one via OHCacheBuilder.executorService()");
 
         final KeyBuffer keySource = keySource(key);
-
         final OffHeapLinkedMap segment = segment(keySource.hash());
         long hashEntryAdr = segment.getEntry(keySource, true, true);
 
@@ -402,7 +412,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             // initialize hash entry
             HashEntries.init(hash, keyLen, 0, hashEntryAdr, Util.SENTINEL_LOADING, 0L);
 
-            if (segment.putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L, 0L, 0L))
+            if (segment.putEntry(hashEntryAdr, hash, keyLen, bytes, true, 0L, 0L, 0L))
             {
                 // this request IS the initial requestor for the key
 
@@ -447,7 +457,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                             // initialize hash entry
                             HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT, entryExpireAt);
 
-                            if (!segment.replaceEntry(hash, sentinelHashEntryAdr, hashEntryAdr, bytes, entryExpireAt))
+                            if (!segment.replaceSentinelEntry(hash, sentinelHashEntryAdr, hashEntryAdr, bytes, entryExpireAt))
                                 throw new RuntimeException("not enough free capacity");
                             derefSentinel = true;
 
@@ -642,10 +652,11 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
     {
         int size = keySize(o);
 
-        ByteBuffer keyBuffer = ByteBuffer.allocate(size);
-        keySerializer.serialize(o, keyBuffer);
-        assert(keyBuffer.position() == keyBuffer.capacity()) && (keyBuffer.capacity() == size);
-        return new KeyBuffer(keyBuffer.array()).finish(hasher);
+        KeyBuffer keyBuffer = new KeyBuffer(size);
+        ByteBuffer bb = keyBuffer.byteBuffer();
+        keySerializer.serialize(o, bb);
+        assert(bb.position() == bb.capacity()) && (bb.capacity() == size);
+        return keyBuffer.finish(hasher);
     }
 
     //
@@ -1037,7 +1048,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
 
         // read key + value
         if (!Util.readFully(channel, Uns.keyBuffer(hashEntryAdr, kvLen)) ||
-            !segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, expireAt, 0L, 0L, 0L))
+            !segment(hash).putEntry(hashEntryAdr, hash, keyLen, totalLen, false, expireAt, 0L, 0L))
         {
             Uns.free(hashEntryAdr);
             return false;
@@ -1049,7 +1060,6 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
     public boolean serializeEntry(K key, WritableByteChannel channel) throws IOException
     {
         KeyBuffer keySource = keySource(key);
-
         long hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true, true);
 
         return hashEntryAdr != 0L && serializeEntry(channel, hashEntryAdr);
@@ -1273,7 +1283,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         private int mapSegmentCount;
         private int mapSegmentIndex;
 
-        private final List<Long> hashEntryAdrs = new ArrayList<>(1024);
+        private final LongArrayList hashEntryAdrs = new LongArrayList(1024);
         private int listIndex;
 
         private boolean eod;
@@ -1298,7 +1308,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
 
             while (listIndex < hashEntryAdrs.size())
             {
-                long hashEntryAdr = hashEntryAdrs.get(listIndex++);
+                long hashEntryAdr = hashEntryAdrs.getLong(listIndex++);
                 HashEntries.dereference(hashEntryAdr);
             }
         }
@@ -1345,7 +1355,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             {
                 if (listIndex < hashEntryAdrs.size())
                 {
-                    long hashEntryAdr = hashEntryAdrs.get(listIndex++);
+                    long hashEntryAdr = hashEntryAdrs.getLong(listIndex++);
                     lastSegment = segment;
                     lastHashEntryAdr = hashEntryAdr;
                     return buildResult(hashEntryAdr);

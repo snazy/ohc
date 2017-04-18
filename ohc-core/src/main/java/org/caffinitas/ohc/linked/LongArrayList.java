@@ -24,7 +24,12 @@ final class LongArrayList
 
     public LongArrayList()
     {
-        array = new long[10];
+        this(10);
+    }
+
+    public LongArrayList(int initialCapacity)
+    {
+        array = new long[initialCapacity];
     }
 
     public long getLong(int i)
@@ -47,7 +52,7 @@ final class LongArrayList
     public void add(long value)
     {
         if (size == array.length)
-            array = Arrays.copyOf(array, array.length + 10);
+            array = Arrays.copyOf(array, size * 2);
         array[size++] = value;
     }
 }
