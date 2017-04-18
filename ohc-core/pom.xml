@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.6.0</version>
+        <version>0.6.1</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-core</artifactId>
-    <version>0.6.0</version>
+    <version>0.6.1</version>
 
     <name>OHC core</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
@@ -107,6 +107,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>java-hamcrest</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
             <scope>test</scope>
@@ -141,6 +147,7 @@
             <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
+                <version>${version.org.apache.felix.maven-bundle-plugin}</version>
                 <extensions>true</extensions>
                 <executions>
                     <execution>
@@ -166,6 +173,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                 <configuration>
                     <systemProperties>
                         <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
@@ -183,7 +191,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>cobertura-maven-plugin</artifactId>
-                <version>${version.org.codehaus.mojo.cobertura}</version>
+                <version>${version.org.codehaus.mojo.cobertura-maven-plugin}</version>
             </plugin>
         </plugins>
     </reporting>
@@ -200,6 +208,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
+                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                         <executions>
                             <execution>
                                 <id>unsafe</id>
@@ -220,66 +229,6 @@
             </build>
         </profile>
         <profile>
-            <id>xxhash</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>xxhash</id>
-                                <goals>
-                                    <goal>test</goal>
-                                </goals>
-                                <configuration>
-                                    <systemProperties>
-                                        <org.caffinitas.ohc.hashAlgorithm>XX</org.caffinitas.ohc.hashAlgorithm>
-                                        <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
-                                        <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
-                                    </systemProperties>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/xxhash</reportsDirectory>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>crc32</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>crc32</id>
-                                <goals>
-                                    <goal>test</goal>
-                                </goals>
-                                <configuration>
-                                    <systemProperties>
-                                        <org.caffinitas.ohc.hashAlgorithm>CRC32</org.caffinitas.ohc.hashAlgorithm>
-                                        <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
-                                        <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
-                                    </systemProperties>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/crc32</reportsDirectory>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
             <id>prod-like</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
@@ -289,6 +238,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
+                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                         <executions>
                             <execution>
                                 <id>unsafe</id>

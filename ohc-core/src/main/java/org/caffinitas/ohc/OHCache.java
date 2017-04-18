@@ -35,24 +35,24 @@ public interface OHCache<K, V> extends Closeable
 
     /**
      * Same as {@link #put(Object, Object, long)} but uses the configured default TTL, if any.
-     *
      * @param key      key of the entry to be added. Must not be {@code null}.
      * @param value    value of the entry to be added. Must not be {@code null}.
+     * @return {@code true}, if the entry has been added, {@code false} otherwise
      */
-    void put(K key, V value);
+    boolean put(K key, V value);
 
     /**
      * Adds the key/value.
      * If the entry size of key/value exceeds the configured maximum entry length, any previously existing entry
      * for the key is removed.
-     *
      * @param key      key of the entry to be added. Must not be {@code null}.
      * @param value    value of the entry to be added. Must not be {@code null}.
      * @param expireAt timestamp in milliseconds since "epoch" (like {@link System#currentTimeMillis() System.currentTimeMillis()})
      *                 when the entry shall expire. Pass {@link #USE_DEFAULT_EXPIRE_AT} for the configured default
      *                 time-to-live or {@link #NEVER_EXPIRE} to let it never expire.
+     * @return {@code true}, if the entry has been added, {@code false} otherwise
      */
-    void put(K key, V value, long expireAt);
+    boolean put(K key, V value, long expireAt);
 
     /**
      * Same as {@link #addOrReplace(Object, Object, Object, long)} but uses the configured default TTL, if any.
@@ -114,8 +114,9 @@ public interface OHCache<K, V> extends Closeable
      * Remove a single entry for the given key.
      *
      * @param key key of the entry to be removed. Must not be {@code null}.
+     * @return {@code true}, if the entry has been removed, {@code false} otherwise
      */
-    void remove(K key);
+    boolean remove(K key);
 
     /**
      * This is effectively a shortcut to remove the entries for all keys given in the iterable {@code keys}.

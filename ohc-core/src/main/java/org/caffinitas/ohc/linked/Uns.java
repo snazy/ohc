@@ -25,7 +25,6 @@ import java.util.StringTokenizer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import com.google.common.primitives.Ints;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -283,14 +282,14 @@ final class Uns
 
     static boolean decrement(long address, long offset)
     {
-        validate(address, offset, 8L);
+        validate(address, offset, 4L);
         long v = ext.getAndAddInt(address, offset, -1);
         return v == 1;
     }
 
     static void increment(long address, long offset)
     {
-        validate(address, offset, 8L);
+        validate(address, offset, 4L);
         ext.getAndAddInt(address, offset, 1);
     }
 
@@ -317,6 +316,33 @@ final class Uns
     {
         validate(address, offset, len);
         unsafe.setMemory(address + offset, len, val);
+    }
+
+    static boolean memoryCompare(long adr1, long off1, long adr2, long off2, long len)
+    {
+        if (adr1 == 0L)
+            return false;
+
+        if (adr1 == adr2)
+        {
+            assert off1 == off2;
+            return true;
+        }
+
+        for (; len >= 8; len -= 8, off1 += 8, off2 += 8)
+            if (Uns.getLong(adr1, off1) != Uns.getLong(adr2, off2))
+                return false;
+        for (; len >= 4; len -= 4, off1 += 4, off2 += 4)
+            if (Uns.getInt(adr1, off1) != Uns.getInt(adr2, off2))
+                return false;
+        for (; len >= 2; len -= 2, off1 += 2, off2 += 2)
+            if (Uns.getShort(adr1, off1) != Uns.getShort(adr2, off2))
+                return false;
+        for (; len > 0; len--, off1++, off2++)
+            if (Uns.getByte(adr1, off1) != Uns.getByte(adr2, off2))
+                return false;
+
+        return true;
     }
 
     static long crc32(long address, long offset, long len)
@@ -415,14 +441,18 @@ final class Uns
         }
     }
 
-    static ByteBuffer keyBufferR(long hashEntryAdr, long keyLen)
+    static void invalidateDirectBuffer(ByteBuffer buffer)
     {
-        return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA, 0, keyLen, true);
+        buffer.position(0);
+        unsafe.putInt(buffer, DIRECT_BYTE_BUFFER_CAPACITY_OFFSET, 0);
+        unsafe.putInt(buffer, DIRECT_BYTE_BUFFER_LIMIT_OFFSET, 0);
+        unsafe.putLong(buffer, DIRECT_BYTE_BUFFER_ADDRESS_OFFSET, 0L);
     }
 
     static ByteBuffer keyBufferR(long hashEntryAdr)
     {
-        return keyBufferR(hashEntryAdr, HashEntries.getKeyLen(hashEntryAdr));
+        long keyLen = HashEntries.getKeyLen(hashEntryAdr);
+        return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA, 0, keyLen, true);
     }
 
     static ByteBuffer keyBuffer(long hashEntryAdr, long keyLen)
@@ -430,14 +460,10 @@ final class Uns
         return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA, 0, keyLen, false);
     }
 
-    static ByteBuffer valueBufferR(long hashEntryAdr, long valueLen)
-    {
-        return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA + Util.roundUpTo8(HashEntries.getKeyLen(hashEntryAdr)), 0, valueLen, true);
-    }
-
     static ByteBuffer valueBufferR(long hashEntryAdr)
     {
-        return valueBufferR(hashEntryAdr, HashEntries.getValueLen(hashEntryAdr));
+        long valueLen = HashEntries.getValueLen(hashEntryAdr);
+        return Uns.directBufferFor(hashEntryAdr + Util.ENTRY_OFF_DATA + Util.roundUpTo8(HashEntries.getKeyLen(hashEntryAdr)), 0, valueLen, true);
     }
 
     static ByteBuffer valueBuffer(long hashEntryAdr, long keyLen, long valueLen)

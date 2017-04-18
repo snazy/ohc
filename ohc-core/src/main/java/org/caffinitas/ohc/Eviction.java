@@ -13,31 +13,11 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.alloc;
+package org.caffinitas.ohc;
 
-import com.sun.jna.Native;
-
-public final class JNANativeAllocator implements IAllocator
+public enum Eviction
 {
-    public long allocate(long size)
-    {
-        try
-        {
-            return Native.malloc(size);
-        }
-        catch (OutOfMemoryError oom)
-        {
-            return 0L;
-        }
-    }
-
-    public void free(long peer)
-    {
-        Native.free(peer);
-    }
-
-    public long getTotalAllocated()
-    {
-        return -1L;
-    }
+    LRU,
+    W_TINY_LFU,
+    NONE
 }

@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.6.0</version>
+        <version>0.6.1</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-jmh</artifactId>
-    <version>0.6.0</version>
+    <version>0.6.1</version>
 
     <name>OHC core - micro benchmarks</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
@@ -72,7 +72,7 @@
     </issueManagement>
 
     <properties>
-        <jmh.version>1.13</jmh.version>
+        <jmh.version>1.18</jmh.version>
         <uberjar.name>benchmarks</uberjar.name>
     </properties>
 
@@ -139,7 +139,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>2.4.3</version>
+                <version>${version.org.apache.maven.plugins.maven-shade-plugin}</version>
                 <executions>
                     <execution>
                         <id>uberjar</id>
@@ -169,7 +169,9 @@
             <build>
                 <plugins>
                     <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-shade-plugin</artifactId>
+                        <version>${version.org.apache.maven.plugins.maven-shade-plugin}</version>
                         <executions>
                             <execution>
                                 <id>uberjar</id>
@@ -193,6 +195,7 @@
                     <plugin>
                         <groupId>org.codehaus.mojo</groupId>
                         <artifactId>exec-maven-plugin</artifactId>
+                        <version>${version.org.codehaus.mojo.exec-maven-plugin}</version>
                         <executions>
                             <execution>
                                 <id>run-benchmarks</id>

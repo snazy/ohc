@@ -24,14 +24,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.caffinitas.ohc.Eviction;
+
 /**
  * On-heap test-only counterpart of {@link OffHeapLinkedMap} for {@link CheckOHCacheImpl}.
  */
 final class CheckSegment
 {
-    private final Map<KeyBuffer, byte[]> map;
-    private final LinkedList<KeyBuffer> lru = new LinkedList<>();
+    private final Map<HeapKeyBuffer, byte[]> map;
+    private final LinkedList<HeapKeyBuffer> lru = new LinkedList<>();
     private final AtomicLong freeCapacity;
+    private final Eviction eviction;
 
     long hitCount;
     long missCount;
@@ -40,21 +43,22 @@ final class CheckSegment
     long removeCount;
     long evictedEntries;
 
-    public CheckSegment(int initialCapacity, float loadFactor, AtomicLong freeCapacity)
+    public CheckSegment(int initialCapacity, float loadFactor, AtomicLong freeCapacity, Eviction eviction)
     {
         this.map = new HashMap<>(initialCapacity, loadFactor);
         this.freeCapacity = freeCapacity;
+        this.eviction = eviction;
     }
 
     synchronized void clear()
     {
-        for (Map.Entry<KeyBuffer, byte[]> entry : map.entrySet())
+        for (Map.Entry<HeapKeyBuffer, byte[]> entry : map.entrySet())
             freeCapacity.addAndGet(sizeOf(entry.getKey(), entry.getValue()));
         map.clear();
         lru.clear();
     }
 
-    synchronized byte[] get(KeyBuffer keyBuffer)
+    synchronized byte[] get(HeapKeyBuffer keyBuffer)
     {
         byte[] r = map.get(keyBuffer);
         if (r == null)
@@ -70,7 +74,7 @@ final class CheckSegment
         return r;
     }
 
-    synchronized boolean put(KeyBuffer keyBuffer, byte[] data, boolean ifAbsent, byte[] old)
+    synchronized boolean put(HeapKeyBuffer keyBuffer, byte[] data, boolean ifAbsent, byte[] old)
     {
         long sz = sizeOf(keyBuffer, data);
         while (freeCapacity.get() < sz)
@@ -106,15 +110,17 @@ final class CheckSegment
         return true;
     }
 
-    synchronized void remove(KeyBuffer keyBuffer)
+    synchronized boolean remove(HeapKeyBuffer keyBuffer)
     {
         byte[] old = map.remove(keyBuffer);
         if (old != null)
         {
-            lru.remove(keyBuffer);
+            boolean r = lru.remove(keyBuffer);
             removeCount++;
             freeCapacity.addAndGet(sizeOf(keyBuffer, old));
+            return r;
         }
+        return false;
     }
 
     synchronized long size()
@@ -122,15 +128,15 @@ final class CheckSegment
         return map.size();
     }
 
-    synchronized Iterator<KeyBuffer> hotN(int n)
+    synchronized Iterator<HeapKeyBuffer> hotN(int n)
     {
-        List<KeyBuffer> lst = new ArrayList<>(n);
-        for (Iterator<KeyBuffer> iter = lru.iterator(); iter.hasNext() && n-- > 0; )
+        List<HeapKeyBuffer> lst = new ArrayList<>(n);
+        for (Iterator<HeapKeyBuffer> iter = lru.iterator(); iter.hasNext() && n-- > 0; )
             lst.add(iter.next());
         return lst.iterator();
     }
 
-    synchronized Iterator<KeyBuffer> keyIterator()
+    synchronized Iterator<HeapKeyBuffer> keyIterator()
     {
         return new ArrayList<>(lru).iterator();
     }
@@ -139,7 +145,10 @@ final class CheckSegment
 
     private boolean evictOne()
     {
-        KeyBuffer last = lru.pollLast();
+        if (eviction == Eviction.NONE)
+            return false;
+
+        HeapKeyBuffer last = lru.pollLast();
         if (last == null)
             return false;
         byte[] old = map.remove(last);
@@ -148,10 +157,10 @@ final class CheckSegment
         return true;
     }
 
-    static long sizeOf(KeyBuffer key, byte[] value)
+    static long sizeOf(HeapKeyBuffer key, byte[] value)
     {
         // calculate the same value as the original impl would do
-        return Util.ENTRY_OFF_DATA + Util.roundUpTo8(key.array().length) + value.length;
+        return Util.ENTRY_OFF_DATA + Util.roundUpTo8(key.size()) + value.length;
     }
 
     void resetStatistics()

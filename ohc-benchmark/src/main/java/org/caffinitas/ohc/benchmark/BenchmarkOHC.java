@@ -38,6 +38,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
+import org.caffinitas.ohc.Eviction;
 import org.caffinitas.ohc.HashAlgorithm;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -66,6 +67,7 @@ public final class BenchmarkOHC
     public static final String FIXED_VALUE_SIZE = "fvs";
     public static final String MAX_ENTRY_SIZE = "mes";
     public static final String UNLOCKED = "ul";
+    public static final String EVICTION = "e";
     public static final String HASH_MODE = "hm";
     public static final String CSV = "csv";
 
@@ -104,6 +106,7 @@ public final class BenchmarkOHC
             int maxEntrySize = Integer.parseInt(cmd.getOptionValue(MAX_ENTRY_SIZE, "-1"));
             boolean unlocked = Boolean.parseBoolean(cmd.getOptionValue(UNLOCKED, "false"));
             HashAlgorithm hashMode = HashAlgorithm.valueOf(cmd.getOptionValue(HASH_MODE, "MURMUR3"));
+            Eviction eviction = Eviction.valueOf(cmd.getOptionValue(EVICTION, "lru"));
 
             boolean bucketHistogram = Boolean.parseBoolean(cmd.getOptionValue(BUCKET_HISTOGRAM, "false"));
 
@@ -144,6 +147,8 @@ public final class BenchmarkOHC
                 builder.hashMode(hashMode);
             if (cmd.hasOption(FIXED_KEY_SIZE))
                 builder.fixedEntrySize(fixedKeySize, fixedValueSize);
+            if (cmd.hasOption(EVICTION))
+                builder.eviction(eviction);
 
             Shared.cache = builder.build();
 
@@ -173,10 +178,14 @@ public final class BenchmarkOHC
                 csv.printf("# Threads:                  %d%n", threads);
                 csv.printf("# Capacity:                 %d bytes%n", capacity);
                 csv.printf("# Read/Write Ratio:         %f%n", readWriteRatio);
+                csv.printf("# Eviction:                 %s%n", eviction);
                 csv.printf("# Segment Count:            %d%n", segmentCount);
                 csv.printf("# Hash table size:          %d%n", hashTableSize);
                 csv.printf("# Load Factor:              %f%n", loadFactor);
                 csv.printf("# Additional key len:       %d%n", keyLen);
+                csv.printf("# Fixed key/value size:     %d/%d%n", fixedKeySize, fixedValueSize);
+                csv.printf("# Max entry size:           %d%n", maxEntrySize);
+                csv.printf("# Chunk size:               %d%n", chunkSize);
                 csv.printf("# Read key distribution:    '%s'%n", readKeyDistStr);
                 csv.printf("# Write key distribution:   '%s'%n", writeKeyDistStr);
                 csv.printf("# Value size distribution:  '%s'%n", valueSizeDistStr);
@@ -362,6 +371,7 @@ public final class BenchmarkOHC
 
         options.addOption(UNLOCKED, true, "unlocked - do ONLY use ONE thread");
         options.addOption(HASH_MODE, true, "hash mode to use - either MURMUR3 or CRC");
+        options.addOption(EVICTION, true, "enable W-TinyLFU (linked implementation only)");
 
         options.addOption(BUCKET_HISTOGRAM, true, "enable bucket histogram. Default: false");
 
