@@ -37,7 +37,9 @@ final class Util
     static final long ENTRY_OFF_SENTINEL = 28;
     // slot in which the entry resides (8 bytes, long)
     static final long ENTRY_OFF_EXPIRE_AT = 32;
-    // bytes 40..47 unused
+    // LRU generation (4 bytes, int, only 2 distinct values)
+    static final long ENTRY_OFF_GENERATION = 40;
+    // bytes 44..47 unused
     // offset of serialized hash value (8 bytes, long)
     static final long ENTRY_OFF_HASH = 48;
     // offset of serialized value length (4 bytes, int)
@@ -53,6 +55,11 @@ final class Util
     // Note: keep ENTRY_OFF_HASH, ENTRY_OFF_VALUE_LENGTH, ENTRY_OFF_KEY_LENGTH in exact that order
     // and together and at the end of the header because
     // org.caffinitas.ohc.linked.OHCacheImpl.(de)serializeEntry relies on it!
+
+// Window Tiny-LFU generations
+
+    static final int GEN_EDEN = 0;
+    static final int GEN_MAIN = 1;
 
 // Hash bucket-table
 

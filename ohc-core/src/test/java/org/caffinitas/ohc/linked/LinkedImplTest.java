@@ -55,6 +55,9 @@ public class LinkedImplTest
             builder.hashTableSize(hashTableSize);
         if (segments > 0)
             builder.segmentCount(segments);
+        else
+            // use 16 segments by default to prevent differing test behaviour on varying test hardware
+            builder.segmentCount(16);
         if (maxEntrySize > 0)
             builder.maxEntrySize(maxEntrySize);
 

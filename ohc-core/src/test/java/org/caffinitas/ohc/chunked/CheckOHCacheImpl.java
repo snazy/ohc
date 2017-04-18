@@ -79,7 +79,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         maxEntrySize = builder.getMaxEntrySize();
     }
 
-    public void put(K key, V value)
+    public boolean put(K key, V value)
     {
         KeyBuffer keyBuffer = keySource(key);
         byte[] data = value(value);
@@ -88,11 +88,11 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         {
             remove(key);
             putFailCount++;
-            return;
+            return false;
         }
 
         CheckSegment segment = segment(keyBuffer.hash());
-        segment.put(keyBuffer, data, false, null);
+        return segment.put(keyBuffer, data, false, null);
     }
 
     public boolean addOrReplace(K key, V old, V value)
@@ -138,7 +138,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         throw new UnsupportedOperationException();
     }
 
-    public void put(K key, V value, long expireAt)
+    public boolean put(K key, V value, long expireAt)
     {
         throw new UnsupportedOperationException();
     }
@@ -149,11 +149,11 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
             put(entry.getKey(), entry.getValue());
     }
 
-    public void remove(K key)
+    public boolean remove(K key)
     {
         KeyBuffer keyBuffer = keySource(key);
         CheckSegment segment = segment(keyBuffer.hash());
-        segment.remove(keyBuffer);
+        return segment.remove(keyBuffer);
     }
 
     public void removeAll(Iterable<K> keys)

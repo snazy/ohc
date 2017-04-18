@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
+import org.caffinitas.ohc.Eviction;
 import org.caffinitas.ohc.HashAlgorithm;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -39,34 +40,36 @@ import org.openjdk.jmh.annotations.Warmup;
 @BenchmarkMode({ /*Mode.AverageTime, */Mode.Throughput })
 @State(Scope.Benchmark)
 @Warmup(iterations = 2)
-@Measurement(iterations = 3)
+@Measurement(iterations = 3, time = 5)
 @Threads(4)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @Fork(value = 1, jvmArgsAppend = "-Xmx512M")
-public class ProtoBenchmark
+public class OHCBenchmark
 {
     private OHCache<Integer, byte[]> cache;
 
     @Param({ "256"/*, "2048", "65536"*/ })
-    private int valueSize = 2048;
+    private int valueSz = 256;
     @Param("1073741824")
     private long capacity = 1024 * 1024 * 1024;
     @Param("-1")
-    private int segmentCount = -1;
+    private int segCnt = -1;
     @Param("-1")
-    private int hashTableSize = -1;
-    @Param("1000000")
-    private int keys = 1000000;
+    private int hashTableSz = -1;
+    @Param("10000000")
+    private int keys = 10_000_000;
     @Param({ "MURMUR3", "CRC32", "XX" })
-    private HashAlgorithm hashAlgorithm = HashAlgorithm.MURMUR3;
+    private HashAlgorithm hashAlg = HashAlgorithm.MURMUR3;
     @Param({ "-1", "65536"/*, "131072"*/ })
-    private int chunkSize = -1;
+    private int chunkSz = -1;
     @Param("-1")
     private int fixedKeyLen = -1;
     @Param("-1")
-    private int fixedValueLen = -1;
-    @Param("false")
-    private boolean unlocked = false;
+    private int fixedValLen = -1;
+    @Param({"LRU", "W_TINY_LFU"})
+    private Eviction eviction = Eviction.LRU;
+
+    private byte[] value;
 
     @State(Scope.Thread)
     public static class PutState
@@ -78,6 +81,7 @@ public class ProtoBenchmark
     public static class GetState
     {
         public int key = ThreadLocalRandom.current().nextInt(1000);
+        public int run;
     }
 
     @Setup
@@ -85,18 +89,20 @@ public class ProtoBenchmark
     {
         cache = OHCacheBuilder.<Integer, byte[]>newBuilder()
                               .capacity(capacity)
-                              .segmentCount(segmentCount)
-                              .hashTableSize(hashTableSize)
+                              .segmentCount(segCnt)
+                              .hashTableSize(hashTableSz)
                               .keySerializer(Utils.intSerializer)
                               .valueSerializer(Utils.byteArraySerializer)
-                              .chunkSize(chunkSize)
-                              .fixedEntrySize(fixedKeyLen, fixedValueLen)
-                              .unlocked(unlocked)
-                              .hashMode(hashAlgorithm)
+                              .chunkSize(chunkSz)
+                              .fixedEntrySize(fixedKeyLen, fixedValLen)
+                              .hashMode(hashAlg)
+                              .eviction(eviction)
                               .build();
 
+        value = new byte[valueSz];
+
         for (int i = 0; i < keys; i++)
-            cache.put(i, new byte[valueSize]);
+            cache.put(i, value);
     }
 
     @TearDown
@@ -123,7 +129,7 @@ public class ProtoBenchmark
     @Threads(value = 1)
     public void putSingleThreaded(PutState state)
     {
-        cache.put(state.key++, new byte[valueSize]);
+        cache.put(state.key++, value);
         if (state.key > keys)
             state.key = 1;
     }
@@ -132,7 +138,7 @@ public class ProtoBenchmark
     @Threads(value = 4)
     public void putMultiThreaded(PutState state)
     {
-        cache.put(state.key++, new byte[valueSize]);
+        cache.put(state.key++, value);
         if (state.key > keys)
             state.key = 1;
     }
@@ -151,6 +157,17 @@ public class ProtoBenchmark
     public void getMultiThreaded(GetState state)
     {
         cache.get(state.key++);
+
+        state.run ++;
+
+        if (state.run < 4)
+        {
+            if (state.key > keys / 5)
+                state.key = 1;
+        }
+
+        state.run = 0;
+
         if (state.key > keys)
             state.key = 1;
     }

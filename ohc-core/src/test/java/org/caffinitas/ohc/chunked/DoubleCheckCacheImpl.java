@@ -52,10 +52,12 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
         this.check = new CheckOHCacheImpl<>(builder);
     }
 
-    public void put(K key, V value)
+    public boolean put(K key, V value)
     {
-        prod.put(key, value);
-        check.put(key, value);
+        boolean rProd = prod.put(key, value);
+        boolean rCheck = check.put(key, value);
+        Assert.assertEquals(rCheck, rProd, "for key='" + key + '\'');
+        return rProd;
     }
 
     public boolean addOrReplace(K key, V old, V value)
@@ -84,7 +86,7 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
         throw new UnsupportedOperationException();
     }
 
-    public void put(K key, V value, long expireAt)
+    public boolean put(K key, V value, long expireAt)
     {
         throw new UnsupportedOperationException();
     }
@@ -95,10 +97,12 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
         check.putAll(m);
     }
 
-    public void remove(K key)
+    public boolean remove(K key)
     {
-        prod.remove(key);
-        check.remove(key);
+        boolean rProd = prod.remove(key);
+        boolean rCheck = check.remove(key);
+        Assert.assertEquals(rCheck, rProd, "for key='" + key + '\'');
+        return rProd;
     }
 
     public void removeAll(Iterable<K> keys)

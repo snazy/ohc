@@ -361,8 +361,6 @@ public class SerializationTest
                 throw new Error(t);
             }
         }
-
-        // TODO check off-heap mem is not leaked
     }
 
     @Test

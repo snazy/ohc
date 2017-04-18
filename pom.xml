@@ -98,6 +98,7 @@
         <version.org.codehaus.mojo.exec-maven-plugin>1.6.0</version.org.codehaus.mojo.exec-maven-plugin>
         <version.org.slf4j>1.7.12</version.org.slf4j>
         <version.org.testng>6.9.10</version.org.testng>
+        <version.org.hamcrest>2.0.0.0</version.org.hamcrest>
         <version.org.xerial.snappy>1.1.1.7</version.org.xerial.snappy>
 
         <surefire.jvmargs />
@@ -171,6 +172,13 @@
                 <groupId>org.testng</groupId>
                 <artifactId>testng</artifactId>
                 <version>${version.org.testng}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.hamcrest</groupId>
+                <artifactId>java-hamcrest</artifactId>
+                <version>${version.org.hamcrest}</version>
                 <scope>test</scope>
             </dependency>
 

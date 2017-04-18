@@ -107,6 +107,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>java-hamcrest</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
             <scope>test</scope>
@@ -215,68 +221,6 @@
                                         <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
                                     </systemProperties>
                                     <reportsDirectory>${project.build.directory}/surefire-reports/unsafe</reportsDirectory>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>xxhash</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
-                        <executions>
-                            <execution>
-                                <id>xxhash</id>
-                                <goals>
-                                    <goal>test</goal>
-                                </goals>
-                                <configuration>
-                                    <systemProperties>
-                                        <org.caffinitas.ohc.hashAlgorithm>XX</org.caffinitas.ohc.hashAlgorithm>
-                                        <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
-                                        <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
-                                    </systemProperties>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/xxhash</reportsDirectory>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>crc32</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
-                        <executions>
-                            <execution>
-                                <id>crc32</id>
-                                <goals>
-                                    <goal>test</goal>
-                                </goals>
-                                <configuration>
-                                    <systemProperties>
-                                        <org.caffinitas.ohc.hashAlgorithm>CRC32</org.caffinitas.ohc.hashAlgorithm>
-                                        <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
-                                        <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
-                                    </systemProperties>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/crc32</reportsDirectory>
                                 </configuration>
                             </execution>
                         </executions>

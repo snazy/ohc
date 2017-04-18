@@ -36,6 +36,7 @@ import org.caffinitas.ohc.CacheLoader;
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.DirectValueAccess;
+import org.caffinitas.ohc.Eviction;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.OHCacheStats;
@@ -68,6 +69,9 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
         long capacity = builder.getCapacity();
         if (capacity <= 0L)
             throw new IllegalArgumentException("capacity:" + capacity);
+
+        if (Eviction.LRU != builder.getEviction())
+            throw new IllegalArgumentException("Chunked implementation only available with LRU");
 
         int segments = builder.getSegmentCount();
         if (segments <= 0)
@@ -172,14 +176,14 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
         return segment(keySource.hash()).getEntry(keySource, null) == Boolean.TRUE;
     }
 
-    public void put(K key, V value)
+    public boolean put(K key, V value)
     {
-        putInternal(key, value, false, null, OHCache.NEVER_EXPIRE);
+        return putInternal(key, value, false, null, OHCache.NEVER_EXPIRE);
     }
 
-    public void put(K key, V value, long expireAt)
+    public boolean put(K key, V value, long expireAt)
     {
-        putInternal(key, value, false, null, expireAt);
+        return putInternal(key, value, false, null, expireAt);
     }
 
     public boolean addOrReplace(K key, V old, V value)
@@ -322,14 +326,14 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
         return fixedKeySize > 0;
     }
 
-    public void remove(K k)
+    public boolean remove(K k)
     {
         if (k == null)
             throw new NullPointerException();
 
         KeyBuffer key = keySource(k);
 
-        segment(key.hash()).removeEntry(key);
+        return segment(key.hash()).removeEntry(key);
     }
 
     public V getWithLoader(K key, CacheLoader<K, V> loader) throws InterruptedException, ExecutionException

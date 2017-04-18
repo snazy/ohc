@@ -9,11 +9,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.caffinitas.ohc.CacheLoader;
+import org.caffinitas.ohc.Eviction;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.caffinitas.ohc.PermanentLoadException;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 public class CacheLoaderTest
@@ -90,8 +92,14 @@ public class CacheLoaderTest
         }
     };
 
-    @Test
-    public void testGetWithLoaderAsync() throws IOException, InterruptedException, ExecutionException, TimeoutException
+    @DataProvider(name = "types")
+    public Object[][] cacheEviction()
+    {
+        return new Object[][]{ { Eviction.LRU }, { Eviction.W_TINY_LFU }, { Eviction.NONE} };
+    }
+
+    @Test(dataProvider = "types")
+    public void testGetWithLoaderAsync(Eviction eviction) throws IOException, InterruptedException, ExecutionException, TimeoutException
     {
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
         try
@@ -102,6 +110,7 @@ public class CacheLoaderTest
                                                   .keySerializer(TestUtils.intSerializer)
                                                   .valueSerializer(TestUtils.stringSerializer)
                                                   .executorService(executorService)
+                                                  .eviction(eviction)
                                                   .build())
             {
                 Future<String> f1 = cache.getWithLoaderAsync(1, loader);
@@ -114,8 +123,8 @@ public class CacheLoaderTest
         }
     }
 
-    @Test
-    public void testGetWithLoaderAsyncNull() throws IOException, InterruptedException, ExecutionException, TimeoutException
+    @Test(dataProvider = "types")
+    public void testGetWithLoaderAsyncNull(Eviction eviction) throws IOException, InterruptedException, ExecutionException, TimeoutException
     {
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
         try
@@ -126,6 +135,7 @@ public class CacheLoaderTest
                                                   .keySerializer(TestUtils.intSerializer)
                                                   .valueSerializer(TestUtils.stringSerializer)
                                                   .executorService(executorService)
+                                                  .eviction(eviction)
                                                   .build())
             {
                 Future<String> f1 = cache.getWithLoaderAsync(1, loaderNull);
@@ -139,8 +149,8 @@ public class CacheLoaderTest
         }
     }
 
-    @Test
-    public void testGetWithLoaderAsyncTempFail() throws IOException, InterruptedException, ExecutionException, TimeoutException
+    @Test(dataProvider = "types")
+    public void testGetWithLoaderAsyncTempFail(Eviction eviction) throws IOException, InterruptedException, ExecutionException, TimeoutException
     {
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
         try
@@ -150,6 +160,7 @@ public class CacheLoaderTest
                                                                 .keySerializer(TestUtils.intSerializer)
                                                                 .valueSerializer(TestUtils.stringSerializer)
                                                                 .executorService(executorService)
+                                                                .eviction(eviction)
                                                                 .build())
             {
                 Future<String> fTempFail = cache.getWithLoaderAsync(1, loaderTempFail);
@@ -173,8 +184,8 @@ public class CacheLoaderTest
         }
     }
 
-    @Test
-    public void testGetWithLoaderAsyncPermFail() throws IOException, InterruptedException, ExecutionException, TimeoutException
+    @Test(dataProvider = "types")
+    public void testGetWithLoaderAsyncPermFail(Eviction eviction) throws IOException, InterruptedException, ExecutionException, TimeoutException
     {
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
         try
@@ -184,6 +195,7 @@ public class CacheLoaderTest
                                                                 .keySerializer(TestUtils.intSerializer)
                                                                 .valueSerializer(TestUtils.stringSerializer)
                                                                 .executorService(executorService)
+                                                                .eviction(eviction)
                                                                 .build())
             {
                 loaderCalled = 0;
@@ -235,8 +247,8 @@ public class CacheLoaderTest
         }
     }
 
-    @Test
-    public void testGetWithSlowLoaderAsync() throws IOException, InterruptedException, ExecutionException, TimeoutException
+    @Test(dataProvider = "types")
+    public void testGetWithSlowLoaderAsync(Eviction eviction) throws IOException, InterruptedException, ExecutionException, TimeoutException
     {
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
         try
@@ -247,6 +259,7 @@ public class CacheLoaderTest
                                                                 .keySerializer(TestUtils.intSerializer)
                                                                 .valueSerializer(TestUtils.stringSerializer)
                                                                 .executorService(executorService)
+                                                                .eviction(eviction)
                                                                 .build())
             {
                 slowLoaderCalled = 0;
@@ -273,8 +286,8 @@ public class CacheLoaderTest
         }
     }
 
-    @Test
-    public void testGetWithSlowTempFailLoaderAsync() throws IOException, InterruptedException, ExecutionException, TimeoutException
+    @Test(dataProvider = "types")
+    public void testGetWithSlowTempFailLoaderAsync(Eviction eviction) throws IOException, InterruptedException, ExecutionException, TimeoutException
     {
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
         try
@@ -285,6 +298,7 @@ public class CacheLoaderTest
                                                                 .keySerializer(TestUtils.intSerializer)
                                                                 .valueSerializer(TestUtils.stringSerializer)
                                                                 .executorService(executorService)
+                                                                .eviction(eviction)
                                                                 .build())
             {
                 slowLoaderCalled = 0;
@@ -348,8 +362,8 @@ public class CacheLoaderTest
         }
     }
 
-    @Test
-    public void testGetWithSlowPermFailLoaderAsync() throws IOException, InterruptedException, ExecutionException, TimeoutException
+    @Test(dataProvider = "types")
+    public void testGetWithSlowPermFailLoaderAsync(Eviction eviction) throws IOException, InterruptedException, ExecutionException, TimeoutException
     {
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
         try
@@ -360,6 +374,7 @@ public class CacheLoaderTest
                                                                 .keySerializer(TestUtils.intSerializer)
                                                                 .valueSerializer(TestUtils.stringSerializer)
                                                                 .executorService(executorService)
+                                                                .eviction(eviction)
                                                                 .build())
             {
                 slowLoaderCalled = 0;

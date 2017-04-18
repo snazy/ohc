@@ -121,6 +121,36 @@ import org.caffinitas.ohc.linked.OHCacheLinkedImpl;
  *         <td>Indirection for current time - used for unit tests.</td>
  *         <td>Default ticker using {@code System.nanoTime()} and {@code System.currentTimeMillis()}</td>
  *     </tr>
+ *     <tr>
+ *         <td>{@code capacity}</td>
+ *         <td>Expected number of elements in the cache</td>
+ *         <td>No default value, recommended to provide a default value.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code eviction}</td>
+ *         <td>Choose the eviction algorithm to use. Available are:
+ *         <ul>
+ *             <li>{@link Eviction#LRU LRU}: Plain LRU - least used entry is subject to eviction</li>
+ *             <li>{@link Eviction#W_TINY_LFU W-WinyLFU}: Enable use of Window Tiny-LFU. The size of the
+ *             frequency sketch ("admission filter") is set to the value of {@code hashTableSize}.
+ *             See <a href="http://highscalability.com/blog/2016/1/25/design-of-a-modern-cache.html">this article</a>
+ *             for a description.</li>
+ *             <li>{@link Eviction#NONE None}: No entries will be evicted - this effectively provides a
+ *             capacity-bounded off-heap map.</li>
+ *         </ul>
+ *         </td>
+ *         <td>{@code LRU}</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code frequencySketchSize}</td>
+ *         <td>Size of the frequency sketch used by {@link Eviction#W_TINY_LFU W-WinyLFU}</td>
+ *         <td>Defaults to {@code hashTableSize}.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code edenSize}</td>
+ *         <td>Size of the eden generation used by {@link Eviction#W_TINY_LFU W-WinyLFU} relative to a segment's size</td>
+ *         <td>{@code 0.2}</td>
+ *     </tr>
  * </table>
  * <p>
  *     You may also use system properties prefixed with {@code org.caffinitas.org.} to other defaults.
@@ -151,6 +181,9 @@ public class OHCacheBuilder<K, V>
     private int timeoutsSlots;
     private int timeoutsPrecision;
     private Ticker ticker = Ticker.DEFAULT;
+    private Eviction eviction = Eviction.LRU;
+    private int frequencySketchSize;
+    private double edenSize = 0.2d;
 
     private OHCacheBuilder()
     {
@@ -172,6 +205,9 @@ public class OHCacheBuilder<K, V>
         timeouts = fromSystemProperties("timeouts", timeouts);
         timeoutsSlots = fromSystemProperties("timeoutsSlots", timeoutsSlots);
         timeoutsPrecision = fromSystemProperties("timeoutsPrecision", timeoutsPrecision);
+        eviction = fromSystemProperties("eviction", eviction, Eviction.class);
+        frequencySketchSize = fromSystemProperties("frequencySketchSize", frequencySketchSize);
+        edenSize = fromSystemProperties("edenSize", edenSize);
     }
 
     public static final String SYSTEM_PROPERTY_PREFIX = "org.caffinitas.ohc.";
@@ -212,6 +248,18 @@ public class OHCacheBuilder<K, V>
         }
     }
 
+    private static double fromSystemProperties(String name, double defaultValue)
+    {
+        try
+        {
+            return Double.parseDouble(System.getProperty(SYSTEM_PROPERTY_PREFIX + name, Double.toString(defaultValue)));
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException("Failed to parse system property " + SYSTEM_PROPERTY_PREFIX + name, e);
+        }
+    }
+
     private static boolean fromSystemProperties(String name, boolean defaultValue)
     {
         try
@@ -227,6 +275,12 @@ public class OHCacheBuilder<K, V>
     private static String fromSystemProperties(String name, String defaultValue)
     {
         return System.getProperty(SYSTEM_PROPERTY_PREFIX + name, defaultValue);
+    }
+
+    private static <E extends Enum> E fromSystemProperties(String name, E defaultValue, Class<E> type)
+    {
+        String value = fromSystemProperties(name, defaultValue.name());
+        return (E) Enum.valueOf(type, value.toUpperCase());
     }
 
     static int roundUpToPowerOf2(int number, int max)
@@ -470,6 +524,39 @@ public class OHCacheBuilder<K, V>
     public OHCacheBuilder<K, V> ticker(Ticker ticker)
     {
         this.ticker = ticker;
+        return this;
+    }
+
+    public Eviction getEviction()
+    {
+        return eviction;
+    }
+
+    public OHCacheBuilder<K, V> eviction(Eviction eviction)
+    {
+        this.eviction = eviction;
+        return this;
+    }
+
+    public int getFrequencySketchSize()
+    {
+        return frequencySketchSize;
+    }
+
+    public OHCacheBuilder<K, V> frequencySketchSize(int frequencySketchSize)
+    {
+        this.frequencySketchSize = frequencySketchSize;
+        return this;
+    }
+
+    public double getEdenSize()
+    {
+        return edenSize;
+    }
+
+    public OHCacheBuilder<K, V> edenSize(double edenSize)
+    {
+        this.edenSize = edenSize;
         return this;
     }
 }

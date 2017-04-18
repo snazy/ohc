@@ -19,7 +19,7 @@ import java.lang.reflect.Field;
 
 import sun.misc.Unsafe;
 
-public class UnsafeAllocator implements IAllocator
+public final class UnsafeAllocator implements IAllocator
 {
     static final Unsafe unsafe;
 

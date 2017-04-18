@@ -391,23 +391,56 @@ public class UnsTest
             for (int i = 0; i < 120; i++)
             {
                 String loop = "at loop #" + i;
-                long v = Uns.getLong(adr, i);
+                long v = Uns.getInt(adr, i);
                 Uns.increment(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 1, loop);
+                assertEquals(Uns.getInt(adr, i), v + 1, loop);
                 Uns.increment(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 2, loop);
+                assertEquals(Uns.getInt(adr, i), v + 2, loop);
                 Uns.increment(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 3, loop);
+                assertEquals(Uns.getInt(adr, i), v + 3, loop);
                 Uns.decrement(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 2, loop);
+                assertEquals(Uns.getInt(adr, i), v + 2, loop);
                 Uns.decrement(adr, i);
-                assertEquals(Uns.getLong(adr, i), v + 1, loop);
+                assertEquals(Uns.getInt(adr, i), v + 1, loop);
             }
 
             Uns.putLong(adr, 8, 1);
             assertTrue(Uns.decrement(adr, 8));
             Uns.putLong(adr, 8, 2);
             assertFalse(Uns.decrement(adr, 8));
+        }
+        finally
+        {
+            Uns.free(adr);
+        }
+    }
+
+    @Test
+    public void testCompare() throws Exception
+    {
+        long adr = Uns.allocate(CAPACITY);
+        try
+        {
+            long adr2 = Uns.allocate(CAPACITY);
+            try
+            {
+
+                Uns.setMemory(adr, 5, 11, (byte) 0);
+                Uns.setMemory(adr2, 5, 11, (byte) 1);
+
+                assertFalse(Uns.memoryCompare(adr, 5, adr2, 5, 11));
+
+                assertTrue(Uns.memoryCompare(adr, 5, adr, 5, 11));
+                assertTrue(Uns.memoryCompare(adr2, 5, adr2, 5, 11));
+
+                Uns.setMemory(adr, 5, 11, (byte) 1);
+
+                assertTrue(Uns.memoryCompare(adr, 5, adr2, 5, 11));
+            }
+            finally
+            {
+                Uns.free(adr2);
+            }
         }
         finally
         {

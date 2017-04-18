@@ -3,18 +3,34 @@
 
 - update maven plugin versions
 - update jmh version
+<<<<<<< HEAD
+=======
+#34 add WTinyLFU
+#37 non-evicting mode
+- unit test fixes for systems with few CPUs
+- unit test fix regarding charset
+>>>>>>> window-tinylfu
 
 0.6.0
 =====
 
-*** BREAKING CHANGE ***
-If entry TTLs are used, it is required to configure the cache with OHCacheBuilder.timeouts(true)
+BREAKING CHANGES
+----------------
 
+- If entry TTLs are used, it is required to configure the cache with OHCacheBuilder.timeouts(true)
+- Signatures of OHCache.put() and OHCache.remove() methods has been changed to return a boolean value.
+  This means that this version of OHC requires a recompilation of code that uses OHC and cannot be
+  used as a drop-in replacement (i.e. just replace a jar).
 
+non-breaking changes
+--------------------
+
+(#37 non-evicting mode) - not merged by accident
+(#34 add WTinyLFU) - not merged by accident
 - add new builder cache flag 'timeouts'
 - add Ticker interface
-- unit test fixes for systems with few CPUs
-- unit test fix regarding charset
+(- unit test fixes for systems with few CPUs) - not merged by accident
+(- unit test fix regarding charset) - not merged by accident
 - update to guava 18.0
 #33 crc32 algorithm does not work on Java7
 
