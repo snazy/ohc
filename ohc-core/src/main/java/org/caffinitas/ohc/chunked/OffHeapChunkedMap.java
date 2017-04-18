@@ -24,6 +24,7 @@ import com.google.common.primitives.Ints;
 
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.OHCacheBuilder;
+import org.caffinitas.ohc.Ticker;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 import sun.nio.ch.DirectBuffer;
 
@@ -58,6 +59,8 @@ final class OffHeapChunkedMap
 
     private final boolean throwOOME;
 
+    private final Ticker ticker;
+
     private Table table;
 
     private long threshold;
@@ -80,6 +83,8 @@ final class OffHeapChunkedMap
     OffHeapChunkedMap(OHCacheBuilder builder, long freeCapacity, long chunkSize)
     {
         this.throwOOME = builder.isThrowOOME();
+
+        this.ticker = builder.getTicker();
 
         this.unlocked = builder.isUnlocked();
 
@@ -870,7 +875,7 @@ final class OffHeapChunkedMap
     private void resetChunk(int chunkNum)
     {
         int offset = chunkOffset(chunkNum);
-        memory.putLong(offset + Util.CHUNK_OFF_TIMESTAMP, System.nanoTime());
+        memory.putLong(offset + Util.CHUNK_OFF_TIMESTAMP, ticker.nanos());
         memory.putInt(offset + Util.CHUNK_OFF_ENTRIES, 0);
         memory.putInt(offset + Util.CHUNK_OFF_BYTES, 0);
     }
@@ -888,7 +893,7 @@ final class OffHeapChunkedMap
     private void touchChunk(int chunkNum)
     {
         int offset = chunkOffset(chunkNum);
-        memory.putLong(offset + Util.CHUNK_OFF_TIMESTAMP, System.nanoTime());
+        memory.putLong(offset + Util.CHUNK_OFF_TIMESTAMP, ticker.nanos());
     }
 
     private long lastUsed(int chunkNum)

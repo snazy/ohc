@@ -50,12 +50,7 @@ fully prepared entry into the segment.
 Eviction is performed using an LRU algorithm. A linked list through all cached elements per segment is used to keep
 track of the eldest entries.
 
-Since this implementation performs alloc/free operations for each individual entry, take care of memory fragmentation.
-We recommend using jemalloc to keep fragmentation low. On Unix operating systems, preload jemalloc. OSX usually does
-not require jemalloc for performance reasons.
-
-The extension jar ``ohc-core-j8`` is not recommmended for the linked implementation to use of new ``sun.misc.Unsafe``
-methods in Java 8 exists.
+The extension jar ``ohc-core-j8`` is recommmended to use of new ``sun.misc.Unsafe`` methods in Java 8.
 
 Chunked implementation
 ----------------------
@@ -114,6 +109,27 @@ requires 8 bytes - so the formula is ``capacity + segment_count * hash_table_siz
 OHC allocates off-heap memory directly bypassing Java's off-heap memory limitation. This means, that all
 memory allocated by OHC is not counted towards ``-XX:maxDirectMemorySize``.
 
+Memory & jemalloc
+=================
+
+Since especially the linked implementation performs alloc/free operations for each individual entry, consider that
+memory fragmentation can happen.
+
+Also leave some head room since some allocations might still be in flight and also "the other stuff"
+(operating system, JVM, etc) need memory. It depends on the usage pattern how much head room is necessary.
+Note that the linked implementation allocates memory during write operations _before_ it is counted towards the
+segments, which will evict older entries. This means: do not dedicate all available memory to OHC.
+
+We recommend using jemalloc to keep fragmentation low. On Unix operating systems, preload jemalloc.
+
+OSX usually does not require jemalloc for performance reasons. Also make sure that you are using a recent version of
+jemalloc - some Linux distributions still provide quite old versions.
+
+To preload jemalloc on Linux, use
+``export LD_PRELOAD=<path-to-libjemalloc.so``, to preload jemalloc on OSX, use
+``export DYLD_INSERT_LIBRARIES=<path-to-libjemalloc.so``. A script template for preloading can be found at the
+`Apache Cassandra project <https://github.com/apache/cassandra/blob/bf3255fc93db65b816b016958967003df38a6004/bin/cassandra#L135-L182>`_.
+
 Usage
 =====
 
@@ -147,7 +163,7 @@ Java 9
 
 Java 9 support is still *experimental*!
 
-OHC has been tested with some early access releases of Java 9 and the unit and JMH tests pass. However,
+OHC has been tested with some *early access* releases of Java 9 and the unit and JMH tests pass. However,
 it requires access to ``sun.misc.Unsafe`` via the JVM option ``-XaddExports:java.base/sun.nio.ch=ALL-UNNAMED``.
 
 Building from source

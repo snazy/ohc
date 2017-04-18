@@ -25,28 +25,32 @@ final class Util
 
 // Hash entries
 
-    // offset of LRU replacement strategy next pointer
+    // offset of LRU replacement strategy next pointer (8 bytes, long)
     static final long ENTRY_OFF_LRU_NEXT = 0;
-    // offset of LRU replacement strategy previous pointer
+    // offset of LRU replacement strategy previous pointer (8 bytes, long)
     static final long ENTRY_OFF_LRU_PREV = 8;
-    // offset of next hash entry in a hash bucket
+    // offset of next hash entry in a hash bucket (8 bytes, long)
     static final long ENTRY_OFF_NEXT = 16;
-    // offset of entry reference counter
+    // offset of entry reference counter (4 bytes, int)
     static final long ENTRY_OFF_REFCOUNT = 24;
-    // offset of entry sentinel
+    // offset of entry sentinel (4 bytes, int)
     static final long ENTRY_OFF_SENTINEL = 28;
-    // slot in which the entry resides
+    // slot in which the entry resides (8 bytes, long)
     static final long ENTRY_OFF_EXPIRE_AT = 32;
-    // offset of serialized hash value
-    static final long ENTRY_OFF_HASH = 40;
-    // offset of serialized value length
-    static final long ENTRY_OFF_VALUE_LENGTH = 48;
-    // offset of serialized hash key length
-    static final long ENTRY_OFF_KEY_LENGTH = 56;
+    // bytes 40..47 unused
+    // offset of serialized hash value (8 bytes, long)
+    static final long ENTRY_OFF_HASH = 48;
+    // offset of serialized value length (4 bytes, int)
+    static final long ENTRY_OFF_VALUE_LENGTH = 56;
+    // offset of serialized hash key length (4 bytes, int)
+    static final long ENTRY_OFF_KEY_LENGTH = 60;
     // offset of data in first block
     static final long ENTRY_OFF_DATA = 64;
 
-    // Note: keep ENTRY_OFF_HASH, ENTRY_OFF_KEY_LENGTH, ENTRY_OFF_VALUE_LENGTH in exact that order
+    static final int SERIALIZED_ENTRY_SIZE = (int) (ENTRY_OFF_DATA - ENTRY_OFF_HASH);
+    static final int SERIALIZED_KEY_LEN_SIZE = (int) (ENTRY_OFF_DATA - ENTRY_OFF_KEY_LENGTH);
+
+    // Note: keep ENTRY_OFF_HASH, ENTRY_OFF_VALUE_LENGTH, ENTRY_OFF_KEY_LENGTH in exact that order
     // and together and at the end of the header because
     // org.caffinitas.ohc.linked.OHCacheImpl.(de)serializeEntry relies on it!
 

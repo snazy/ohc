@@ -57,8 +57,8 @@ public class ProtoBenchmark
     private int hashTableSize = -1;
     @Param("1000000")
     private int keys = 1000000;
-    @Param({ "MURMUR3"/*, "CRC32", "XX"*/ })
-    private HashAlgorithm hashAlgorithm;
+    @Param({ "MURMUR3", "CRC32", "XX" })
+    private HashAlgorithm hashAlgorithm = HashAlgorithm.MURMUR3;
     @Param({ "-1", "65536"/*, "131072"*/ })
     private int chunkSize = -1;
     @Param("-1")
@@ -92,6 +92,7 @@ public class ProtoBenchmark
                               .chunkSize(chunkSize)
                               .fixedEntrySize(fixedKeyLen, fixedValueLen)
                               .unlocked(unlocked)
+                              .hashMode(hashAlgorithm)
                               .build();
 
         for (int i = 0; i < keys; i++)

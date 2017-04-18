@@ -17,6 +17,8 @@ package org.caffinitas.ohc.linked;
 
 import com.google.common.primitives.Ints;
 
+import org.caffinitas.ohc.Ticker;
+
 /**
  * Manages cache entry time-to-live in off-heap memory.
  * <p>
@@ -41,7 +43,9 @@ final class Timeouts
     private final int slotCount;
     private final Slot[] slots;
 
-    Timeouts(int slots, long precision)
+    private final Ticker ticker;
+
+    Timeouts(Ticker ticker, int slots, long precision)
     {
         if (slots == 0)
             slots = 64;
@@ -52,6 +56,8 @@ final class Timeouts
             throw new IllegalArgumentException("timeouts-slots <= 0");
         if (precision < 1)
             throw new IllegalArgumentException("precision <= 0");
+
+        this.ticker = ticker;
 
         this.slotCount = Ints.checkedCast(Util.roundUpToPowerOf2(Math.min(slots, 16), 1 << 30));
 
@@ -108,7 +114,7 @@ final class Timeouts
     int removeExpired(TimeoutHandler expireHandler)
     {
         // ensure the clock never goes backwards
-        long t = System.currentTimeMillis();
+        long t = ticker.currentTimeMillis();
 
         int expired = 0;
         for (int i = 0; i < slotCount; i++)

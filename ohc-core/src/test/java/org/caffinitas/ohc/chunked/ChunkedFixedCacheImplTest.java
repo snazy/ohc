@@ -69,6 +69,7 @@ public class ChunkedFixedCacheImplTest
     static OHCacheBuilder<Integer, String> baseBuilder()
     {
         return OHCacheBuilder.<Integer, String>newBuilder()
+                             .segmentCount(16)
                              .keySerializer(TestUtils.fixedKeySerializer)
                              .valueSerializer(TestUtils.fixedValueSerializer)
                              .chunkSize(65536);
@@ -362,7 +363,7 @@ public class ChunkedFixedCacheImplTest
                     iProd.next();
                     count++;
                 }
-                assertTrue(count >= 10);
+                assertTrue(count >= 10, "count is " + count + " but should be >= 10");
             }
         }
     }
@@ -496,7 +497,7 @@ public class ChunkedFixedCacheImplTest
                     count++;
                 }
 
-                assertTrue(count >= 10);
+                assertTrue(count >= 10, "count is " + count + " but should be >= 10");
             }
         }
     }

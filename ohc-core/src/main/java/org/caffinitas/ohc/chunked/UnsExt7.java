@@ -13,8 +13,9 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.linked;
+package org.caffinitas.ohc.chunked;
 
+import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
 
 import sun.misc.Unsafe;
@@ -26,30 +27,11 @@ final class UnsExt7 extends UnsExt
         super(unsafe);
     }
 
-    long getAndPutLong(long address, long offset, long value)
-    {
-        long r = unsafe.getLong(null, address + offset);
-        unsafe.putLong(null, address + offset, value);
-        return r;
-    }
-
-    int getAndAddInt(long address, long offset, int value)
-    {
-        address += offset;
-        int v;
-        while (true)
-        {
-            v = unsafe.getIntVolatile(null, address);
-            if (unsafe.compareAndSwapInt(null, address, v, v + value))
-                return v;
-        }
-    }
-
-    long crc32(long address, long offset, long len)
+    long crc32(ByteBuffer buffer)
     {
         CRC32 crc = new CRC32();
-        for (; len-- > 0; offset++)
-            crc.update(Uns.getByte(address, offset));
+        while (buffer.hasRemaining())
+            crc.update(buffer.get());
         long h = crc.getValue();
         h |= h << 32;
         return h;

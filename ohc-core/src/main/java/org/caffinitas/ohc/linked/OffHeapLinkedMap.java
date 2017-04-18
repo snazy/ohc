@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import com.google.common.primitives.Ints;
 
 import org.caffinitas.ohc.OHCacheBuilder;
+import org.caffinitas.ohc.Ticker;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 final class OffHeapLinkedMap
@@ -58,6 +59,8 @@ final class OffHeapLinkedMap
 
     private final boolean throwOOME;
 
+    private final Ticker ticker;
+
     private final Timeouts timeouts;
     private final Timeouts.TimeoutHandler timeoutsExpireHandler = new Timeouts.TimeoutHandler()
     {
@@ -73,8 +76,10 @@ final class OffHeapLinkedMap
 
         this.throwOOME = builder.isThrowOOME();
 
+        this.ticker = builder.getTicker();
+
         // 64 hash slots, each for 128ms
-        this.timeouts = new Timeouts(builder.getTimeoutsSlots(), builder.getTimeoutsPrecision());
+        this.timeouts = builder.isTimeouts() ? new Timeouts(ticker, builder.getTimeoutsSlots(), builder.getTimeoutsPrecision()) : null;
 
         this.unlocked = builder.isUnlocked();
 
@@ -103,7 +108,8 @@ final class OffHeapLinkedMap
             table.release();
             table = null;
 
-            timeouts.release();
+            if (timeouts != null)
+                timeouts.release();
         }
         finally
         {
@@ -187,7 +193,7 @@ final class OffHeapLinkedMap
 
     int usedTimeouts()
     {
-        return timeouts.used();
+        return timeouts != null ? timeouts.used() : 0;
     }
 
     long getEntry(KeyBuffer key, boolean reference, boolean updateLRU)
@@ -205,7 +211,7 @@ final class OffHeapLinkedMap
                 // return existing entry
 
                 long expireAt = HashEntries.getExpireAt(hashEntryAdr);
-                if (expireAt > 0L && expireAt <= System.currentTimeMillis())
+                if (expireAt > 0L && expireAt <= ticker.currentTimeMillis())
                 {
                     // entry is expired, remove it and return
                     expiredEntries++;
@@ -252,7 +258,7 @@ final class OffHeapLinkedMap
                     continue;
 
                 long testExpireAt = HashEntries.getExpireAt(hashEntryAdr);
-                if (testExpireAt == 0L || testExpireAt > System.currentTimeMillis())
+                if (testExpireAt == 0L || testExpireAt > ticker.currentTimeMillis())
                 {
                     // replace existing entry
                     //
@@ -327,7 +333,8 @@ final class OffHeapLinkedMap
 
     private void removeExpired()
     {
-        expiredEntries += timeouts.removeExpired(timeoutsExpireHandler);
+        if (timeouts != null)
+            expiredEntries += timeouts.removeExpired(timeoutsExpireHandler);
     }
 
     private long removeEldest()
@@ -361,9 +368,12 @@ final class OffHeapLinkedMap
                 {
                     next = HashEntries.getNext(hashEntryAdr);
 
-                    long expireAt = HashEntries.getExpireAt(hashEntryAdr);
-                    if (expireAt > 0L)
-                        timeouts.remove(hashEntryAdr, expireAt);
+                    if (timeouts != null)
+                    {
+                        long expireAt = HashEntries.getExpireAt(hashEntryAdr);
+                        if (expireAt > 0L)
+                            timeouts.remove(hashEntryAdr, expireAt);
+                    }
 
                     freed += HashEntries.getAllocLen(hashEntryAdr);
                     HashEntries.dereference(hashEntryAdr);
@@ -552,7 +562,7 @@ final class OffHeapLinkedMap
         boolean wasFirst = lock();
         try
         {
-            long t = System.currentTimeMillis();
+            long t = ticker.currentTimeMillis();
             for (; nSegments-- > 0 && mapSegmentIndex < table.size(); mapSegmentIndex++)
                 for (long hashEntryAdr = table.getFirst(mapSegmentIndex);
                      hashEntryAdr != 0L;
@@ -704,7 +714,7 @@ final class OffHeapLinkedMap
 
         table.removeLink(hash, hashEntryAdr, prevEntryAdr);
 
-        if (removeFromTimeouts)
+        if (removeFromTimeouts && timeouts != null)
         {
             long expireAt = HashEntries.getExpireAt(hashEntryAdr);
             if (expireAt > 0L)
@@ -749,7 +759,12 @@ final class OffHeapLinkedMap
                 replaceInternal(oldHashEntryAdr, prevEntryAdr, newHashEntryAdr);
 
                 if (expireAt > 0L)
-                    timeouts.add(newHashEntryAdr, expireAt);
+                {
+                    if (timeouts != null)
+                        timeouts.add(newHashEntryAdr, expireAt);
+                    else
+                        throw new IllegalStateException("entry TTLs not enabled on this cache instance");
+                }
 
                 if (freeCapacity < bytes)
                     removeExpired();
@@ -824,7 +839,12 @@ final class OffHeapLinkedMap
             lruTail = hashEntryAdr;
 
         if (expireAt > 0L)
-            timeouts.add(hashEntryAdr, expireAt);
+        {
+            if (timeouts != null)
+                timeouts.add(hashEntryAdr, expireAt);
+            else
+                throw new IllegalStateException("entry TTLs not enabled on this cache instance");
+        }
     }
 
     private void touch(long hashEntryAdr)

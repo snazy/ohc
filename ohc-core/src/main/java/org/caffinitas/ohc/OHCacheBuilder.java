@@ -116,6 +116,11 @@ import org.caffinitas.ohc.linked.OHCacheLinkedImpl;
  *         <td>The amount of time in milliseconds for each timeouts-slot.</td>
  *         <td>{@code 128}</td>
  *     </tr>
+ *     <tr>
+ *         <td>{@code ticker}</td>
+ *         <td>Indirection for current time - used for unit tests.</td>
+ *         <td>Default ticker using {@code System.nanoTime()} and {@code System.currentTimeMillis()}</td>
+ *     </tr>
  * </table>
  * <p>
  *     You may also use system properties prefixed with {@code org.caffinitas.org.} to other defaults.
@@ -142,8 +147,10 @@ public class OHCacheBuilder<K, V>
     private HashAlgorithm hashAlgorighm = HashAlgorithm.MURMUR3;
     private boolean unlocked;
     private long defaultTTLmillis;
+    private boolean timeouts;
     private int timeoutsSlots;
     private int timeoutsPrecision;
+    private Ticker ticker = Ticker.DEFAULT;
 
     private OHCacheBuilder()
     {
@@ -162,6 +169,7 @@ public class OHCacheBuilder<K, V>
         hashAlgorighm = HashAlgorithm.valueOf(fromSystemProperties("hashAlgorighm", hashAlgorighm.name()));
         unlocked = fromSystemProperties("unlocked", unlocked);
         defaultTTLmillis = fromSystemProperties("defaultTTLmillis", defaultTTLmillis);
+        timeouts = fromSystemProperties("timeouts", timeouts);
         timeoutsSlots = fromSystemProperties("timeoutsSlots", timeoutsSlots);
         timeoutsPrecision = fromSystemProperties("timeoutsPrecision", timeoutsPrecision);
     }
@@ -417,6 +425,17 @@ public class OHCacheBuilder<K, V>
         return this;
     }
 
+    public boolean isTimeouts()
+    {
+        return timeouts;
+    }
+
+    public OHCacheBuilder<K, V> timeouts(boolean timeouts)
+    {
+        this.timeouts = timeouts;
+        return this;
+    }
+
     public int getTimeoutsSlots()
     {
         return timeoutsSlots;
@@ -424,6 +443,8 @@ public class OHCacheBuilder<K, V>
 
     public OHCacheBuilder<K, V> timeoutsSlots(int timeoutsSlots)
     {
+        if (timeoutsSlots > 0)
+            this.timeouts = true;
         this.timeoutsSlots = timeoutsSlots;
         return this;
     }
@@ -435,7 +456,20 @@ public class OHCacheBuilder<K, V>
 
     public OHCacheBuilder<K, V> timeoutsPrecision(int timeoutsPrecision)
     {
+        if (timeoutsPrecision > 0)
+            this.timeouts = true;
         this.timeoutsPrecision = timeoutsPrecision;
+        return this;
+    }
+
+    public Ticker getTicker()
+    {
+        return ticker;
+    }
+
+    public OHCacheBuilder<K, V> ticker(Ticker ticker)
+    {
+        this.ticker = ticker;
         return this;
     }
 }
