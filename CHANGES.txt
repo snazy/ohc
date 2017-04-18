@@ -1,3 +1,9 @@
+0.6.1
+=====
+
+- update maven plugin versions
+- update jmh version
+
 0.6.0
 =====
 

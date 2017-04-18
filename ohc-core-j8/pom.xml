@@ -115,6 +115,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                 <configuration>
                     <systemProperties>
                         <org.caffinitas.ohc.disableJEmalloc>false</org.caffinitas.ohc.disableJEmalloc>
@@ -130,6 +131,7 @@
             <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
+                <version>${version.org.apache.felix.maven-bundle-plugin}</version>
                 <extensions>true</extensions>
                 <executions>
                     <execution>
@@ -167,6 +169,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
+                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                         <executions>
                             <execution>
                                 <id>unsafe</id>
@@ -196,6 +199,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
+                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                         <executions>
                             <execution>
                                 <id>xxhash</id>
@@ -226,6 +230,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
+                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                         <executions>
                             <execution>
                                 <id>crc32</id>
@@ -256,6 +261,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
+                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                         <executions>
                             <execution>
                                 <id>unsafe</id>
