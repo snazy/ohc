@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.6.1-SNAPSHOT</version>
+        <version>0.6.2-SNAPSHOT</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-core-j8</artifactId>
-    <version>0.6.1-SNAPSHOT</version>
+    <version>0.6.2-SNAPSHOT</version>
 
     <name>OHC core - Java8 optimization</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
