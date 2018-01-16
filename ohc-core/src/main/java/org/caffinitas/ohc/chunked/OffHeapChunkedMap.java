@@ -951,7 +951,8 @@ final class OffHeapChunkedMap
             // yield control to other thread.
             // Note: we cannot use LockSupport.parkNanos() as that does not
             // provide nanosecond resolution on Windows.
-            Thread.yield();
+            while(lockFieldUpdater.get(this) != 0L)
+                Thread.yield();
         }
     }
 
