@@ -13,15 +13,29 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc;
+package org.caffinitas.ohc.linked;
 
-public enum HashAlgorithm
+import java.util.zip.CRC32C;
+
+class Crc32cHash extends Hasher
 {
-    MURMUR3,
+    long hash(byte[] array)
+    {
+        CRC32C crc = new CRC32C();
+        crc.update(array);
+        long h = crc.getValue();
+        h |= h << 32;
+        return h;
+    }
 
-    CRC32,
+    long hash(long address, long offset, int length)
+    {
+        Uns.validate(address, offset, length);
 
-    CRC32C,
-
-    XX
+        CRC32C crc = new CRC32C();
+        crc.update(Uns.directBufferFor(address, offset, length, true));
+        long h = crc.getValue();
+        h |= h << 32;
+        return h;
+    }
 }

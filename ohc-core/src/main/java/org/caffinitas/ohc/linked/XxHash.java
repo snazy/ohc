@@ -13,15 +13,21 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc;
+package org.caffinitas.ohc.linked;
 
-public enum HashAlgorithm
+import net.jpountz.xxhash.XXHashFactory;
+
+final class XxHash extends Hasher
 {
-    MURMUR3,
+    private static final XXHashFactory xx = XXHashFactory.fastestInstance();
 
-    CRC32,
+    long hash(long address, long offset, int length)
+    {
+        return xx.hash64().hash(Uns.directBufferFor(address, offset, length, true), 0);
+    }
 
-    CRC32C,
-
-    XX
+    long hash(byte[] array)
+    {
+        return xx.hash64().hash(array, 0, array.length, 0);
+    }
 }

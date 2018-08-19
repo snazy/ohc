@@ -177,7 +177,7 @@
             <id>integration-tests</id>
             <activation>
                 <property>
-                    <name>!skipTests</name>
+                    <name>!skipJmh</name>
                 </property>
             </activation>
             <build>

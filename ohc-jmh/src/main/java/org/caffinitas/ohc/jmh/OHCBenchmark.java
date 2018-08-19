@@ -58,7 +58,7 @@ public class OHCBenchmark
     private int hashTableSz = -1;
     @Param("10000000")
     private int keys = 10_000_000;
-    @Param({ "MURMUR3", "CRC32", "XX" })
+    @Param({ "MURMUR3", "CRC32", "CRC32C", "XX" })
     private HashAlgorithm hashAlg = HashAlgorithm.MURMUR3;
     @Param({ "-1", "65536"/*, "131072"*/ })
     private int chunkSz = -1;

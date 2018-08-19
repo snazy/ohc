@@ -9,6 +9,7 @@ Features
 - entry eviction and expiration without a separate thread
 - capable of maintaining huge amounts of cache memory
 - suitable for tiny/small entries with low overhead using the chunked implementation
+- runs with Java 8 and Java 11 - support for Java 7 and earlier has been dropped with version 0.7.0
 
 Performance
 ===========
@@ -182,13 +183,13 @@ Key and value serializers need to implement the ``CacheSerializer`` interface. T
 - ``void serialize(Object obj, DataOutput out)`` to serialize the given object to the data output
 - ``T deserialize(DataInput in)`` to deserialize an object from the data input
 
-Java 9
-------
+Java 11
+-------
 
-Java 9 support is still *experimental*!
+Java 11 support is still *experimental*!
 
-OHC has been tested with some *early access* releases of Java 9 and the unit and JMH tests pass. However,
-it requires access to ``sun.misc.Unsafe`` via the JVM option ``-XaddExports:java.base/sun.nio.ch=ALL-UNNAMED``.
+OHC has been tested with some *early access* releases of Java 11 and the unit and JMH tests pass. However,
+it requires access to ``sun.misc.Unsafe`` via the JVM option ``--add-exports java.base/sun.nio.ch=ALL-UNNAMED``.
 
 Building from source
 ====================

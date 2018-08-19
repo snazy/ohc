@@ -42,6 +42,7 @@ public class KeyBufferTest
         return new Object[][]{
         { HashAlgorithm.MURMUR3 },
         { HashAlgorithm.CRC32 },
+        // TODO { HashAlgorithm.CRC32C }, testing this with Java 8 yields to test failures (as the implementation falls back to CRC32)
         // TODO { HashAlgorithm.XX }
         };
     }
@@ -87,6 +88,8 @@ public class KeyBufferTest
                 return Hashing.murmur3_128().newHasher();
             case CRC32:
                 return Hashing.crc32().newHasher();
+            case CRC32C:
+                return Hashing.crc32c().newHasher();
             default:
                 throw new IllegalArgumentException();
         }

@@ -335,7 +335,7 @@
                 <jdk>11</jdk>
             </activation>
             <properties>
-                <surefire.jvmargs>-XaddExports:java.base/sun.nio.ch=ALL-UNNAMED</surefire.jvmargs>
+                <surefire.jvmargs>--add-exports java.base/sun.nio.ch=ALL-UNNAMED</surefire.jvmargs>
             </properties>
         </profile>
 
@@ -395,6 +395,7 @@
         <!--
         Release deployment procecure:
 
+            . ~/devel/java11-openjdk.sh
             mvn clean
             mvn jgitflow:release-start -Pdeploy
             mvn jgitflow:release-finish -Pdeploy
@@ -402,6 +403,7 @@
 
             ALTERNATIVE:
 
+            . ~/devel/java11-openjdk.sh
             mvn clean
             mvn jgitflow:release-start -Pdeploy
             mvn jgitflow:release-finish -Pdeploy -DkeepBranch=true -DnoDeploy=true

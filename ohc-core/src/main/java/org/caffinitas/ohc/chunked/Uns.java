@@ -22,7 +22,6 @@ import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.zip.CRC32;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -151,13 +150,6 @@ final class Uns
 
     private Uns()
     {
-    }
-
-    static long crc32(ByteBuffer buffer)
-    {
-        CRC32 crc = new CRC32();
-        crc.update(buffer);
-        return crc.getValue();
     }
 
     static void copyMemory(byte[] arr, int off, long address, long offset, long len)

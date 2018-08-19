@@ -13,15 +13,17 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc;
+package org.caffinitas.ohc.chunked;
 
-public enum HashAlgorithm
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+final class Crc32cHash extends Crc32Hash
 {
-    MURMUR3,
+    private static final Logger LOGGER = LoggerFactory.getLogger(Hasher.class);
 
-    CRC32,
-
-    CRC32C,
-
-    XX
+    Crc32cHash()
+    {
+        LOGGER.warn("CRC32C hash is only available with Java 11 or newer. Falling back to CRC32.");
+    }
 }

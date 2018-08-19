@@ -23,7 +23,6 @@ import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.zip.CRC32;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,7 +110,7 @@ final class Uns
         }
     }
 
-    private static void validate(long address, long offset, long len)
+    static void validate(long address, long offset, long len)
     {
         if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
         {
@@ -313,17 +312,6 @@ final class Uns
                 return false;
 
         return true;
-    }
-
-    static long crc32(long address, long offset, long len)
-    {
-        validate(address, offset, len);
-
-        CRC32 crc = new CRC32();
-        crc.update(Uns.directBufferFor(address, offset, len, true));
-        long h = crc.getValue();
-        h |= h << 32;
-        return h;
     }
 
     static long getTotalAllocated()
