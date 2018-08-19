@@ -1,6 +1,7 @@
 0.7.0
 =====
 
+#53 Fix calculation of 'slots' in Timeouts
 #59 Fix initialization of 'precision' in Timeout
 #61 fix double counting in Timeouts.removeExpired()
 - upgrade a bunch of dependencies
