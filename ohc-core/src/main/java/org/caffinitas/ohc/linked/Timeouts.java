@@ -68,7 +68,7 @@ final class Timeouts
         for (int i = 0; i < slotCount; i++)
             this.slots[i] = new Slot();
 
-        precision = Util.roundUpToPowerOf2(Math.min(precision, 1), 1 << 30);
+        precision = Util.roundUpToPowerOf2(Math.max(precision, 1), 1 << 30);
         precisionShift = 64 - Util.bitNum(precision) - 1;
     }
 
