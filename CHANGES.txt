@@ -1,6 +1,7 @@
 0.7.0
 =====
 
+#61 fix double counting in Timeouts.removeExpired()
 - upgrade a bunch of dependencies
   - Guave to version 19.0
   - SLF4J to 1.7.25

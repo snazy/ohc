@@ -119,7 +119,7 @@ final class Timeouts
         int expired = 0;
         for (int i = 0; i < slotCount; i++)
         {
-            expired += slots[i++].removeExpired(t, expireHandler);
+            expired += slots[i].removeExpired(t, expireHandler);
         }
         return expired;
     }
