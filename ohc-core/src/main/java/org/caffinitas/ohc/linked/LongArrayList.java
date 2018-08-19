@@ -22,12 +22,12 @@ final class LongArrayList
     private long[] array;
     private int size;
 
-    public LongArrayList()
+    LongArrayList()
     {
         this(10);
     }
 
-    public LongArrayList(int initialCapacity)
+    LongArrayList(int initialCapacity)
     {
         array = new long[initialCapacity];
     }

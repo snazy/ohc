@@ -56,13 +56,7 @@ abstract class OffHeapLinkedMap
     private final Ticker ticker;
 
     private final Timeouts timeouts;
-    private final Timeouts.TimeoutHandler timeoutsExpireHandler = new Timeouts.TimeoutHandler()
-    {
-        public void expired(long hashEntryAdr)
-        {
-            removeEntry(hashEntryAdr, false);
-        }
-    };
+    private final Timeouts.TimeoutHandler timeoutsExpireHandler = hashEntryAdr -> removeEntry(hashEntryAdr, false);
 
     OffHeapLinkedMap(OHCacheBuilder builder)
     {

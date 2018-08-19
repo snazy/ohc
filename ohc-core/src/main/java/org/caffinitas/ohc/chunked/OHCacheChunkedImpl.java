@@ -23,10 +23,8 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import com.google.common.primitives.Ints;
 import org.slf4j.Logger;
@@ -336,12 +334,12 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
         return segment(key.hash()).removeEntry(key);
     }
 
-    public V getWithLoader(K key, CacheLoader<K, V> loader) throws InterruptedException, ExecutionException
+    public V getWithLoader(K key, CacheLoader<K, V> loader)
     {
         throw unsupportedOp();
     }
 
-    public V getWithLoader(K key, CacheLoader<K, V> loader, long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException
+    public V getWithLoader(K key, CacheLoader<K, V> loader, long timeout, TimeUnit unit)
     {
         throw unsupportedOp();
     }
@@ -598,32 +596,32 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
     // serialization (serialized data cannot be ported between different CPU architectures, if endianess differs)
     //
 
-    public CloseableIterator<K> deserializeKeys(final ReadableByteChannel channel) throws IOException
+    public CloseableIterator<K> deserializeKeys(final ReadableByteChannel channel)
     {
         throw unsupportedOp();
     }
 
-    public boolean deserializeEntry(ReadableByteChannel channel) throws IOException
+    public boolean deserializeEntry(ReadableByteChannel channel)
     {
         throw unsupportedOp();
     }
 
-    public boolean serializeEntry(K key, WritableByteChannel channel) throws IOException
+    public boolean serializeEntry(K key, WritableByteChannel channel)
     {
         throw unsupportedOp();
     }
 
-    public int deserializeEntries(ReadableByteChannel channel) throws IOException
+    public int deserializeEntries(ReadableByteChannel channel)
     {
         throw unsupportedOp();
     }
 
-    public int serializeHotNEntries(int n, WritableByteChannel channel) throws IOException
+    public int serializeHotNEntries(int n, WritableByteChannel channel)
     {
         throw unsupportedOp();
     }
 
-    public int serializeHotNKeys(int n, WritableByteChannel channel) throws IOException
+    public int serializeHotNKeys(int n, WritableByteChannel channel)
     {
         throw unsupportedOp();
     }
@@ -683,7 +681,7 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
             snaphotBuffer = ByteBuffer.allocate(chunkSize + Util.CHUNK_OFF_DATA);
         }
 
-        public void close() throws IOException
+        public void close()
         {
             // noop
         }

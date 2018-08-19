@@ -16,7 +16,6 @@
 package org.caffinitas.ohc.chunked;
 
 import java.nio.ByteBuffer;
-import java.util.zip.CRC32;
 
 import net.jpountz.xxhash.XXHashFactory;
 import org.caffinitas.ohc.HashAlgorithm;

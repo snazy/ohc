@@ -24,7 +24,6 @@ import java.nio.channels.WritableByteChannel;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -417,73 +416,69 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                 // this request IS the initial requestor for the key
 
                 final long sentinelHashEntryAdr = hashEntryAdr;
-                return executorService.submit(new Callable<V>()
-                {
-                    public V call() throws Exception
+                return executorService.submit(() -> {
+                    Exception failure = null;
+                    V value = null;
+                    boolean derefSentinel = false;
+
+                    try
                     {
-                        Exception failure = null;
-                        V value = null;
-                        boolean derefSentinel = false;
+                        value = loader.load(key);
 
-                        try
+                        long entryExpireAt = expireAt;
+                        if (value == null || (entryExpireAt > 0L && entryExpireAt <= ticker.currentTimeMillis()))
                         {
-                            value = loader.load(key);
+                            // If the value is null, it means the loaded could not
+                            // already expired
 
-                            long entryExpireAt = expireAt;
-                            if (value == null || (entryExpireAt > 0L && entryExpireAt <= ticker.currentTimeMillis()))
-                            {
-                                // If the value is null, it means the loaded could not
-                                // already expired
+                            segment.removeEntry(sentinelHashEntryAdr);
 
-                                segment.removeEntry(sentinelHashEntryAdr);
-
-                                return null;
-                            }
-
-                            // not already expired
-
-                            int valueLen = valueSize(value);
-
-                            long bytes = Util.allocLen(keyLen, valueLen);
-
-                            long hashEntryAdr;
-                            if ((maxEntrySize > 0L && bytes > maxEntrySize) || (hashEntryAdr = Uns.allocate(bytes, throwOOME)) == 0L)
-                                throw new RuntimeException("max entry size exceeded or malloc() failed");
-
-                            long hash = serializeForPut(key, value, keyLen, valueLen, hashEntryAdr);
-                            if (entryExpireAt == USE_DEFAULT_EXPIRE_AT)
-                                entryExpireAt = defaultExpireAt();
-
-                            // initialize hash entry
-                            HashEntries.init(hash, keyLen, valueLen, hashEntryAdr, Util.SENTINEL_NOT_PRESENT, entryExpireAt);
-
-                            if (!segment.replaceSentinelEntry(hash, sentinelHashEntryAdr, hashEntryAdr, bytes, entryExpireAt))
-                                throw new RuntimeException("not enough free capacity");
-                            derefSentinel = true;
-
-                            HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_SUCCESS);
-                            HashEntries.dereference(sentinelHashEntryAdr);
-                        }
-                        catch (PermanentLoadException e)
-                        {
-                            HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_PERMANENT_FAILURE);
-                            throw e;
-                        }
-                        catch (Throwable e)
-                        {
-                            failure = e instanceof Exception ? (Exception) e : new RuntimeException(e);
-                            HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_TEMPORARY_FAILURE);
-                            if (derefSentinel)
-                                HashEntries.dereference(sentinelHashEntryAdr);
-                            else
-                                segment.removeEntry(sentinelHashEntryAdr);
+                            return null;
                         }
 
-                        if (failure != null)
-                            throw failure;
+                        // not already expired
 
-                        return value;
+                        int valueLen = valueSize(value);
+
+                        long bytes1 = Util.allocLen(keyLen, valueLen);
+
+                        long hashEntryAdr1;
+                        if ((maxEntrySize > 0L && bytes1 > maxEntrySize) || (hashEntryAdr1 = Uns.allocate(bytes1, throwOOME)) == 0L)
+                            throw new RuntimeException("max entry size exceeded or malloc() failed");
+
+                        long hash1 = serializeForPut(key, value, keyLen, valueLen, hashEntryAdr1);
+                        if (entryExpireAt == USE_DEFAULT_EXPIRE_AT)
+                            entryExpireAt = defaultExpireAt();
+
+                        // initialize hash entry
+                        HashEntries.init(hash1, keyLen, valueLen, hashEntryAdr1, Util.SENTINEL_NOT_PRESENT, entryExpireAt);
+
+                        if (!segment.replaceSentinelEntry(hash1, sentinelHashEntryAdr, hashEntryAdr1, bytes1, entryExpireAt))
+                            throw new RuntimeException("not enough free capacity");
+                        derefSentinel = true;
+
+                        HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_SUCCESS);
+                        HashEntries.dereference(sentinelHashEntryAdr);
                     }
+                    catch (PermanentLoadException e)
+                    {
+                        HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_PERMANENT_FAILURE);
+                        throw e;
+                    }
+                    catch (Throwable e)
+                    {
+                        failure = e instanceof Exception ? (Exception) e : new RuntimeException(e);
+                        HashEntries.setSentinel(sentinelHashEntryAdr, Util.SENTINEL_TEMPORARY_FAILURE);
+                        if (derefSentinel)
+                            HashEntries.dereference(sentinelHashEntryAdr);
+                        else
+                            segment.removeEntry(sentinelHashEntryAdr);
+                    }
+
+                    if (failure != null)
+                        throw failure;
+
+                    return value;
                 });
             }
             else
@@ -1396,7 +1391,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
 
         long lastHashEntryAdr;
 
-        public AbstractHotKeyIterator(int n)
+        AbstractHotKeyIterator(int n)
         {
             // hotN implementation does only return a (good) approximation - not necessarily the exact hotN
             // since it iterates over the all segments and takes a fraction of 'n' from them.

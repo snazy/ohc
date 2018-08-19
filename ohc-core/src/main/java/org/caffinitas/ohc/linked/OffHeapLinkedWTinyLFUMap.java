@@ -102,15 +102,12 @@ final class OffHeapLinkedWTinyLFUMap extends OffHeapLinkedMap
         long candidateAdr = edenLruTail;
         long nextCandidateAdr;
 
-        if (bytes > edenFreeCapacity)
+        // main generation has enough free capacity for candidate from eden, just move candidate to main generation and return
+        // (note: this happens when the cache is initially empty and new entries get added)
+        if (mainLruTail == 0L || mainFreeCapacity >= bytes)
         {
-            // main generation has enough free capacity for candidate from eden, just move candidate to main generation and return
-            // (note: this happens when the cache is initially empty and new entries get added)
-            if (mainLruTail == 0L || mainFreeCapacity >= bytes)
-            {
-                moveCandidateFromEdenToMain(candidateAdr);
-                return null;
-            }
+            moveCandidateFromEdenToMain(candidateAdr);
+            return null;
         }
 
         // status: main generation has not enough room - need to check entries in eden generation against entries in
