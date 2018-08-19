@@ -272,8 +272,7 @@
                                 <configuration>
                                     <tasks>
                                         <mkdir dir="target/classes11" />
-                                        <javac srcdir="src/main/java11" destdir="target/classes11"
-                                               classpath="${project.build.outputDirectory}" includeantruntime="false" />
+                                        <javac srcdir="src/main/java11" destdir="target/classes11" classpath="${project.build.outputDirectory}" includeantruntime="false" />
                                     </tasks>
                                 </configuration>
                                 <goals>
