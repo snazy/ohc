@@ -5,12 +5,12 @@
     <parent>
         <groupId>org.caffinitas.ohc</groupId>
         <artifactId>ohc-parent</artifactId>
-        <version>0.7.0-SNAPSHOT</version>
+        <version>0.7.1-SNAPSHOT</version>
         <relativePath>..</relativePath>
     </parent>
 
     <artifactId>ohc-core</artifactId>
-    <version>0.7.0-SNAPSHOT</version>
+    <version>0.7.1-SNAPSHOT</version>
 
     <name>OHC core</name>
     <description>Off-Heap concurrent hash map intended to store GBs of serialized data</description>
@@ -272,8 +272,7 @@
                                 <configuration>
                                     <tasks>
                                         <mkdir dir="target/classes11" />
-                                        <javac srcdir="src/main/java11" destdir="target/classes11"
-                                               classpath="${project.build.outputDirectory}" includeantruntime="false" />
+                                        <javac srcdir="src/main/java11" destdir="target/classes11" classpath="${project.build.outputDirectory}" includeantruntime="false" />
                                     </tasks>
                                 </configuration>
                                 <goals>
