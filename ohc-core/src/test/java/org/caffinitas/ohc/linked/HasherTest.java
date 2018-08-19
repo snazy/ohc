@@ -36,6 +36,12 @@ public class HasherTest
     }
 
     @Test
+    public void testCRC32C()
+    {
+        test(HashAlgorithm.CRC32C);
+    }
+
+    @Test
     public void testXX()
     {
         test(HashAlgorithm.XX);

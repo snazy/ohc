@@ -15,20 +15,27 @@
  */
 package org.caffinitas.ohc.linked;
 
-import sun.misc.Unsafe;
+import java.util.zip.CRC32C;
 
-abstract class UnsExt
+class Crc32cHash extends Hasher
 {
-    final Unsafe unsafe;
-
-    UnsExt(Unsafe unsafe)
+    long hash(byte[] array)
     {
-        this.unsafe = unsafe;
+        CRC32C crc = new CRC32C();
+        crc.update(array);
+        long h = crc.getValue();
+        h |= h << 32;
+        return h;
     }
 
-    abstract long getAndPutLong(long address, long offset, long value);
+    long hash(long address, long offset, int length)
+    {
+        Uns.validate(address, offset, length);
 
-    abstract int getAndAddInt(long address, long offset, int value);
-
-    abstract long crc32(long address, long offset, long len);
+        CRC32C crc = new CRC32C();
+        crc.update(Uns.directBufferFor(address, offset, length, true));
+        long h = crc.getValue();
+        h |= h << 32;
+        return h;
+    }
 }

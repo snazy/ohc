@@ -13,25 +13,27 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc.chunked;
+package org.caffinitas.ohc.linked;
 
-import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
 
-import sun.misc.Unsafe;
-
-final class UnsExt7 extends UnsExt
+class Crc32Hash extends Hasher
 {
-    UnsExt7(Unsafe unsafe)
-    {
-        super(unsafe);
-    }
-
-    long crc32(ByteBuffer buffer)
+    long hash(byte[] array)
     {
         CRC32 crc = new CRC32();
-        while (buffer.hasRemaining())
-            crc.update(buffer.get());
+        crc.update(array);
+        long h = crc.getValue();
+        h |= h << 32;
+        return h;
+    }
+
+    long hash(long address, long offset, int length)
+    {
+        Uns.validate(address, offset, length);
+
+        CRC32 crc = new CRC32();
+        crc.update(Uns.directBufferFor(address, offset, length, true));
         long h = crc.getValue();
         h |= h << 32;
         return h;

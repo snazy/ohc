@@ -1,3 +1,20 @@
+0.7.0
+=====
+
+- introduced experimental support for Java 11
+  - ohc-core.jar is now built as a multi-release jar
+  - hasher implementation for CRC32C, falls back to CRC32 before Java 11
+#53 Fix calculation of 'slots' in Timeouts
+#59 Fix initialization of 'precision' in Timeout
+#61 fix double counting in Timeouts.removeExpired()
+- upgrade a bunch of dependencies
+  - Guave to version 19.0
+  - SLF4J to 1.7.25
+  - snappy to 1.1.7.2
+  - jna to 4.5.2
+- removed support for Java 7, therefore the artifact ohc-core-j8 is no longer necessary
+
+
 0.6.1
 =====
 

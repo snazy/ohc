@@ -94,12 +94,15 @@ public class CrossCheckTest
         return new Object[][]{
         { Eviction.LRU, HashAlgorithm.MURMUR3 },
         { Eviction.LRU, HashAlgorithm.CRC32 },
+        { Eviction.LRU, HashAlgorithm.CRC32C },
         { Eviction.LRU, HashAlgorithm.XX },
         { Eviction.W_TINY_LFU, HashAlgorithm.MURMUR3 },
         { Eviction.W_TINY_LFU, HashAlgorithm.CRC32 },
+        { Eviction.W_TINY_LFU, HashAlgorithm.CRC32C },
         { Eviction.W_TINY_LFU, HashAlgorithm.XX },
         { Eviction.NONE, HashAlgorithm.MURMUR3 },
         { Eviction.NONE, HashAlgorithm.CRC32 },
+        { Eviction.NONE, HashAlgorithm.CRC32C },
         { Eviction.NONE, HashAlgorithm.XX }
         };
     }
@@ -110,6 +113,7 @@ public class CrossCheckTest
         return new Object[][]{
         { Eviction.LRU, HashAlgorithm.MURMUR3 },
         { Eviction.LRU, HashAlgorithm.CRC32 },
+        { Eviction.LRU, HashAlgorithm.CRC32C },
         { Eviction.LRU, HashAlgorithm.XX }
         };
     }
@@ -120,6 +124,7 @@ public class CrossCheckTest
         return new Object[][]{
         { Eviction.NONE, HashAlgorithm.MURMUR3 },
         { Eviction.NONE, HashAlgorithm.CRC32 },
+        { Eviction.NONE, HashAlgorithm.CRC32C },
         { Eviction.NONE, HashAlgorithm.XX }
         };
     }

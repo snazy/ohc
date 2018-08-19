@@ -13,11 +13,21 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc;
+package org.caffinitas.ohc.linked;
 
-/**
- * This is a placeholder for Javadoc to succeed since maven-central requires a javadoc artifact for everything
- */
-public class DummyJavadocPlaceholder
+import net.jpountz.xxhash.XXHashFactory;
+
+final class XxHash extends Hasher
 {
+    private static final XXHashFactory xx = XXHashFactory.fastestInstance();
+
+    long hash(long address, long offset, int length)
+    {
+        return xx.hash64().hash(Uns.directBufferFor(address, offset, length, true), 0);
+    }
+
+    long hash(byte[] array)
+    {
+        return xx.hash64().hash(array, 0, array.length, 0);
+    }
 }

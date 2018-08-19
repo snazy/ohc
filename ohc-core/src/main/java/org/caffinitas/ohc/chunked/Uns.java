@@ -20,7 +20,6 @@ import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Map;
-import java.util.StringTokenizer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -47,8 +46,8 @@ final class Uns
     //
     // #ifdef __DEBUG_OFF_HEAP_MEMORY_ACCESS
     //
-    private static final ConcurrentMap<Long, AllocInfo> ohDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, AllocInfo>(16384) : null;
-    private static final Map<Long, Throwable> ohFreeDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<Long, Throwable>(16384) : null;
+    private static final ConcurrentMap<Long, AllocInfo> ohDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<>(16384) : null;
+    private static final Map<Long, Throwable> ohFreeDebug = __DEBUG_OFF_HEAP_MEMORY_ACCESS ? new ConcurrentHashMap<>(16384) : null;
 
     private static final class AllocInfo
     {
@@ -114,8 +113,6 @@ final class Uns
     // #endif
     //
 
-    private static final UnsExt ext;
-
     static
     {
         try
@@ -125,34 +122,6 @@ final class Uns
             unsafe = (Unsafe) field.get(null);
             if (unsafe.addressSize() > 8)
                 throw new RuntimeException("Address size " + unsafe.addressSize() + " not supported yet (max 8 bytes)");
-
-            String javaVersion = System.getProperty("java.version");
-            if (javaVersion.indexOf('-') != -1)
-                javaVersion = javaVersion.substring(0, javaVersion.indexOf('-'));
-            StringTokenizer st = new StringTokenizer(javaVersion, ".");
-            int major = Integer.parseInt(st.nextToken());
-            int minor = st.hasMoreTokens() ? Integer.parseInt(st.nextToken()) : 0;
-            UnsExt e;
-            if (major > 1 || minor >= 8)
-                try
-                {
-                    // use new Java8 methods in sun.misc.Unsafe
-                    Class<? extends UnsExt> cls = (Class<? extends UnsExt>) Class.forName(UnsExt7.class.getName().replace('7', '8'));
-                    e = cls.getDeclaredConstructor(Unsafe.class).newInstance(unsafe);
-                    LOGGER.info("OHC using Java8 Unsafe API");
-                }
-                catch (VirtualMachineError ex)
-                {
-                    throw ex;
-                }
-                catch (Throwable ex)
-                {
-                    LOGGER.warn("Failed to load Java8 implementation ohc-core-j8 : " + ex);
-                    e = new UnsExt7(unsafe);
-                }
-            else
-                e = new UnsExt7(unsafe);
-            ext = e;
 
             if (__DEBUG_OFF_HEAP_MEMORY_ACCESS)
                 LOGGER.warn("Degraded performance due to off-heap memory allocations and access guarded by debug code enabled via system property " + OHCacheBuilder.SYSTEM_PROPERTY_PREFIX + "debugOffHeapAccess=true");
@@ -181,11 +150,6 @@ final class Uns
 
     private Uns()
     {
-    }
-
-    static long crc32(ByteBuffer buffer)
-    {
-        return ext.crc32(buffer);
     }
 
     static void copyMemory(byte[] arr, int off, long address, long offset, long len)

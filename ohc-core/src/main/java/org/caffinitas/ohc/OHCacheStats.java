@@ -17,8 +17,6 @@ package org.caffinitas.ohc;
 
 import java.util.Arrays;
 
-import com.google.common.base.Objects;
-
 public final class OHCacheStats
 {
     private final long hitCount;
@@ -149,22 +147,23 @@ public final class OHCacheStats
         return lruCompactions;
     }
 
-    public String toString()
-    {
-        return Objects.toStringHelper(this)
-                      .add("hitCount", hitCount)
-                      .add("missCount", missCount)
-                      .add("evictionCount", evictionCount)
-                      .add("size", size)
-                      .add("capacity", capacity)
-                      .add("free", free)
-                      .add("rehashCount", rehashCount)
-                      .add("put(add/replace/fail)", Long.toString(putAddCount)+'/'+putReplaceCount+'/'+putFailCount)
-                      .add("removeCount", removeCount)
-                      .add("segmentSizes(#/min/max/avg)", String.format("%d/%d/%d/%.2f", segmentSizes.length, getMinSegmentSize(), getMaxSegmentSize(), getAverageSegmentSize()))
-                      .add("totalAllocated", totalAllocated)
-                      .add("lruCompactions", lruCompactions)
-                      .toString();
+    @Override
+    public String toString() {
+        return "OHCacheStats{" +
+                "hitCount=" + hitCount +
+                ", missCount=" + missCount +
+                ", evictionCount=" + evictionCount +
+                ", expireCount=" + expireCount +
+                ", size=" + size +
+                ", capacity=" + capacity +
+                ", free=" + free +
+                ", rehashCount=" + rehashCount +
+                ", put(add/replace/fail)=" + Long.toString(putAddCount)+'/'+putReplaceCount+'/'+putFailCount +
+                ", removeCount=" + removeCount +
+                ", segmentSizes(#/min/max/avg)=" + String.format("%d/%d/%d/%.2f", segmentSizes.length, getMinSegmentSize(), getMaxSegmentSize(), getAverageSegmentSize()) +
+                ", totalAllocated=" + totalAllocated +
+                ", lruCompactions=" + lruCompactions +
+                '}';
     }
 
     private static long maxOf(long[] arr)

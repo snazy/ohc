@@ -15,18 +15,16 @@
  */
 package org.caffinitas.ohc.chunked;
 
+import net.jpountz.xxhash.XXHashFactory;
+
 import java.nio.ByteBuffer;
 
-import sun.misc.Unsafe;
-
-abstract class UnsExt
+final class XxHash extends Hasher
 {
-    final Unsafe unsafe;
+    private static final XXHashFactory xx = XXHashFactory.fastestInstance();
 
-    UnsExt(Unsafe unsafe)
+    long hash(ByteBuffer buffer)
     {
-        this.unsafe = unsafe;
+        return xx.hash64().hash(buffer, 0);
     }
-
-    abstract long crc32(ByteBuffer buffer);
 }

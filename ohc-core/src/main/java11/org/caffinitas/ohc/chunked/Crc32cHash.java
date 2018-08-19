@@ -13,15 +13,17 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.caffinitas.ohc;
+package org.caffinitas.ohc.chunked;
 
-public enum HashAlgorithm
+import java.nio.ByteBuffer;
+import java.util.zip.CRC32C;
+
+class Crc32cHash extends Hasher
 {
-    MURMUR3,
-
-    CRC32,
-
-    CRC32C,
-
-    XX
+    long hash(ByteBuffer buffer)
+    {
+        CRC32C crc = new CRC32C();
+        crc.update(buffer);
+        return crc.getValue();
+    }
 }

@@ -15,22 +15,15 @@
  */
 package org.caffinitas.ohc.chunked;
 
-import java.nio.ByteBuffer;
-import java.util.zip.CRC32;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import sun.misc.Unsafe;
-
-final class UnsExt8 extends UnsExt
+final class Crc32cHash extends Crc32Hash
 {
-    UnsExt8(Unsafe unsafe)
-    {
-        super(unsafe);
-    }
+    private static final Logger LOGGER = LoggerFactory.getLogger(Hasher.class);
 
-    long crc32(ByteBuffer buffer)
+    Crc32cHash()
     {
-        CRC32 crc = new CRC32();
-        crc.update(buffer);
-        return crc.getValue();
+        LOGGER.warn("CRC32C hash is only available with Java 11 or newer. Falling back to CRC32.");
     }
 }

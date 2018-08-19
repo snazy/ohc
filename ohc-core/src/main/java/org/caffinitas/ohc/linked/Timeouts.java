@@ -59,7 +59,7 @@ final class Timeouts
 
         this.ticker = ticker;
 
-        this.slotCount = Ints.checkedCast(Util.roundUpToPowerOf2(Math.min(slots, 16), 1 << 30));
+        this.slotCount = Ints.checkedCast(Util.roundUpToPowerOf2(Math.max(slots, 16), 1 << 30));
 
         int slotShift = 64 - Util.bitNum(slotCount) - 1;
         this.slotBitmask = ((long) slotCount - 1) << slotShift;
@@ -68,7 +68,7 @@ final class Timeouts
         for (int i = 0; i < slotCount; i++)
             this.slots[i] = new Slot();
 
-        precision = Util.roundUpToPowerOf2(Math.min(precision, 1), 1 << 30);
+        precision = Util.roundUpToPowerOf2(Math.max(precision, 1), 1 << 30);
         precisionShift = 64 - Util.bitNum(precision) - 1;
     }
 
@@ -119,7 +119,7 @@ final class Timeouts
         int expired = 0;
         for (int i = 0; i < slotCount; i++)
         {
-            expired += slots[i++].removeExpired(t, expireHandler);
+            expired += slots[i].removeExpired(t, expireHandler);
         }
         return expired;
     }
