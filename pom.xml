@@ -88,7 +88,7 @@
         <version.org.apache.maven.plugins.maven-source-plugin>3.0.1</version.org.apache.maven.plugins.maven-source-plugin>
         <version.org.apache.maven.plugins.maven-surefire-plugin>2.22.0</version.org.apache.maven.plugins.maven-surefire-plugin>
         <version.org.apache.maven.plugins.maven-surefire-report-plugin>2.22.0</version.org.apache.maven.plugins.maven-surefire-report-plugin>
-        <version.org.apache.logging.log4j>2.11.1</version.org.apache.logging.log4j>
+        <version.org.apache.logging.log4j>2.13.3</version.org.apache.logging.log4j>
         <version.org.codehaus.mojo.cobertura-maven-plugin>2.7</version.org.codehaus.mojo.cobertura-maven-plugin>
         <version.org.codehaus.mojo.exec-maven-plugin>1.6.0</version.org.codehaus.mojo.exec-maven-plugin>
         <version.org.slf4j>1.7.25</version.org.slf4j>
