@@ -68,7 +68,7 @@
     </issueManagement>
 
     <properties>
-        <jmh.version>1.21</jmh.version>
+        <jmh.version>1.26</jmh.version>
         <uberjar.name>benchmarks</uberjar.name>
     </properties>
 
@@ -196,10 +196,10 @@
                                 <configuration>
                                     <classpathScope>test</classpathScope>
                                     <executable>java</executable>
+                                    <commantLineArgs>${surefire.jvmargs}</commantLineArgs>
                                     <arguments>
                                         <argument>-classpath</argument>
                                         <classpath />
-                                        <argument>${surefire.jvmargs}</argument>
                                         <argument>org.openjdk.jmh.Main</argument>
                                         <argument>.*</argument>
                                     </arguments>

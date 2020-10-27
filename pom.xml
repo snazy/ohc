@@ -207,6 +207,11 @@
                     <configuration>
                         <source>1.8</source>
                         <target>1.8</target>
+
+                        <compilerArgs>
+                            <!-- Maven incremental build always detects package-info.java as "stale" -->
+                            <arg>-Xpkginfo:always</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
 
@@ -222,6 +227,7 @@
                         <show>protected</show>
                         <includeDependencySources>false</includeDependencySources>
                         <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
+                        <source>8</source>
                     </configuration>
                     <executions>
                         <execution>
@@ -315,6 +321,7 @@
                     <failOnError>false</failOnError>
                     <includeDependencySources>true</includeDependencySources>
                     <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
+                    <source>8</source>
                 </configuration>
                 <reportSets>
                     <reportSet>
@@ -336,7 +343,6 @@
             </activation>
             <properties>
                 <surefire.jvmargs>--add-exports java.base/sun.nio.ch=ALL-UNNAMED</surefire.jvmargs>
-                <javadoc.args>--add-exports java.base/sun.nio.ch=ALL-UNNAMED</javadoc.args>
             </properties>
         </profile>
 
