@@ -198,7 +198,7 @@ Clone the git repo to your local machine. Either use the stable master branch or
 
 ``git clone https://github.com/snazy/ohc.git``
 
-You need Oracle JDK8 to build the source (Oracle JRE7 is the minimum requirement during runtime).
+You need OpenJDK 11 to build the source.
 Just execute
 
 ``mvn clean install``
@@ -208,7 +208,7 @@ Benchmarking
 
 You need to build OHC from source because the big benchmark artifacts are not uploaded to Maven Central.
 
-Execute ``java -jar ohc-benchmark/target/ohc-benchmark-0.5.1-SNAPSHOT.jar -h`` (when building from source)
+Execute ``java -jar ohc-benchmark/target/ohc-benchmark-0.7.1-SNAPSHOT.jar -h`` (when building from source)
 to get some help information.
 
 Generally the benchmark tool starts a bunch of threads and performs _get_ and _put_ operations concurrently
