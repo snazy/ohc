@@ -332,7 +332,7 @@
         <profile>
             <id>java11</id>
             <activation>
-                <jdk>11</jdk>
+                <jdk>[11,)</jdk>
             </activation>
             <properties>
                 <surefire.jvmargs>--add-exports java.base/sun.nio.ch=ALL-UNNAMED</surefire.jvmargs>
