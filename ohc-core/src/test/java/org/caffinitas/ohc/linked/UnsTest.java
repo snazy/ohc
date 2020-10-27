@@ -167,7 +167,7 @@ public class UnsTest
     @Test(expectedExceptions = IOException.class)
     public void testAllocateTooMuch() throws Exception
     {
-        Uns.allocateIOException(Long.MAX_VALUE);
+        Uns.allocateIOException(Long.MAX_VALUE >> 2);
     }
 
     @Test
