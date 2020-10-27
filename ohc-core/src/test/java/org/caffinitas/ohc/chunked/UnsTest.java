@@ -24,6 +24,7 @@ import org.testng.annotations.Test;
 import sun.misc.Unsafe;
 import sun.nio.ch.DirectBuffer;
 
+import static org.caffinitas.ohc.util.ByteBufferCompat.byteBufferClear;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertNotNull;
 import static org.testng.Assert.assertTrue;
@@ -62,10 +63,10 @@ public class UnsTest
     private static void fillRandom()
     {
         Random r = new Random();
-        directBuffer.clear();
+        byteBufferClear(directBuffer);
         while (directBuffer.remaining() >= 4)
             directBuffer.putInt(r.nextInt());
-        directBuffer.clear();
+        byteBufferClear(directBuffer);
     }
 
     @Test
@@ -87,8 +88,8 @@ public class UnsTest
             assertEquals(buf.capacity(), directBuffer.capacity());
         }
 
-        buf.clear();
-        directBuffer.clear();
+        byteBufferClear(buf);
+        byteBufferClear(directBuffer);
 
         while (buf.remaining() >= 8)
         {

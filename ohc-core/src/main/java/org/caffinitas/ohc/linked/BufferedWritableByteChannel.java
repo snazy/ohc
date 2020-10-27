@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 
 import static org.caffinitas.ohc.linked.Util.writeFully;
+import static org.caffinitas.ohc.util.ByteBufferCompat.*;
 
 final class BufferedWritableByteChannel implements WritableByteChannel
 {
@@ -46,17 +47,17 @@ final class BufferedWritableByteChannel implements WritableByteChannel
             int br = buffer.remaining();
             if (br == 0)
             {
-                buffer.flip();
+                byteBufferFlip(buffer);
                 writeFully(delegate, buffer);
-                buffer.clear();
+                byteBufferClear(buffer);
             }
             if (sr > br)
             {
                 int lim = src.limit();
-                src.limit(src.position() + br);
+                byteBufferLimit(src, src.position() + br);
                 buffer.put(src);
-                src.position(src.limit());
-                src.limit(lim);
+                byteBufferPosition(src, src.limit());
+                byteBufferLimit(src, lim);
                 wr += br;
             }
             else
@@ -74,7 +75,7 @@ final class BufferedWritableByteChannel implements WritableByteChannel
 
     public void close() throws IOException
     {
-        buffer.flip();
+        byteBufferFlip(buffer);
         writeFully(delegate, buffer);
 
         buffer = null;

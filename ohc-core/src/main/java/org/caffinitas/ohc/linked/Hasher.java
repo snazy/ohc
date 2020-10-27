@@ -23,31 +23,34 @@ abstract class Hasher
 {
     static Hasher create(HashAlgorithm hashAlgorithm)
     {
+        switch (hashAlgorithm) {
+            case XX:
+                try {
+                    return new XxHash();
+                }
+                catch (Exception e) {
+                    // fall through
+                }
+            case CRC32C:
+                try {
+                    return Crc32cHash.newInstance();
+                }
+                catch (Exception e) {
+                    // fall through
+                }
+            case CRC32:
+                return new Crc32Hash();
+            case MURMUR3:
+                return new Murmur3Hash();
+            default:
+                throw new UnsupportedOperationException("Incomplete implementation of Hasher.create()");
+        }
+    }
+
+    private static Hasher newHasher(HashAlgorithm hashAlgorithm)
+            throws InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException, ClassNotFoundException {
         String cls = forAlg(hashAlgorithm);
-        try
-        {
-            return (Hasher) Class.forName(cls).getDeclaredConstructor().newInstance();
-        }
-        catch (ClassNotFoundException | NoSuchMethodException | InvocationTargetException e)
-        {
-            if (hashAlgorithm == HashAlgorithm.XX)
-            {
-                cls = forAlg(HashAlgorithm.CRC32);
-                try
-                {
-                    return (Hasher) Class.forName(cls).getDeclaredConstructor().newInstance();
-                }
-                catch (InstantiationException | ClassNotFoundException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e1)
-                {
-                    throw new RuntimeException(e1);
-                }
-            }
-            throw new RuntimeException(e);
-        }
-        catch (InstantiationException | IllegalAccessException e)
-        {
-            throw new RuntimeException(e);
-        }
+        return (Hasher) Class.forName(cls).getDeclaredConstructor().newInstance();
     }
 
     private static String forAlg(HashAlgorithm hashAlgorithm)

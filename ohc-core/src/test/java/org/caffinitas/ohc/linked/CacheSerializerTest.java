@@ -15,8 +15,6 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.io.IOException;
-
 import org.caffinitas.ohc.CloseableIterator;
 import org.caffinitas.ohc.Eviction;
 import org.caffinitas.ohc.OHCache;
@@ -25,6 +23,8 @@ import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
+
+import java.io.IOException;
 
 public class CacheSerializerTest
 {

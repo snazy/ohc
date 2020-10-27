@@ -15,21 +15,20 @@
  */
 package org.caffinitas.ohc.linked;
 
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.Test;
+import sun.misc.Unsafe;
+import sun.nio.ch.DirectBuffer;
+
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Random;
 
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.Test;
-import sun.misc.Unsafe;
-import sun.nio.ch.DirectBuffer;
-
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNotEquals;
-import static org.testng.Assert.assertTrue;
+import static org.caffinitas.ohc.util.ByteBufferCompat.byteBufferClear;
+import static org.caffinitas.ohc.util.ByteBufferCompat.byteBufferFlip;
+import static org.testng.Assert.*;
 
 public class UnsTest
 {
@@ -65,10 +64,10 @@ public class UnsTest
     private static void fillRandom()
     {
         Random r = new Random();
-        directBuffer.clear();
+        byteBufferClear(directBuffer);
         while (directBuffer.remaining() >= 4)
             directBuffer.putInt(r.nextInt());
-        directBuffer.clear();
+        byteBufferClear(directBuffer);
     }
 
     @Test
@@ -90,8 +89,8 @@ public class UnsTest
             assertEquals(buf.capacity(), directBuffer.capacity());
         }
 
-        buf.clear();
-        directBuffer.clear();
+        byteBufferClear(buf);
+        byteBufferClear(directBuffer);
 
         while (buf.remaining() >= 8)
         {
@@ -274,9 +273,9 @@ public class UnsTest
             for (int i = 0; i < 14; i++)
             {
                 long u = Uns.getLongFromByteArray(arr, i);
-                directBuffer.clear();
+                byteBufferClear(directBuffer);
                 directBuffer.put(arr);
-                directBuffer.flip();
+                byteBufferFlip(directBuffer);
                 long b = directBuffer.getLong(i);
                 assertEquals(b, u);
             }

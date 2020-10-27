@@ -10,6 +10,7 @@ Features
 - capable of maintaining huge amounts of cache memory
 - suitable for tiny/small entries with low overhead using the chunked implementation
 - runs with Java 8 and Java 11 - support for Java 7 and earlier has been dropped with version 0.7.0
+- to build OHC from source, Java 11 or newer (tested with Java 11 + 15) is required
 
 Performance
 ===========
@@ -22,7 +23,7 @@ A very basic impression on the speed is in the _Benchmarking_ section.
 Requirements
 ============
 
-Java7 VM that support 64bit and has ``sun.misc.Unsafe`` (Oracle JVMs on x64 Intel CPUs).
+Java 8 VM that support 64bit and has ``sun.misc.Unsafe`` (Oracle JVMs on x64 Intel CPUs).
 
 OHC is targeted for Linux and OSX. It *should* work on Windows and other Unix OSs.
 
@@ -183,14 +184,6 @@ Key and value serializers need to implement the ``CacheSerializer`` interface. T
 - ``void serialize(Object obj, DataOutput out)`` to serialize the given object to the data output
 - ``T deserialize(DataInput in)`` to deserialize an object from the data input
 
-Java 11
--------
-
-Java 11 support is still *experimental*!
-
-OHC has been tested with some *early access* releases of Java 11 and the unit and JMH tests pass. However,
-it requires access to ``sun.misc.Unsafe`` via the JVM option ``--add-exports java.base/sun.nio.ch=ALL-UNNAMED``.
-
 Building from source
 ====================
 
@@ -198,8 +191,7 @@ Clone the git repo to your local machine. Either use the stable master branch or
 
 ``git clone https://github.com/snazy/ohc.git``
 
-You need OpenJDK 11 to build the source.
-Just execute
+You need OpenJDK 11 or newer to build from source. Just execute
 
 ``mvn clean install``
 

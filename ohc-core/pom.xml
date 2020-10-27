@@ -91,6 +91,11 @@
         </dependency>
 
         <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>net.jpountz.lz4</groupId>
             <artifactId>lz4</artifactId>
             <optional>true</optional>
@@ -173,12 +178,57 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
                 <configuration>
-                    <systemProperties>
-                        <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
-                        <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
-                    </systemProperties>
-                    <reportsDirectory>${project.build.directory}/surefire-reports/normal</reportsDirectory>
-                    <argLine>${surefire.jvmargs}</argLine>
+                    <forkCount>4</forkCount>
+                    <argLine>${surefire.jvmargs} -Xms256m -Xmx256m</argLine>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>default-test</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <systemProperties>
+                                <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
+                                <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
+                            </systemProperties>
+                            <reportsDirectory>${project.build.directory}/surefire-reports/normal</reportsDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>unsafe</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <systemProperties>
+                                <org.caffinitas.ohc.allocator>unsafe</org.caffinitas.ohc.allocator>
+                                <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
+                            </systemProperties>
+                            <reportsDirectory>${project.build.directory}/surefire-reports/unsafe</reportsDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>prod-like</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <systemProperties>
+                                <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
+                                <org.caffinitas.ohc.debugOffHeapAccess>false</org.caffinitas.ohc.debugOffHeapAccess>
+                            </systemProperties>
+                            <reportsDirectory>${project.build.directory}/surefire-reports/prod-like</reportsDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <doclint>all,-html</doclint>
                 </configuration>
             </plugin>
         </plugins>
@@ -193,169 +243,5 @@
             </plugin>
         </plugins>
     </reporting>
-
-    <!-- same profiles as in ohc-core-j8 -->
-    <profiles>
-        <profile>
-            <id>unsafe</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
-                        <executions>
-                            <execution>
-                                <id>unsafe</id>
-                                <goals>
-                                    <goal>test</goal>
-                                </goals>
-                                <configuration>
-                                    <systemProperties>
-                                        <org.caffinitas.ohc.allocator>unsafe</org.caffinitas.ohc.allocator>
-                                        <org.caffinitas.ohc.debugOffHeapAccess>true</org.caffinitas.ohc.debugOffHeapAccess>
-                                    </systemProperties>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/unsafe</reportsDirectory>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>prod-like</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
-                        <executions>
-                            <execution>
-                                <id>unsafe</id>
-                                <goals>
-                                    <goal>test</goal>
-                                </goals>
-                                <configuration>
-                                    <systemProperties>
-                                        <org.caffinitas.ohc.allocator>jna</org.caffinitas.ohc.allocator>
-                                        <org.caffinitas.ohc.debugOffHeapAccess>false</org.caffinitas.ohc.debugOffHeapAccess>
-                                    </systemProperties>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/prod-like</reportsDirectory>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
-            <id>java11</id>
-            <activation>
-                <jdk>[11,)</jdk>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-antrun-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>compile-java9</id>
-                                <phase>compile</phase>
-                                <configuration>
-                                    <tasks>
-                                        <mkdir dir="target/classes11" />
-                                        <javac srcdir="src/main/java11" destdir="target/classes11" classpath="${project.build.outputDirectory}" includeantruntime="false" />
-                                    </tasks>
-                                </configuration>
-                                <goals>
-                                    <goal>run</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-javadoc-plugin</artifactId>
-                        <configuration>
-                            <doclint>all,-html</doclint>
-                        </configuration>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-resources-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>copy-resources</id>
-                                <phase>prepare-package</phase>
-                                <goals>
-                                    <goal>copy-resources</goal>
-                                </goals>
-                                <configuration>
-                                    <outputDirectory>${project.build.outputDirectory}/META-INF/versions/11</outputDirectory>
-                                    <resources>
-                                        <resource>
-                                            <directory>target/classes11</directory>
-                                        </resource>
-                                    </resources>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-jar-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <!-- run in pre-integration-test phase, run unit tests in integration-test phase -->
-                                <phase>pre-integration-test</phase>
-                                <goals>
-                                    <goal>jar</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                        <configuration>
-                            <archive>
-                                <manifestEntries>
-                                    <Multi-Release>true</Multi-Release>
-                                </manifestEntries>
-                            </archive>
-                        </configuration>
-                    </plugin>
-                    <!-- Following surefire config runs tests including the Java 11 specific classes -->
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <version>${version.org.apache.maven.plugins.maven-surefire-plugin}</version>
-                        <executions>
-                            <execution>
-                                <id>java11</id>
-                                <!-- run in integration-test phase, have jar being built in pre-integration-test phase -->
-                                <phase>integration-test</phase>
-                                <goals>
-                                    <goal>test</goal>
-                                </goals>
-                                <configuration>
-                                    <classesDirectory>target/notexists</classesDirectory>
-                                    <additionalClasspathElements>
-                                        <element>target/ohc-core-${project.version}.jar</element>
-                                    </additionalClasspathElements>
-                                    <reportsDirectory>${project.build.directory}/surefire-reports/java11</reportsDirectory>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 
 </project>

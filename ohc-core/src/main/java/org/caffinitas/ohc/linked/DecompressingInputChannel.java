@@ -25,6 +25,7 @@ import org.xerial.snappy.Snappy;
 import static org.caffinitas.ohc.linked.Util.HEADER_COMPRESSED;
 import static org.caffinitas.ohc.linked.Util.HEADER_COMPRESSED_WRONG;
 import static org.caffinitas.ohc.linked.Util.readFully;
+import static org.caffinitas.ohc.util.ByteBufferCompat.*;
 
 final class DecompressingInputChannel implements ReadableByteChannel
 {
@@ -49,7 +50,7 @@ final class DecompressingInputChannel implements ReadableByteChannel
             ByteBuffer header = Uns.directBufferFor(headerAdr, 0, 16, false);
             if (!readFully(delegate, header))
                 throw new EOFException("Could not read file header");
-            header.flip();
+            byteBufferFlip(header);
             int magic = header.getInt();
             if (magic == HEADER_COMPRESSED_WRONG)
                 throw new IOException("File from instance with different CPU architecture cannot be loaded");
@@ -68,10 +69,10 @@ final class DecompressingInputChannel implements ReadableByteChannel
         this.delegate = delegate;
         this.compressedAddress = Uns.allocateIOException(maxCLen + bufferSize);
         this.compressedBuffer = Uns.directBufferFor(compressedAddress, 0L, maxCLen, false);
-        this.compressedBuffer.position(compressedBuffer.limit());
+        byteBufferPosition(this.compressedBuffer, compressedBuffer.limit());
 
         this.decompressedBuffer = Uns.directBufferFor(compressedAddress, maxCLen, bufferSize, false);
-        this.decompressedBuffer.position(decompressedBuffer.limit());
+        byteBufferPosition(this.decompressedBuffer, decompressedBuffer.limit());
     }
 
     public void close()
@@ -108,7 +109,7 @@ final class DecompressingInputChannel implements ReadableByteChannel
                 throw new EOFException("unexpected EOF");
 
             // decompress
-            decompressedBuffer.clear();
+            byteBufferClear(decompressedBuffer);
             if (!Snappy.isValidCompressedBuffer(compressedBuffer))
                 throw new IOException("Invalid compressed data");
             r = Snappy.uncompress(compressedBuffer, decompressedBuffer);
@@ -118,9 +119,9 @@ final class DecompressingInputChannel implements ReadableByteChannel
         if (dstRem < r)
         {
             ByteBuffer dDup = decompressedBuffer.duplicate();
-            dDup.limit(dDup.position() + dstRem);
+            byteBufferLimit(dDup, dDup.position() + dstRem);
             dst.put(dDup);
-            decompressedBuffer.position(decompressedBuffer.position() + dstRem);
+            byteBufferPosition(decompressedBuffer, decompressedBuffer.position() + dstRem);
             return dstRem;
         }
         else
@@ -132,11 +133,11 @@ final class DecompressingInputChannel implements ReadableByteChannel
     private int readBytes(int len) throws IOException
     {
         // read compressed buffer
-        compressedBuffer.clear();
-        compressedBuffer.limit(len);
+        byteBufferClear(compressedBuffer);
+        byteBufferLimit(compressedBuffer, len);
         if (!readFully(delegate, compressedBuffer))
             return 0;
-        compressedBuffer.position(0);
+        byteBufferPosition(compressedBuffer, 0);
         return len;
     }
 

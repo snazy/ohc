@@ -49,6 +49,8 @@ import org.caffinitas.ohc.TemporaryLoadException;
 import org.caffinitas.ohc.Ticker;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 
+import static org.caffinitas.ohc.util.ByteBufferCompat.*;
+
 public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(OHCacheLinkedImpl.class);
@@ -889,7 +891,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         {
             ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             Util.readFully(channel, header);
-            header.flip();
+            byteBufferFlip(header);
             int magic = header.getInt();
             if (magic == Util.HEADER_KEYS_WRONG)
                 throw new IOException("File from instance with different CPU architecture cannot be loaded");
@@ -941,7 +943,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             {
                 try
                 {
-                    bb.clear();
+                    byteBufferClear(bb);
                     if (!Util.readFully(channel, bb))
                     {
                         eod = true;
@@ -1028,9 +1030,9 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
                 ByteBuffer tmp = ByteBuffer.allocate(8192);
                 while (kvLen > 0L)
                 {
-                    tmp.clear();
+                    byteBufferClear(tmp);
                     if (kvLen < tmp.capacity())
-                        tmp.limit(Ints.checkedCast(kvLen));
+                        byteBufferLimit(tmp, Ints.checkedCast(kvLen));
                     if (!Util.readFully(channel, tmp))
                         return false;
                     kvLen -= tmp.limit();
@@ -1067,7 +1069,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
         {
             ByteBuffer header = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             Util.readFully(channel, header);
-            header.flip();
+            byteBufferFlip(header);
             int magic = header.getInt();
             if (magic == Util.HEADER_ENTRIES_WRONG)
                 throw new IOException("File from instance with different CPU architecture cannot be loaded");
@@ -1112,7 +1114,7 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
             ByteBuffer headerBuffer = Uns.directBufferFor(headerAddress, 0L, 8L, false);
             headerBuffer.putInt(entries ? Util.HEADER_ENTRIES : Util.HEADER_KEYS);
             headerBuffer.putInt(CURRENT_FILE_VERSION);
-            headerBuffer.flip();
+            byteBufferFlip(headerBuffer);
             Util.writeFully(channel, headerBuffer);
         }
         finally

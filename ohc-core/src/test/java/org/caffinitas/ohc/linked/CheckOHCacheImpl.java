@@ -15,6 +15,9 @@
  */
 package org.caffinitas.ohc.linked;
 
+import org.caffinitas.ohc.*;
+import org.caffinitas.ohc.histo.EstimatedHistogram;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -28,16 +31,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
-
-import org.caffinitas.ohc.CacheLoader;
-import org.caffinitas.ohc.CacheSerializer;
-import org.caffinitas.ohc.DirectValueAccess;
-import org.caffinitas.ohc.CloseableIterator;
-import org.caffinitas.ohc.Eviction;
-import org.caffinitas.ohc.OHCache;
-import org.caffinitas.ohc.OHCacheBuilder;
-import org.caffinitas.ohc.OHCacheStats;
-import org.caffinitas.ohc.histo.EstimatedHistogram;
 
 /**
  * This is a {@link org.caffinitas.ohc.OHCache} implementation used to validate functionality of

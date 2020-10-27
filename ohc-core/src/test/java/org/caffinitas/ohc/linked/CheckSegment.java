@@ -15,16 +15,10 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
-
 import org.caffinitas.ohc.Eviction;
+
+import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * On-heap test-only counterpart of {@link OffHeapLinkedMap} for {@link CheckOHCacheImpl}.

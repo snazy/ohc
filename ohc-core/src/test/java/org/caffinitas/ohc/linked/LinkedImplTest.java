@@ -15,12 +15,12 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.io.IOException;
-
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
+
+import java.io.IOException;
 
 public class LinkedImplTest
 {

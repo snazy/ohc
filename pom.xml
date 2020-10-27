@@ -75,6 +75,7 @@
         <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m5.1</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
         <version.net.java.dev.jna>4.5.2</version.net.java.dev.jna>
         <version.net.jpountz.lz4>1.3.0</version.net.jpountz.lz4>
+        <version.org.ow2.asm>9.0</version.org.ow2.asm>
         <version.org.apache.felix.maven-bundle-plugin>5.1.1</version.org.apache.felix.maven-bundle-plugin>
         <version.org.apache.maven.plugins.maven-assembly-plugin>3.3.0</version.org.apache.maven.plugins.maven-assembly-plugin>
         <version.org.apache.maven.plugins.maven-compiler-plugin>3.8.1</version.org.apache.maven.plugins.maven-compiler-plugin>
@@ -155,6 +156,12 @@
                 <groupId>net.java.dev.jna</groupId>
                 <artifactId>jna</artifactId>
                 <version>${version.net.java.dev.jna}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.ow2.asm</groupId>
+                <artifactId>asm</artifactId>
+                <version>${version.org.ow2.asm}</version>
             </dependency>
 
             <dependency>

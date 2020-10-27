@@ -18,12 +18,50 @@ package org.caffinitas.ohc.linked;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class Crc32cHash extends Crc32Hash
+import java.util.zip.CRC32C;
+
+final class Crc32cHash
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(Hasher.class);
 
-    Crc32cHash()
-    {
+    static final boolean AVAILABLE;
+
+    static {
+        boolean avail;
+        try {
+            Class.forName("java.util.zip.CRC32C").getDeclaredConstructor().newInstance();
+            avail = true;
+        }
+        catch (Exception e) {
+            avail = false;
+        }
+        AVAILABLE = avail;
+    }
+
+    static Hasher newInstance() {
+        if (AVAILABLE)
+            return new Crc32cHashImpl();
         LOGGER.warn("CRC32C hash is only available with Java 11 or newer. Falling back to CRC32.");
+        return new Crc32Hash();
+    }
+
+    static final class Crc32cHashImpl extends Hasher {
+        long hash(byte[] array) {
+            CRC32C crc = new CRC32C();
+            crc.update(array);
+            long h = crc.getValue();
+            h |= h << 32;
+            return h;
+        }
+
+        long hash(long address, long offset, int length) {
+            Uns.validate(address, offset, length);
+
+            CRC32C crc = new CRC32C();
+            crc.update(Uns.directBufferFor(address, offset, length, true));
+            long h = crc.getValue();
+            h |= h << 32;
+            return h;
+        }
     }
 }
