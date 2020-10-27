@@ -71,7 +71,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <version.com.google.guava>19.0</version.com.google.guava>
+        <version.com.google.guava>30.0-jre</version.com.google.guava>
         <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m5.1</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
         <version.net.java.dev.jna>4.5.2</version.net.java.dev.jna>
         <version.net.jpountz.lz4>1.3.0</version.net.jpountz.lz4>
