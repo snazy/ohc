@@ -122,11 +122,6 @@ import org.caffinitas.ohc.linked.OHCacheLinkedImpl;
  *         <td>Default ticker using {@code System.nanoTime()} and {@code System.currentTimeMillis()}</td>
  *     </tr>
  *     <tr>
- *         <td>{@code capacity}</td>
- *         <td>Expected number of elements in the cache</td>
- *         <td>No default value, recommended to provide a default value.</td>
- *     </tr>
- *     <tr>
  *         <td>{@code eviction}</td>
  *         <td>Choose the eviction algorithm to use. Available are:
  *         <ul>
