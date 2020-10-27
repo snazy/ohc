@@ -15,6 +15,7 @@
  */
 package org.caffinitas.ohc.chunked;
 
+import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 
 import org.caffinitas.ohc.HashAlgorithm;
@@ -26,18 +27,18 @@ abstract class Hasher
         String cls = forAlg(hashAlgorithm);
         try
         {
-            return (Hasher) Class.forName(cls).newInstance();
+            return (Hasher) Class.forName(cls).getDeclaredConstructor().newInstance();
         }
-        catch (ClassNotFoundException e)
+        catch (ClassNotFoundException | NoSuchMethodException | InvocationTargetException e)
         {
             if (hashAlgorithm == HashAlgorithm.XX)
             {
                 cls = forAlg(HashAlgorithm.CRC32C);
                 try
                 {
-                    return (Hasher) Class.forName(cls).newInstance();
+                    return (Hasher) Class.forName(cls).getDeclaredConstructor().newInstance();
                 }
-                catch (InstantiationException | ClassNotFoundException | IllegalAccessException e1)
+                catch (InstantiationException | ClassNotFoundException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e1)
                 {
                     throw new RuntimeException(e1);
                 }
@@ -53,7 +54,7 @@ abstract class Hasher
     private static String forAlg(HashAlgorithm hashAlgorithm)
     {
         return Hasher.class.getName().substring(0, Hasher.class.getName().lastIndexOf('.') + 1)
-               + hashAlgorithm.name().substring(0, 1)
+               + hashAlgorithm.name().charAt(0)
                + hashAlgorithm.name().substring(1).toLowerCase()
                + "Hash";
     }
