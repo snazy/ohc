@@ -1,3 +1,13 @@
+0.7.1
+=====
+
+#67 Improve lock performance
+- Requires Java 11 or newer to build, runtime support for Java 8 and newer
+  (ohc-core.jar is no longer a multi-release jar)
+- Simplified test-related parts in pom.xml
+- Bump many library versions (see 3f6614707b34aa8689afe069d74ed319c8a8b2ea + e74d45518168710bc33d99f33cc1e5ed735eeb94)
+- Fix javadoc + jmh invocations for Java 11+
+
 0.7.0
 =====
 
