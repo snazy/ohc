@@ -52,8 +52,6 @@ fully prepared entry into the segment.
 Eviction is performed using an LRU algorithm. A linked list through all cached elements per segment is used to keep
 track of the eldest entries.
 
-The extension jar ``ohc-core-j8`` is recommmended to use of new ``sun.misc.Unsafe`` methods in Java 8.
-
 Chunked implementation
 ----------------------
 
@@ -82,10 +80,6 @@ Specifying the ``fixedKeyLength`` and ``fixedValueLength`` builder properties re
 8 bytes per entry.
 
 Serialization, direct access and get-with-loader functions are not supported in this implementation.
-
-NOTE: The CRC hash algorithm requires JRE 8 or newer.
-
-The extension jar ``ohc-core-j8`` is not required for the chunked implementation.
 
 To enable the chunked implementation, specify the ``chunkSize`` in ``org.caffinitas.ohc.OHCacheBuilder``.
 
