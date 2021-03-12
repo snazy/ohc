@@ -18,15 +18,14 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.util.concurrent.ThreadLocalRandom;
-
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
+
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 
 /**

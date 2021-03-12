@@ -1,6 +1,7 @@
 .idea
 out
 target
+*.iml
 
 .DS_Store
 

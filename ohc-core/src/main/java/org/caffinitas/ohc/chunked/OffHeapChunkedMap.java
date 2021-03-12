@@ -28,6 +28,8 @@ import org.caffinitas.ohc.Ticker;
 import org.caffinitas.ohc.histo.EstimatedHistogram;
 import sun.nio.ch.DirectBuffer;
 
+import static org.caffinitas.ohc.util.ByteBufferCompat.*;
+
 final class OffHeapChunkedMap
 {
     // maximum hash table size
@@ -242,7 +244,7 @@ final class OffHeapChunkedMap
                 serBuffer = ByteBuffer.allocate(valueLen);
 
                 Uns.copyMemory(((DirectBuffer)memory).address(), hashEntryValueOffset, serBuffer.array(), 0, valueLen);
-                serBuffer.limit(valueLen);
+                byteBufferLimit(serBuffer, valueLen);
 
                 break;
             }
@@ -557,7 +559,7 @@ final class OffHeapChunkedMap
         {
             // It's important to initialize the hash table memory.
             // (uninitialized memory will cause problems - endless loops, JVM crashes, damaged data, etc)
-            table.clear();
+            byteBufferClear(table);
             while (table.remaining() > 8)
                 table.putLong(0L);
             while (table.remaining() > 0)
@@ -688,7 +690,7 @@ final class OffHeapChunkedMap
                 if (n == entries || n == limit)
                     return endOfData();
 
-                snaphotBuffer.clear();
+                byteBufferClear(snaphotBuffer);
                 int keyLen;
                 int reservedLen;
                 boolean removed;
@@ -715,8 +717,8 @@ final class OffHeapChunkedMap
                 if (!removed)
                 {
 
-                    snaphotBuffer.position(keyOff);
-                    snaphotBuffer.limit(keyOff + keyLen);
+                    byteBufferPosition(snaphotBuffer, keyOff);
+                    byteBufferLimit(snaphotBuffer, keyOff + keyLen);
                     return snaphotBuffer;
                 }
             }
@@ -745,8 +747,8 @@ final class OffHeapChunkedMap
                     try
                     {
                         Uns.copyMemory(((DirectBuffer)memory).address(), chunkOffset(chunk), snaphotBuffer.array(), 0, chunkFullSize);
-                        snaphotBuffer.position(0);
-                        snaphotBuffer.limit(chunkFullSize);
+                        byteBufferPosition(snaphotBuffer, 0);
+                        byteBufferLimit(snaphotBuffer, chunkFullSize);
 
                         snapshotIterator = new ChunkSnapshotIterator(keysPerChunk, snaphotBuffer);
                     }
@@ -951,7 +953,8 @@ final class OffHeapChunkedMap
             // yield control to other thread.
             // Note: we cannot use LockSupport.parkNanos() as that does not
             // provide nanosecond resolution on Windows.
-            Thread.yield();
+            while(lockFieldUpdater.get(this) != 0L)
+                Thread.yield();
         }
     }
 

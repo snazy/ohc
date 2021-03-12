@@ -11,10 +11,10 @@
     </Appenders>
 
     <Loggers>
-        <Logger name="org.caffinitas.ohc" level="trace" additivity="false">
+        <Logger name="org.caffinitas.ohc" level="error" additivity="false">
             <AppenderRef ref="console"/>
         </Logger>
-        <Root level="debug">
+        <Root level="error">
             <AppenderRef ref="console"/>
         </Root>
     </Loggers>

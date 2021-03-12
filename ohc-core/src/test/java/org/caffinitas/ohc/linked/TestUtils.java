@@ -15,15 +15,13 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Random;
-
+import com.google.common.base.Charsets;
 import org.caffinitas.ohc.CacheSerializer;
 import org.caffinitas.ohc.OHCache;
 import org.testng.Assert;
 
-import com.google.common.base.Charsets;
+import java.nio.ByteBuffer;
+import java.util.Random;
 
 final class TestUtils
 {

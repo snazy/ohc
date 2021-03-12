@@ -15,16 +15,15 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.nio.ByteBuffer;
-
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
-
 import org.caffinitas.ohc.HashAlgorithm;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
+
+import java.nio.ByteBuffer;
 
 import static org.testng.Assert.assertEquals;
 

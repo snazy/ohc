@@ -736,13 +736,15 @@ abstract class OffHeapLinkedMap
             return false;
         while (true)
         {
+
             if (lockFieldUpdater.compareAndSet(this, 0L, t))
                 return true;
 
             // yield control to other thread.
             // Note: we cannot use LockSupport.parkNanos() as that does not
             // provide nanosecond resolution on Windows.
-            Thread.yield();
+            while(lockFieldUpdater.get(this) != 0L)
+                Thread.yield();
         }
     }
 

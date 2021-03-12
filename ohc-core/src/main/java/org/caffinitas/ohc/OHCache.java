@@ -153,6 +153,7 @@ public interface OHCache<K, V> extends Closeable
      * After closing, you must not call any of the methods of the {@link java.nio.ByteBuffer}
      * returned by {@link DirectValueAccess#buffer()}.
      *
+     * @param key the key of the value to retrieve
      * @return reference-counted byte buffer or {@code null} if key does not exist.
      */
     DirectValueAccess getDirect(K key);
@@ -161,6 +162,8 @@ public interface OHCache<K, V> extends Closeable
      * Like {@link OHCache#getDirect(Object)}, but allows skipping the update of LRU stats when {@code updateLRU}
      * is {@code false}.
      *
+     * @param key the key to retrieve
+     * @param updateLRU whether to update LRU stats
      * @return reference-counted byte buffer or {@code null} if key does not exist.
      */
     DirectValueAccess getDirect(K key, boolean updateLRU);
@@ -196,6 +199,7 @@ public interface OHCache<K, V> extends Closeable
      *
      * @param key    key of the value to load
      * @param loader loader implementation to use
+     * @param expireAt optional timestamp (millis since epoch) at which the entry shall expire
      * @return a future to process the load request asynchronously.
      */
     Future<V> getWithLoaderAsync(K key, CacheLoader<K, V> loader, long expireAt);
@@ -235,6 +239,9 @@ public interface OHCache<K, V> extends Closeable
      * <p>
      *     Note: During a rehash, the implementation might return keys twice or not at all.
      * </p>
+     *
+     * @param n the N most recently used keys
+     * @return closeable iterator over the keys
      */
     CloseableIterator<K> hotKeyIterator(int n);
 
@@ -244,6 +251,8 @@ public interface OHCache<K, V> extends Closeable
      * <p>
      *     Note: During a rehash, the implementation might return keys twice or not at all.
      * </p>
+     *
+     * @return closeable iterator over the keys
      */
     CloseableIterator<K> keyIterator();
 
@@ -254,6 +263,9 @@ public interface OHCache<K, V> extends Closeable
      * <p>
      *     Note: During a rehash, the implementation might return keys twice or not at all.
      * </p>
+     *
+     * @param n the N most recently used keys
+     * @return closeable iterator over byte-buffers
      */
     CloseableIterator<ByteBuffer> hotKeyBufferIterator(int n);
 
@@ -264,21 +276,67 @@ public interface OHCache<K, V> extends Closeable
      * <p>
      *     Note: During a rehash, the implementation might return keys twice or not at all.
      * </p>
+     *
+     * @return closeable iterator over byte-buffers
      */
     CloseableIterator<ByteBuffer> keyBufferIterator();
 
     // serialization
 
+    /**
+     * Deserialize a single entry.
+
+     * @param channel channel to read from
+     * @return whether the deserialization was successful
+     * @throws IOException indicates an IO error
+     */
     boolean deserializeEntry(ReadableByteChannel channel) throws IOException;
 
+    /**
+     * Serialize a cache entry.
+     *
+     * @param key Key of the cache entry to serialize
+     * @param channel target channel to write to
+     * @return whether the serialization was successful
+     * @throws IOException indicates an IO error
+     */
     boolean serializeEntry(K key, WritableByteChannel channel) throws IOException;
 
+    /**
+     * Deserialize entries.
+     *
+     * @param channel channel to read from
+     * @return number of deserialized entries
+     * @throws IOException indicates an IO error
+     */
     int deserializeEntries(ReadableByteChannel channel) throws IOException;
 
+    /**
+     * Serialize a the hottest cache entries.
+     *
+     * @param n number of cache entries to serialize
+     * @param channel target channel to write to
+     * @return number of serialized entries
+     * @throws IOException indicates an IO error
+     */
     int serializeHotNEntries(int n, WritableByteChannel channel) throws IOException;
 
+    /**
+     * Serialize a the keys of the hottest cache entries.
+     *
+     * @param n number of cache entries to serialize
+     * @param channel target channel to write to
+     * @return number of serialized entries
+     * @throws IOException indicates an IO error
+     */
     int serializeHotNKeys(int n, WritableByteChannel channel) throws IOException;
 
+    /**
+     *
+     * @param channel channel to read from
+     * @return deserialized keys
+     * @throws IOException indicates an IO error
+     */
     CloseableIterator<K> deserializeKeys(ReadableByteChannel channel) throws IOException;
 
     // statistics / information
@@ -312,6 +370,8 @@ public interface OHCache<K, V> extends Closeable
      * Future operations will even allocate in flight, temporary memory - i.e. setting capacity to 0 does not
      * disable the cache, it will continue to work but cannot add more data.
      * </p>
+     *
+     * @param capacity the new capacity
      */
     void setCapacity(long capacity);
 }

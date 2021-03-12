@@ -15,9 +15,7 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.nio.BufferUnderflowException;
-import java.nio.ReadOnlyBufferException;
-
+import com.google.common.base.Charsets;
 import org.caffinitas.ohc.DirectValueAccess;
 import org.caffinitas.ohc.OHCache;
 import org.caffinitas.ohc.OHCacheBuilder;
@@ -25,7 +23,8 @@ import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.Test;
 
-import com.google.common.base.Charsets;
+import java.nio.BufferUnderflowException;
+import java.nio.ReadOnlyBufferException;
 
 public class DirectAccessTest
 {

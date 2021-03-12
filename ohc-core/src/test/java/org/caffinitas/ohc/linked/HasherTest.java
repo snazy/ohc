@@ -15,11 +15,11 @@
  */
 package org.caffinitas.ohc.linked;
 
-import java.util.Random;
-
 import org.caffinitas.ohc.HashAlgorithm;
 import org.testng.Assert;
 import org.testng.annotations.Test;
+
+import java.util.Random;
 
 public class HasherTest
 {

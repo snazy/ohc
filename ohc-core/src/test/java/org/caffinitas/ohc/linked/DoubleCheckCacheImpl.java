@@ -15,6 +15,10 @@
  */
 package org.caffinitas.ohc.linked;
 
+import org.caffinitas.ohc.*;
+import org.caffinitas.ohc.histo.EstimatedHistogram;
+import org.testng.Assert;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
@@ -26,15 +30,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import org.caffinitas.ohc.CacheLoader;
-import org.caffinitas.ohc.DirectValueAccess;
-import org.caffinitas.ohc.CloseableIterator;
-import org.caffinitas.ohc.OHCache;
-import org.caffinitas.ohc.OHCacheBuilder;
-import org.caffinitas.ohc.OHCacheStats;
-import org.caffinitas.ohc.histo.EstimatedHistogram;
-import org.testng.Assert;
 
 /**
  * Test code that contains an instance of the production and check {@link org.caffinitas.ohc.OHCache}

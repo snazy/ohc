@@ -33,6 +33,8 @@ import org.caffinitas.ohc.alloc.UnsafeAllocator;
 
 import sun.misc.Unsafe;
 
+import static org.caffinitas.ohc.util.ByteBufferCompat.byteBufferPosition;
+
 final class Uns
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(Uns.class);
@@ -406,7 +408,7 @@ final class Uns
 
     static void invalidateDirectBuffer(ByteBuffer buffer)
     {
-        buffer.position(0);
+        byteBufferPosition(buffer, 0);
         unsafe.putInt(buffer, DIRECT_BYTE_BUFFER_CAPACITY_OFFSET, 0);
         unsafe.putInt(buffer, DIRECT_BYTE_BUFFER_LIMIT_OFFSET, 0);
         unsafe.putLong(buffer, DIRECT_BYTE_BUFFER_ADDRESS_OFFSET, 0L);

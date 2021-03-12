@@ -86,7 +86,7 @@ public class EstimatedHistogram
 
     /**
      * Increments the count of the bucket closest to n, rounding UP.
-     * @param n
+     * @param n value to add
      */
     public void add(long n)
     {
@@ -159,7 +159,7 @@ public class EstimatedHistogram
     }
 
     /**
-     * @param percentile
+     * @param percentile percentile
      * @return estimated value at given percentile
      */
     public long percentile(double percentile)
@@ -227,7 +227,7 @@ public class EstimatedHistogram
     /**
      * log.debug() every record in the histogram
      *
-     * @param log
+     * @param log logger to log to
      */
     public void log(Logger log)
     {

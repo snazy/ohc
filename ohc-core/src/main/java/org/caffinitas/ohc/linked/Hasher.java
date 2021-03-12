@@ -17,41 +17,46 @@ package org.caffinitas.ohc.linked;
 
 import org.caffinitas.ohc.HashAlgorithm;
 
+import java.lang.reflect.InvocationTargetException;
+
 abstract class Hasher
 {
     static Hasher create(HashAlgorithm hashAlgorithm)
     {
+        switch (hashAlgorithm) {
+            case XX:
+                try {
+                    return new XxHash();
+                }
+                catch (Exception e) {
+                    // fall through
+                }
+            case CRC32C:
+                try {
+                    return Crc32cHash.newInstance();
+                }
+                catch (Exception e) {
+                    // fall through
+                }
+            case CRC32:
+                return new Crc32Hash();
+            case MURMUR3:
+                return new Murmur3Hash();
+            default:
+                throw new UnsupportedOperationException("Incomplete implementation of Hasher.create()");
+        }
+    }
+
+    private static Hasher newHasher(HashAlgorithm hashAlgorithm)
+            throws InstantiationException, IllegalAccessException, InvocationTargetException, NoSuchMethodException, ClassNotFoundException {
         String cls = forAlg(hashAlgorithm);
-        try
-        {
-            return (Hasher) Class.forName(cls).newInstance();
-        }
-        catch (ClassNotFoundException e)
-        {
-            if (hashAlgorithm == HashAlgorithm.XX)
-            {
-                cls = forAlg(HashAlgorithm.CRC32);
-                try
-                {
-                    return (Hasher) Class.forName(cls).newInstance();
-                }
-                catch (InstantiationException | ClassNotFoundException | IllegalAccessException e1)
-                {
-                    throw new RuntimeException(e1);
-                }
-            }
-            throw new RuntimeException(e);
-        }
-        catch (InstantiationException | IllegalAccessException e)
-        {
-            throw new RuntimeException(e);
-        }
+        return (Hasher) Class.forName(cls).getDeclaredConstructor().newInstance();
     }
 
     private static String forAlg(HashAlgorithm hashAlgorithm)
     {
         return Hasher.class.getName().substring(0, Hasher.class.getName().lastIndexOf('.') + 1)
-               + hashAlgorithm.name().substring(0, 1)
+               + hashAlgorithm.name().charAt(0)
                + hashAlgorithm.name().substring(1).toLowerCase()
                + "Hash";
     }

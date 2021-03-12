@@ -4,7 +4,7 @@
 
     <groupId>org.caffinitas.ohc</groupId>
     <artifactId>ohc-parent</artifactId>
-    <version>0.7.0</version>
+    <version>0.7.1</version>
     <packaging>pom</packaging>
 
     <name>OHC parent</name>
@@ -35,7 +35,7 @@
 
     <licenses>
         <license>
-            <name>Apache 2</name>
+            <name>Apache-2.0</name>
             <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
             <distribution>repo</distribution>
             <comments>Apache License Version 2.0</comments>
@@ -71,30 +71,31 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <version.com.google.guava>19.0</version.com.google.guava>
+        <version.com.google.guava>30.0-jre</version.com.google.guava>
         <version.external.atlassian.jgitflow.jgitflow-maven-plugin>1.0-m5.1</version.external.atlassian.jgitflow.jgitflow-maven-plugin>
-        <version.net.java.dev.jna>4.5.2</version.net.java.dev.jna>
+        <version.net.java.dev.jna>5.7.0</version.net.java.dev.jna>
         <version.net.jpountz.lz4>1.3.0</version.net.jpountz.lz4>
-        <version.org.apache.felix.maven-bundle-plugin>3.3.0</version.org.apache.felix.maven-bundle-plugin>
-        <version.org.apache.maven.plugins.maven-assembly-plugin>3.1.0</version.org.apache.maven.plugins.maven-assembly-plugin>
-        <version.org.apache.maven.plugins.maven-compiler-plugin>3.8.0</version.org.apache.maven.plugins.maven-compiler-plugin>
-        <version.org.apache.maven.plugins.maven-dependency-plugin>3.1.1</version.org.apache.maven.plugins.maven-dependency-plugin>
+        <version.org.ow2.asm>9.1</version.org.ow2.asm>
+        <version.org.apache.felix.maven-bundle-plugin>5.1.1</version.org.apache.felix.maven-bundle-plugin>
+        <version.org.apache.maven.plugins.maven-assembly-plugin>3.3.0</version.org.apache.maven.plugins.maven-assembly-plugin>
+        <version.org.apache.maven.plugins.maven-compiler-plugin>3.8.1</version.org.apache.maven.plugins.maven-compiler-plugin>
+        <version.org.apache.maven.plugins.maven-dependency-plugin>3.1.2</version.org.apache.maven.plugins.maven-dependency-plugin>
         <version.org.apache.maven.plugins.maven-gpg-plugin>1.6</version.org.apache.maven.plugins.maven-gpg-plugin>
-        <version.org.apache.maven.plugins.maven-jar-plugin>3.1.0</version.org.apache.maven.plugins.maven-jar-plugin>
-        <version.org.apache.maven.plugins.maven-javadoc-plugin>3.0.1</version.org.apache.maven.plugins.maven-javadoc-plugin>
-        <version.org.apache.maven.plugins.maven-project-info-reports-plugin>3.0.0</version.org.apache.maven.plugins.maven-project-info-reports-plugin>
-        <version.org.apache.maven.plugins.maven-site-plugin>3.7.1</version.org.apache.maven.plugins.maven-site-plugin>
-        <version.org.apache.maven.plugins.maven-shade-plugin>3.1.1</version.org.apache.maven.plugins.maven-shade-plugin>
-        <version.org.apache.maven.plugins.maven-source-plugin>3.0.1</version.org.apache.maven.plugins.maven-source-plugin>
-        <version.org.apache.maven.plugins.maven-surefire-plugin>2.22.0</version.org.apache.maven.plugins.maven-surefire-plugin>
-        <version.org.apache.maven.plugins.maven-surefire-report-plugin>2.22.0</version.org.apache.maven.plugins.maven-surefire-report-plugin>
-        <version.org.apache.logging.log4j>2.11.1</version.org.apache.logging.log4j>
+        <version.org.apache.maven.plugins.maven-jar-plugin>3.2.0</version.org.apache.maven.plugins.maven-jar-plugin>
+        <version.org.apache.maven.plugins.maven-javadoc-plugin>3.2.0</version.org.apache.maven.plugins.maven-javadoc-plugin>
+        <version.org.apache.maven.plugins.maven-project-info-reports-plugin>3.1.1</version.org.apache.maven.plugins.maven-project-info-reports-plugin>
+        <version.org.apache.maven.plugins.maven-site-plugin>3.9.1</version.org.apache.maven.plugins.maven-site-plugin>
+        <version.org.apache.maven.plugins.maven-shade-plugin>3.2.4</version.org.apache.maven.plugins.maven-shade-plugin>
+        <version.org.apache.maven.plugins.maven-source-plugin>3.2.1</version.org.apache.maven.plugins.maven-source-plugin>
+        <version.org.apache.maven.plugins.maven-surefire-plugin>2.22.2</version.org.apache.maven.plugins.maven-surefire-plugin>
+        <version.org.apache.maven.plugins.maven-surefire-report-plugin>2.22.2</version.org.apache.maven.plugins.maven-surefire-report-plugin>
+        <version.org.apache.logging.log4j>2.13.3</version.org.apache.logging.log4j>
         <version.org.codehaus.mojo.cobertura-maven-plugin>2.7</version.org.codehaus.mojo.cobertura-maven-plugin>
-        <version.org.codehaus.mojo.exec-maven-plugin>1.6.0</version.org.codehaus.mojo.exec-maven-plugin>
-        <version.org.slf4j>1.7.25</version.org.slf4j>
-        <version.org.testng>6.14.3</version.org.testng>
-        <version.org.hamcrest>2.0.0.0</version.org.hamcrest>
-        <version.org.xerial.snappy>1.1.7.2</version.org.xerial.snappy>
+        <version.org.codehaus.mojo.exec-maven-plugin>3.0.0</version.org.codehaus.mojo.exec-maven-plugin>
+        <version.org.slf4j>1.7.30</version.org.slf4j>
+        <version.org.testng>7.4.0</version.org.testng>
+        <version.org.hamcrest>2.2</version.org.hamcrest>
+        <version.org.xerial.snappy>1.1.8.4</version.org.xerial.snappy>
 
         <surefire.jvmargs />
     </properties>
@@ -158,6 +159,12 @@
             </dependency>
 
             <dependency>
+                <groupId>org.ow2.asm</groupId>
+                <artifactId>asm</artifactId>
+                <version>${version.org.ow2.asm}</version>
+            </dependency>
+
+            <dependency>
                 <groupId>net.jpountz.lz4</groupId>
                 <artifactId>lz4</artifactId>
                 <version>${version.net.jpountz.lz4}</version>
@@ -172,7 +179,7 @@
 
             <dependency>
                 <groupId>org.hamcrest</groupId>
-                <artifactId>java-hamcrest</artifactId>
+                <artifactId>hamcrest</artifactId>
                 <version>${version.org.hamcrest}</version>
                 <scope>test</scope>
             </dependency>
@@ -207,6 +214,11 @@
                     <configuration>
                         <source>1.8</source>
                         <target>1.8</target>
+
+                        <compilerArgs>
+                            <!-- Maven incremental build always detects package-info.java as "stale" -->
+                            <arg>-Xpkginfo:always</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
 
@@ -222,6 +234,7 @@
                         <show>protected</show>
                         <includeDependencySources>false</includeDependencySources>
                         <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
+                        <source>8</source>
                     </configuration>
                     <executions>
                         <execution>
@@ -315,6 +328,7 @@
                     <failOnError>false</failOnError>
                     <includeDependencySources>true</includeDependencySources>
                     <includeTransitiveDependencySources>false</includeTransitiveDependencySources>
+                    <source>8</source>
                 </configuration>
                 <reportSets>
                     <reportSet>
@@ -332,11 +346,10 @@
         <profile>
             <id>java11</id>
             <activation>
-                <jdk>11</jdk>
+                <jdk>[11,)</jdk>
             </activation>
             <properties>
                 <surefire.jvmargs>--add-exports java.base/sun.nio.ch=ALL-UNNAMED</surefire.jvmargs>
-                <javadoc.args>--add-exports java.base/sun.nio.ch=ALL-UNNAMED</javadoc.args>
             </properties>
         </profile>
 
