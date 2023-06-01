@@ -18,6 +18,7 @@ package org.caffinitas.ohc.linked;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.zip.CRC32C;
 
 final class Crc32cHash
@@ -46,9 +47,9 @@ final class Crc32cHash
     }
 
     static final class Crc32cHashImpl extends Hasher {
-        long hash(byte[] array) {
+        long hash(ByteBuffer byteBuffer) {
             CRC32C crc = new CRC32C();
-            crc.update(array);
+            crc.update(byteBuffer);
             long h = crc.getValue();
             h |= h << 32;
             return h;

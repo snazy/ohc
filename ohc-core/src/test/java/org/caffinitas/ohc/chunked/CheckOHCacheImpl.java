@@ -182,7 +182,15 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
     public V get(K key)
     {
-        KeyBuffer keyBuffer = keySource(key);
+        return get(keySource(key));
+    }
+
+    @Override
+    public V getBySerialized(ByteBuffer key) {
+        return get(new KeyBuffer(key).finish(hasher));
+    }
+
+    private V get(KeyBuffer keyBuffer) {
         CheckSegment segment = segment(keyBuffer.hash());
         byte[] value = segment.get(keyBuffer);
 

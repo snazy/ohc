@@ -184,10 +184,18 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
     {
         if (key == null)
             throw new NullPointerException();
+        return get(keySource(key));
+    }
 
+    @Override
+    public V getBySerialized(ByteBuffer key) {
+        if (key == null)
+            throw new NullPointerException();
+        return get(new KeyBuffer(key, hasher));
+    }
+
+    private V get(KeyBuffer keySource) {
         long hashEntryAdr = 0L;
-
-        KeyBuffer keySource = keySource(key);
         try
         {
             hashEntryAdr = segment(keySource.hash()).getEntry(keySource, true, true);
@@ -647,13 +655,11 @@ public final class OHCacheLinkedImpl<K, V> implements OHCache<K, V>
 
     private KeyBuffer keySource(K o)
     {
-        int size = keySize(o);
-
-        KeyBuffer keyBuffer = new KeyBuffer(size);
-        ByteBuffer bb = keyBuffer.byteBuffer();
-        keySerializer.serialize(o, bb);
-        assert(bb.position() == bb.capacity()) && (bb.capacity() == size);
-        return keyBuffer.finish(hasher);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(keySize(o));
+        keySerializer.serialize(o, byteBuffer);
+        assert(byteBuffer.position() == byteBuffer.limit());
+        byteBuffer.clear();
+        return new KeyBuffer(byteBuffer, hasher);
     }
 
     //

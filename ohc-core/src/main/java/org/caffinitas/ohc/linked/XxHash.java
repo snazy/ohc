@@ -17,6 +17,8 @@ package org.caffinitas.ohc.linked;
 
 import net.jpountz.xxhash.XXHashFactory;
 
+import java.nio.ByteBuffer;
+
 final class XxHash extends Hasher
 {
     private static final XXHashFactory xx = XXHashFactory.fastestInstance();
@@ -26,8 +28,8 @@ final class XxHash extends Hasher
         return xx.hash64().hash(Uns.directBufferFor(address, offset, length, true), 0);
     }
 
-    long hash(byte[] array)
+    long hash(ByteBuffer byteBuffer)
     {
-        return xx.hash64().hash(array, 0, array.length, 0);
+        return xx.hash64().hash(byteBuffer, 0);
     }
 }

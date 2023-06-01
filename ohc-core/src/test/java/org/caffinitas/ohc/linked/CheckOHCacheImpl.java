@@ -32,6 +32,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.caffinitas.ohc.util.ByteBufferCompat.byteBufferFlip;
+
 /**
  * This is a {@link org.caffinitas.ohc.OHCache} implementation used to validate functionality of
  * {@link OHCacheLinkedImpl} - this implementation is <b>not</b> for production use!
@@ -77,7 +79,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
     public boolean put(K key, V value)
     {
-        HeapKeyBuffer keyBuffer = keySource(key);
+        KeyBuffer keyBuffer = keySource(key);
         byte[] data = value(value);
 
         if (maxEntrySize > 0L && CheckSegment.sizeOf(keyBuffer, data) > maxEntrySize)
@@ -93,7 +95,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
     public boolean addOrReplace(K key, V old, V value)
     {
-        HeapKeyBuffer keyBuffer = keySource(key);
+        KeyBuffer keyBuffer = keySource(key);
         byte[] data = value(value);
         byte[] oldData = value(old);
 
@@ -110,7 +112,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
     public boolean putIfAbsent(K k, V v)
     {
-        HeapKeyBuffer keyBuffer = keySource(k);
+        KeyBuffer keyBuffer = keySource(k);
         byte[] data = value(v);
 
         if (maxEntrySize > 0L && CheckSegment.sizeOf(keyBuffer, data) > maxEntrySize)
@@ -147,7 +149,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
     public boolean remove(K key)
     {
-        HeapKeyBuffer keyBuffer = keySource(key);
+        KeyBuffer keyBuffer = keySource(key);
         CheckSegment segment = segment(keyBuffer.hash());
         return segment.remove(keyBuffer);
     }
@@ -176,7 +178,15 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
     public V get(K key)
     {
-        HeapKeyBuffer keyBuffer = keySource(key);
+        return get(keySource(key));
+    }
+
+    @Override
+    public V getBySerialized(ByteBuffer key) {
+        return get(new KeyBuffer(key, hasher));
+    }
+
+    private V get(KeyBuffer keyBuffer) {
         CheckSegment segment = segment(keyBuffer.hash());
         byte[] value = segment.get(keyBuffer);
 
@@ -188,7 +198,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
 
     public boolean containsKey(K key)
     {
-        HeapKeyBuffer keyBuffer = keySource(key);
+        KeyBuffer keyBuffer = keySource(key);
         CheckSegment segment = segment(keyBuffer.hash());
         return segment.get(keyBuffer) != null;
     }
@@ -217,9 +227,9 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     {
         return new AbstractHotKeyIter<K>(n)
         {
-            protected K construct(HeapKeyBuffer next)
+            protected K construct(KeyBuffer next)
             {
-                return keySerializer.deserialize(ByteBuffer.wrap(next.array()));
+                return keySerializer.deserialize(next.byteBuffer());
             }
         };
     }
@@ -228,9 +238,9 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     {
         return new AbstractHotKeyIter<ByteBuffer>(n)
         {
-            protected ByteBuffer construct(HeapKeyBuffer next)
+            protected ByteBuffer construct(KeyBuffer next)
             {
-                return ByteBuffer.wrap(next.array());
+                return next.byteBuffer();
             }
         };
     }
@@ -239,9 +249,9 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     {
         return new AbstractKeyIter<K>()
         {
-            protected K construct(HeapKeyBuffer next)
+            protected K construct(KeyBuffer next)
             {
-                return keySerializer.deserialize(ByteBuffer.wrap(next.array()));
+                return keySerializer.deserialize(next.byteBuffer());
             }
         };
     }
@@ -250,9 +260,9 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     {
         return new AbstractKeyIter<ByteBuffer>()
         {
-            protected ByteBuffer construct(HeapKeyBuffer next)
+            protected ByteBuffer construct(KeyBuffer next)
             {
-                return ByteBuffer.wrap(next.array());
+                return next.byteBuffer();
             }
         };
     }
@@ -271,7 +281,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
             this.perMap = n / maps.length + 1;
         }
 
-        Iterator<HeapKeyBuffer> keyBufferIterator()
+        Iterator<KeyBuffer> keyBufferIterator()
         {
             return segment.hotN(perMap);
         }
@@ -280,12 +290,12 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
     abstract class AbstractKeyIter<E> implements CloseableIterator<E>
     {
         private int map;
-        private Iterator<HeapKeyBuffer> current = Collections.emptyIterator();
+        private Iterator<KeyBuffer> current = Collections.emptyIterator();
         private boolean eol;
 
-        private HeapKeyBuffer next;
+        private KeyBuffer next;
         CheckSegment segment;
-        private HeapKeyBuffer last;
+        private KeyBuffer last;
         private CheckSegment lastSegment;
 
         public void close()
@@ -328,7 +338,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
             }
         }
 
-        Iterator<HeapKeyBuffer> keyBufferIterator()
+        Iterator<KeyBuffer> keyBufferIterator()
         {
             return segment.keyIterator();
         }
@@ -347,7 +357,7 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
             return r;
         }
 
-        abstract E construct(HeapKeyBuffer next);
+        abstract E construct(KeyBuffer next);
 
         public void remove()
         {
@@ -539,14 +549,15 @@ final class CheckOHCacheImpl<K, V> implements OHCache<K, V>
         return maps[seg];
     }
 
-    private HeapKeyBuffer keySource(K o)
+    private KeyBuffer keySource(K o)
     {
         int size = keySerializer.serializedSize(o);
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(size);
         keySerializer.serialize(o, keyBuffer);
         assert(keyBuffer.position() == keyBuffer.capacity()) && (keyBuffer.capacity() == size);
-        return new HeapKeyBuffer(keyBuffer.array()).finish(hasher);
+        keyBuffer.clear();
+        return new KeyBuffer(keyBuffer, hasher);
     }
 
     private byte[] value(V value)

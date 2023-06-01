@@ -15,12 +15,14 @@
  */
 package org.caffinitas.ohc.linked;
 
+import java.nio.ByteBuffer;
+
 final class Murmur3Hash extends Hasher
 {
-    long hash(byte[] array)
+    long hash(ByteBuffer byteBuffer)
     {
-        int o = 0;
-        int r = array.length;
+        int o = byteBuffer.position();
+        int r = byteBuffer.limit() - byteBuffer.position();
 
         long h1 = 0L;
         long h2 = 0L;
@@ -28,9 +30,9 @@ final class Murmur3Hash extends Hasher
 
         for (; r >= 16; r -= 16)
         {
-            k1 = getLong(array, o);
+            k1 = byteBuffer.getLong(o);
             o += 8;
-            k2 = getLong(array, o);
+            k2 = byteBuffer.getLong(o);
             o += 8;
 
             // bmix64()
@@ -55,36 +57,36 @@ final class Murmur3Hash extends Hasher
             switch (r)
             {
                 case 15:
-                    k2 ^= toLong(array[o + 14]) << 48; // fall through
+                    k2 ^= toLong(byteBuffer.get(o + 14)) << 48; // fall through
                 case 14:
-                    k2 ^= toLong(array[o + 13]) << 40; // fall through
+                    k2 ^= toLong(byteBuffer.get(o + 13)) << 40; // fall through
                 case 13:
-                    k2 ^= toLong(array[o + 12]) << 32; // fall through
+                    k2 ^= toLong(byteBuffer.get(o + 12)) << 32; // fall through
                 case 12:
-                    k2 ^= toLong(array[o + 11]) << 24; // fall through
+                    k2 ^= toLong(byteBuffer.get(o + 11)) << 24; // fall through
                 case 11:
-                    k2 ^= toLong(array[o + 10]) << 16; // fall through
+                    k2 ^= toLong(byteBuffer.get(o + 10)) << 16; // fall through
                 case 10:
-                    k2 ^= toLong(array[o + 9]) << 8; // fall through
+                    k2 ^= toLong(byteBuffer.get(o + 9)) << 8; // fall through
                 case 9:
-                    k2 ^= toLong(array[o + 8]); // fall through
+                    k2 ^= toLong(byteBuffer.get(o + 8)); // fall through
                 case 8:
-                    k1 ^= getLong(array, o);
+                    k1 ^= byteBuffer.getLong(o);
                     break;
                 case 7:
-                    k1 ^= toLong(array[o + 6]) << 48; // fall through
+                    k1 ^= toLong(byteBuffer.get(o + 6)) << 48; // fall through
                 case 6:
-                    k1 ^= toLong(array[o + 5]) << 40; // fall through
+                    k1 ^= toLong(byteBuffer.get(o + 5)) << 40; // fall through
                 case 5:
-                    k1 ^= toLong(array[o + 4]) << 32; // fall through
+                    k1 ^= toLong(byteBuffer.get(o + 4)) << 32; // fall through
                 case 4:
-                    k1 ^= toLong(array[o + 3]) << 24; // fall through
+                    k1 ^= toLong(byteBuffer.get(o + 3)) << 24; // fall through
                 case 3:
-                    k1 ^= toLong(array[o + 2]) << 16; // fall through
+                    k1 ^= toLong(byteBuffer.get(o + 2)) << 16; // fall through
                 case 2:
-                    k1 ^= toLong(array[o + 1]) << 8; // fall through
+                    k1 ^= toLong(byteBuffer.get(o + 1)) << 8; // fall through
                 case 1:
-                    k1 ^= toLong(array[o]);
+                    k1 ^= toLong(byteBuffer.get(o));
                     break;
                 default:
                     throw new AssertionError("Should never get here.");
@@ -96,8 +98,8 @@ final class Murmur3Hash extends Hasher
 
         // makeHash()
 
-        h1 ^= array.length;
-        h2 ^= array.length;
+        h1 ^= byteBuffer.limit() - byteBuffer.position();
+        h2 ^= byteBuffer.limit() - byteBuffer.position();
 
         h1 += h2;
         h2 += h1;
@@ -110,19 +112,6 @@ final class Murmur3Hash extends Hasher
 
         // padToLong()
         return h1;
-    }
-
-    private static long getLong(byte[] array, int o)
-    {
-        long l = toLong(array[o + 7]) << 56;
-        l |= toLong(array[o + 6]) << 48;
-        l |= toLong(array[o + 5]) << 40;
-        l |= toLong(array[o + 4]) << 32;
-        l |= toLong(array[o + 3]) << 24;
-        l |= toLong(array[o + 2]) << 16;
-        l |= toLong(array[o + 1]) << 8;
-        l |= toLong(array[o]);
-        return l;
     }
 
     long hash(long adr, long offset, int length)

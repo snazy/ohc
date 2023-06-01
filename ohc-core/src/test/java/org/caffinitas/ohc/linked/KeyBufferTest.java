@@ -25,6 +25,7 @@ import org.testng.annotations.Test;
 
 import java.nio.ByteBuffer;
 
+import static org.caffinitas.ohc.util.ByteBufferCompat.byteBufferFlip;
 import static org.testng.Assert.assertEquals;
 
 public class KeyBufferTest
@@ -49,14 +50,13 @@ public class KeyBufferTest
     @Test(dataProvider = "hashes")
     public void testHashFinish(HashAlgorithm hashAlgorithm) throws Exception
     {
-        KeyBuffer out = new KeyBuffer(12);
-
-        ByteBuffer buf = out.byteBuffer();
+        ByteBuffer buf = ByteBuffer.allocate(12);
         byte[] ref = TestUtils.randomBytes(10);
         buf.put((byte) (42 & 0xff));
         buf.put(ref);
         buf.put((byte) (0xf0 & 0xff));
-        out.finish(org.caffinitas.ohc.linked.Hasher.create(hashAlgorithm));
+        buf.clear();
+        KeyBuffer out = new KeyBuffer(buf, org.caffinitas.ohc.linked.Hasher.create(hashAlgorithm));
 
         Hasher hasher = hasher(hashAlgorithm);
         hasher.putByte((byte) 42);
@@ -97,14 +97,13 @@ public class KeyBufferTest
     @Test(dataProvider = "hashes", dependsOnMethods = "testHashFinish")
     public void testHashFinish16(HashAlgorithm hashAlgorithm) throws Exception
     {
-        KeyBuffer out = new KeyBuffer(16);
-
         byte[] ref = TestUtils.randomBytes(14);
-        ByteBuffer buf = out.byteBuffer();
+        ByteBuffer buf = ByteBuffer.allocate(16);
         buf.put((byte) (42 & 0xff));
         buf.put(ref);
         buf.put((byte) (0xf0 & 0xff));
-        out.finish(org.caffinitas.ohc.linked.Hasher.create(hashAlgorithm));
+        buf.clear();
+        KeyBuffer out = new KeyBuffer(buf, org.caffinitas.ohc.linked.Hasher.create(hashAlgorithm));
 
         Hasher hasher = hasher(hashAlgorithm);
         hasher.putByte((byte) 42);
@@ -122,12 +121,11 @@ public class KeyBufferTest
         {
             for (int j = 0; j < 10; j++)
             {
-                KeyBuffer out = new KeyBuffer(i);
-
                 byte[] ref = TestUtils.randomBytes(i);
-                ByteBuffer buf = out.byteBuffer();
+                ByteBuffer buf = ByteBuffer.allocate(i);
                 buf.put(ref);
-                out.finish(org.caffinitas.ohc.linked.Hasher.create(hashAlgorithm));
+                buf.clear();
+                KeyBuffer out = new KeyBuffer(buf, org.caffinitas.ohc.linked.Hasher.create(hashAlgorithm));
 
                 Hasher hasher = hasher(hashAlgorithm);
                 hasher.putBytes(ref);

@@ -16,28 +16,25 @@
 package org.caffinitas.ohc.linked;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 
 final class KeyBuffer
 {
-    final byte[] buffer;
-    private long hash;
+    final ByteBuffer buffer;
+    private final long hash;
 
-    KeyBuffer(int size)
+    KeyBuffer(ByteBuffer buffer, Hasher hasher)
     {
-        buffer = new byte[size];
+        this.buffer = buffer.order(ByteOrder.LITTLE_ENDIAN);
+        int position = buffer.position();
+        hash = hasher.hash(buffer);
+        buffer.position(position);
     }
 
     long hash()
     {
         return hash;
-    }
-
-    KeyBuffer finish(Hasher hasher)
-    {
-        hash = hasher.hash(buffer);
-
-        return this;
     }
 
     public boolean equals(Object o)
@@ -47,7 +44,7 @@ final class KeyBuffer
 
         KeyBuffer keyBuffer = (KeyBuffer) o;
 
-        return buffer.length == keyBuffer.buffer.length && Arrays.equals(keyBuffer.buffer, buffer);
+        return buffer.equals(keyBuffer.buffer);
     }
 
     public int hashCode()
@@ -66,11 +63,10 @@ final class KeyBuffer
     @Override
     public String toString()
     {
-        byte[] b = buffer;
-        StringBuilder sb = new StringBuilder(b.length * 3);
-        for (int ii = 0; ii < b.length; ii++) {
+        StringBuilder sb = new StringBuilder((buffer.limit() - buffer.position()) * 3);
+        for (int ii = buffer.position(); ii < buffer.limit(); ii++) {
             if (ii % 8 == 0 && ii != 0) sb.append('\n');
-            sb.append(pad(b[ii]));
+            sb.append(pad(buffer.get(ii)));
             sb.append(' ');
         }
         return sb.toString();
@@ -78,7 +74,7 @@ final class KeyBuffer
 
     ByteBuffer byteBuffer()
     {
-        return ByteBuffer.wrap(buffer);
+        return buffer.asReadOnlyBuffer();
     }
 
     boolean sameKey(long hashEntryAdr)
@@ -87,25 +83,25 @@ final class KeyBuffer
             return false;
 
         long serKeyLen = HashEntries.getKeyLen(hashEntryAdr);
-        return serKeyLen == buffer.length && compareKey(hashEntryAdr);
+        return serKeyLen == (buffer.limit() - buffer.position()) && compareKey(hashEntryAdr);
     }
 
     private boolean compareKey(long hashEntryAdr)
     {
         int blkOff = (int) Util.ENTRY_OFF_DATA;
-        int p = 0;
-        int endIdx = buffer.length - 1;
+        int p = buffer.position();
+        int endIdx = buffer.limit() - 1;
         for (; p <= endIdx - 8; p += 8, blkOff += 8)
-            if (Uns.getLong(hashEntryAdr, blkOff) != Uns.getLongFromByteArray(buffer, p))
+            if (Uns.getLong(hashEntryAdr, blkOff) != buffer.getLong(p))
                 return false;
         for (; p <= endIdx - 4; p += 4, blkOff += 4)
-            if (Uns.getInt(hashEntryAdr, blkOff) != Uns.getIntFromByteArray(buffer, p))
+            if (Uns.getInt(hashEntryAdr, blkOff) != buffer.getInt(p))
                 return false;
         for (; p <= endIdx - 2; p += 2, blkOff += 2)
-            if (Uns.getShort(hashEntryAdr, blkOff) != Uns.getShortFromByteArray(buffer, p))
+            if (Uns.getShort(hashEntryAdr, blkOff) != buffer.getShort(p))
                 return false;
         for (; p < endIdx; p++, blkOff++)
-            if (Uns.getByte(hashEntryAdr, blkOff) != buffer[p])
+            if (Uns.getByte(hashEntryAdr, blkOff) != buffer.get(p))
                 return false;
 
         return true;

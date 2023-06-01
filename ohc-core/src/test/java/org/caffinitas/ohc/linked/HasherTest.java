@@ -19,6 +19,8 @@ import org.caffinitas.ohc.HashAlgorithm;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Random;
 
 public class HasherTest
@@ -55,7 +57,7 @@ public class HasherTest
         rand.nextBytes(buf);
 
         Hasher hasher = Hasher.create(hash);
-        long arrayVal = hasher.hash(buf);
+        long arrayVal = hasher.hash(ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN));
         long memAddr = Uns.allocate(buf.length + 99);
         try
         {

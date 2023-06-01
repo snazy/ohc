@@ -139,6 +139,14 @@ public interface OHCache<K, V> extends Closeable
     V get(K key);
 
     /**
+     * Get the value for a given key.
+     *
+     * @param key      key of the entry to be retrieved. Must not be {@code null}.
+     * @return either the non-{@code null} value or {@code null} if no entry for the requested key exists
+     */
+    V getBySerialized(ByteBuffer key);
+
+    /**
      * Checks whether an entry for a given key exists.
      * Usually, this is more efficient than testing for {@code null} via {@link #get(Object)}.
      *

@@ -18,6 +18,7 @@ package org.caffinitas.ohc.linked;
 import org.caffinitas.ohc.HashAlgorithm;
 
 import java.lang.reflect.InvocationTargetException;
+import java.nio.ByteBuffer;
 
 abstract class Hasher
 {
@@ -61,7 +62,7 @@ abstract class Hasher
                + "Hash";
     }
 
-    abstract long hash(byte[] array);
+    abstract long hash(ByteBuffer byteBuffer);
 
     abstract long hash(long address, long offset, int length);
 

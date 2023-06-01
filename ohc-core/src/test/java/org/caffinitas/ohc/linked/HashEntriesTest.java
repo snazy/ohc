@@ -21,6 +21,7 @@ import org.testng.annotations.Test;
 
 import java.nio.ByteBuffer;
 
+import static org.caffinitas.ohc.util.ByteBufferCompat.byteBufferFlip;
 import static org.testng.Assert.*;
 
 public class HashEntriesTest
@@ -63,24 +64,25 @@ public class HashEntriesTest
     public void testCompareKey() throws Exception
     {
         long adr = Uns.allocate(MIN_ALLOC_LEN);
-        KeyBuffer key = new KeyBuffer(11);
         try
         {
             HashEntries.init(0L, 11, 0, adr, Util.SENTINEL_NOT_PRESENT, 0L);
 
-            ByteBuffer keyBuffer = key.byteBuffer();
+            byte[] keyArray = new byte[11];
+            ByteBuffer keyBuffer = ByteBuffer.wrap(keyArray);
             keyBuffer.putInt(0x98765432);
             keyBuffer.putInt(0xabcdabba);
             keyBuffer.put((byte)(0x44 & 0xff));
             keyBuffer.put((byte)(0x55 & 0xff));
             keyBuffer.put((byte)(0x88 & 0xff));
-            key.finish(Hasher.create(HashAlgorithm.MURMUR3));
+            keyBuffer.clear();
+            KeyBuffer key = new KeyBuffer(keyBuffer, Hasher.create(HashAlgorithm.MURMUR3));
 
             Uns.setMemory(adr, Util.ENTRY_OFF_DATA, 11, (byte) 0);
 
             assertFalse(key.sameKey(adr));
 
-            Uns.copyMemory(key.buffer, 0, adr, Util.ENTRY_OFF_DATA, 11);
+            Uns.copyMemory(keyArray, 0, adr, Util.ENTRY_OFF_DATA, 11);
             HashEntries.init(key.hash(), 11, 0, adr, Util.SENTINEL_NOT_PRESENT, 0L);
 
             assertTrue(key.sameKey(adr));

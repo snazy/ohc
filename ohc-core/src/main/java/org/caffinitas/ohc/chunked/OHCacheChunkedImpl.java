@@ -162,8 +162,17 @@ public final class OHCacheChunkedImpl<K, V> implements OHCache<K, V>
 
         KeyBuffer keySource = keySource(key);
 
-        OffHeapChunkedMap seg = segment(keySource.hash());
-        return (V) seg.getEntry(keySource, valueSerializer);
+        return (V) segment(keySource.hash()).getEntry(keySource, valueSerializer);
+    }
+
+    @Override
+    public V getBySerialized(ByteBuffer key) {
+        if (key == null)
+            throw new NullPointerException();
+
+        KeyBuffer keySource = keySource(key);
+
+        return (V) segment(keySource.hash()).getEntry(keySource, valueSerializer);
     }
 
     public boolean containsKey(K key)

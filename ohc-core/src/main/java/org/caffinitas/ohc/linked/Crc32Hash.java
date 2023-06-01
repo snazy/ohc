@@ -15,14 +15,15 @@
  */
 package org.caffinitas.ohc.linked;
 
+import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
 
 class Crc32Hash extends Hasher
 {
-    long hash(byte[] array)
+    long hash(ByteBuffer byteBuffer)
     {
         CRC32 crc = new CRC32();
-        crc.update(array);
+        crc.update(byteBuffer);
         long h = crc.getValue();
         h |= h << 32;
         return h;

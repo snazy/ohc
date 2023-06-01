@@ -145,6 +145,14 @@ public class DoubleCheckCacheImpl<K, V> implements OHCache<K, V>
         return rProd;
     }
 
+    @Override
+    public V getBySerialized(ByteBuffer key) {
+        V rProd = prod.getBySerialized(key);
+        V rCheck = check.getBySerialized(key);
+        Assert.assertEquals(rProd, rCheck, "for key='" + key + '\'');
+        return rProd;
+    }
+
     public boolean containsKey(K key)
     {
         boolean rProd = prod.containsKey(key);
