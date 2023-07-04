@@ -1,6 +1,13 @@
 OHC - An off-heap-cache
 =======================
 
+
+THIS PROJECT IS NO LONGER MAINTAINED!!!
+
+
+
+
+
 Features
 ========
 
